@@ -19,6 +19,7 @@ pub(crate) fn tls_certificate_assets_sql(sort_sql: &str) -> String {
                     count(DISTINCT lower(loc.host_ip))::bigint AS source_host_count,
                     count(DISTINCT loc.port)::bigint AS source_port_count,
                     count(DISTINCT src.uuid)::bigint AS source_count,
+                    (c.owner IS NOT NULL) AS writable,
                     coalesce(c.creation_time, 0)::bigint AS created_at_unix,
                     coalesce(c.modification_time, 0)::bigint AS modified_at_unix
                FROM tls_certificates c
@@ -26,7 +27,7 @@ pub(crate) fn tls_certificate_assets_sql(sort_sql: &str) -> String {
                LEFT JOIN tls_certificate_locations loc ON loc.id = src.location
               GROUP BY c.id, c.uuid, c.subject_dn, c.comment, c.issuer_dn,
                        c.serial, c.md5_fingerprint, c.sha256_fingerprint,
-                       c.activation_time, c.expiration_time,
+                       c.activation_time, c.expiration_time, c.owner,
                        c.creation_time, c.modification_time
          ),
          filtered AS (
@@ -74,6 +75,7 @@ pub(crate) fn tls_certificate_asset_detail_sql() -> &'static str {
               count(DISTINCT lower(loc.host_ip))::bigint AS source_host_count,
               count(DISTINCT loc.port)::bigint AS source_port_count,
               count(DISTINCT src.uuid)::bigint AS source_count,
+              (c.owner IS NOT NULL) AS writable,
               coalesce(c.creation_time, 0)::bigint AS created_at_unix,
               coalesce(c.modification_time, 0)::bigint AS modified_at_unix
          FROM tls_certificates c
@@ -82,7 +84,7 @@ pub(crate) fn tls_certificate_asset_detail_sql() -> &'static str {
         WHERE c.uuid = $1
         GROUP BY c.id, c.uuid, c.subject_dn, c.comment, c.issuer_dn,
                  c.serial, c.md5_fingerprint, c.sha256_fingerprint,
-                 c.activation_time, c.expiration_time,
+                 c.activation_time, c.expiration_time, c.owner,
                  c.creation_time, c.modification_time
         LIMIT 1;"#
 }

@@ -1543,7 +1543,20 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-configuration-write
       summary: Replace complete retained scanner editor configuration
-      description: Atomically replaces name, comment, host, port, scanner type, CA certificate, optional human-owned certificate credential, relay host, and relay port for a human-owned non-built-in scanner that is not referenced by a live non-hidden task, without contacting or verifying it. Any authenticated stack operator may continue this work; the scanner's existing owner remains attribution. In-use scanners return conflict; their name/comment can still be changed through the metadata PATCH endpoint. Supported scanner types are 2, 5, 6, and 8. Unix socket configurations store port 0 and clear CA and credential fields. Relay configuration is fully replaced: omitting, setting null, or sending a blank relay_host clears an existing relay and requires relay_port 0. Remote TLS/relay verification and external relay-file synchronization remain inherited.
+      description: >-
+        Atomically replaces name, comment, host, port, scanner type, CA
+        certificate, optional human-owned certificate credential, relay host,
+        and relay port for a human-owned non-built-in scanner that is not
+        referenced by a live non-hidden task. It does so without contacting or verifying it.
+        Any authenticated stack operator may continue this work; the
+        scanner's existing owner remains attribution. In-use scanners return
+        conflict; their name/comment can still be changed through the metadata
+        PATCH endpoint. Supported scanner types are 2, 5, 6, and 8. Unix socket
+        configurations store port 0 and clear CA and credential fields. Relay
+        configuration is fully replaced: omitting, setting null, or sending a
+        blank relay_host clears an existing relay and requires relay_port 0.
+        Remote TLS/relay verification and external relay-file synchronization
+        remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       requestBody:
@@ -12300,7 +12313,7 @@ components:
           format: date-time
     TlsCertificateAsset:
       type: object
-      required: [id, name, subject_dn, serial, source_count, in_use]
+      required: [id, name, subject_dn, serial, source_count, in_use, writable]
       properties:
         id:
           type: string
@@ -12346,6 +12359,9 @@ components:
           type: integer
         in_use:
           type: boolean
+        writable:
+          type: boolean
+          description: True only for a human-owned certificate that the trusted operator team may delete.
         created_at:
           type: string
           format: date-time

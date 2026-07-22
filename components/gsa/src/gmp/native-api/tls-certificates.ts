@@ -76,6 +76,7 @@ interface NativeTlsCertificatePayload {
   source_port_count?: number;
   source_count?: number;
   in_use?: boolean;
+  writable: boolean;
   sources?: NativeTlsCertificateSourcePayload[];
   user_tags?: NativeUserTagPayload[];
   created_at?: string;
@@ -286,7 +287,7 @@ const nativeTlsCertificateToModel = (
     valid: detail ? booleanToYesNo(item.valid) : undefined,
     trust: detail ? booleanToYesNo(item.trust) : undefined,
     time_status: detail ? nativeTimeStatus(item.time_status) : undefined,
-    writable: detail ? 1 : undefined,
+    writable: booleanToYesNo(item.writable),
     user_tags: detail ? nativeUserTagsElement(item.user_tags ?? []) : undefined,
     sources: detail
       ? {source: (item.sources ?? []).map(nativeSourceToElement)}

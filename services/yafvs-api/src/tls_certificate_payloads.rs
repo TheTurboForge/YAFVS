@@ -62,6 +62,7 @@ pub(crate) struct TlsCertificateAssetItem {
     source_port_count: i64,
     source_count: i64,
     in_use: bool,
+    writable: bool,
     created_at: Option<String>,
     modified_at: Option<String>,
 }
@@ -110,6 +111,7 @@ pub(crate) fn tls_certificate_asset_from_row(row: &Row) -> TlsCertificateAssetIt
         source_port_count: row.get("source_port_count"),
         source_count,
         in_use: source_count > 0,
+        writable: row.get("writable"),
         created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
         modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
     }

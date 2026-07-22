@@ -19,6 +19,7 @@ import {
   deleteNativeTlsCertificate,
   exportNativeTlsCertificateMetadata,
   exportNativeTlsCertificatesMetadata,
+  fetchNativeTlsCertificate,
   fetchNativeTlsCertificatePem,
   fetchNativeTlsCertificates,
   nativeTlsCertificatesQueryFromFilter,
@@ -47,11 +48,9 @@ export class TlsCertificateCommand extends EntityCommand {
   }
 
   async delete({id}) {
-    if (canUseNativeApi(this.http)) {
-      await deleteNativeTlsCertificate(this.http, id);
-      return new Response();
-    }
-    return super.delete({id});
+    requireNativeTlsCertificateApi(this.http);
+    await deleteNativeTlsCertificate(this.http, id);
+    return new Response();
   }
 
   async get({id}) {
@@ -63,6 +62,44 @@ export class TlsCertificateCommand extends EntityCommand {
 export class TlsCertificatesCommand extends EntitiesCommand {
   constructor(http) {
     super(http, 'tls_certificate', TlsCertificate);
+  }
+
+  async delete(entities) {
+    const response = await this.deleteByIds(entities.map(entity => entity.id));
+    return response.setData(entities);
+  }
+
+  async deleteByIds(ids) {
+    requireNativeTlsCertificateApi(this.http);
+    if (new Set(ids).size !== ids.length) {
+      throw new Error(
+        'Native TLS certificate bulk delete contains duplicate IDs',
+      );
+    }
+    const certificates = await Promise.all(
+      ids.map(
+        async id =>
+          (await fetchNativeTlsCertificate(this.http, id)).tlsCertificate,
+      ),
+    );
+    if (certificates.some(certificate => !certificate.isWritable())) {
+      throw new Error(
+        'Native TLS certificate bulk delete includes a protected certificate',
+      );
+    }
+    let deleted = 0;
+    try {
+      for (const id of ids) {
+        await deleteNativeTlsCertificate(this.http, id);
+        deleted += 1;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown error';
+      throw new Error(
+        `Native TLS certificate bulk delete stopped after ${deleted} of ${ids.length} items: ${message}`,
+      );
+    }
+    return new Response(ids);
   }
 
   export(entities) {

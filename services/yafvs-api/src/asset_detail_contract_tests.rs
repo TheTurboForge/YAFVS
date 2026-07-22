@@ -114,7 +114,7 @@ fn cve_catalog_detail_reads_reference_context_without_mutation_workflows() {
 }
 
 #[test]
-fn tls_certificate_reads_are_native_only_while_mutations_remain_separate() {
+fn tls_certificate_reads_and_browser_deletes_are_native_only() {
     for retired in [
         "get_tls_certificate_gmp",
         "get_tls_certificates_gmp",
@@ -198,7 +198,10 @@ fn tls_certificate_reads_are_native_only_while_mutations_remain_separate() {
             "GMP help must retain separately classified mutation {retained}"
         );
     }
-    assert!(GSA_TLS_CERTIFICATE_COMMAND.contains("return super.delete({id});"));
+    assert!(!GSA_TLS_CERTIFICATE_COMMAND.contains("super.delete"));
+    assert!(GSA_TLS_CERTIFICATE_COMMAND.contains("deleteNativeTlsCertificate"));
+    assert!(GSA_TLS_CERTIFICATE_COMMAND.contains("async deleteByIds(ids)"));
+    assert!(GSA_TLS_CERTIFICATE_COMMAND.contains("certificate.isWritable()"));
     assert!(GSA_CAPABILITIES.contains("'get_tls_certificates'"));
 }
 
@@ -985,6 +988,8 @@ fn tls_certificate_detail_contract_excludes_certificate_bytes() {
     for required in ["valid_int", "trust_int", "time_status", "host_asset_id"] {
         assert!(combined_sql.contains(required));
     }
+    assert!(list_sql.contains("(c.owner IS NOT NULL) AS writable"));
+    assert!(detail_sql.contains("(c.owner IS NOT NULL) AS writable"));
     for forbidden in [
         "c.certificate",
         "certificate_format",

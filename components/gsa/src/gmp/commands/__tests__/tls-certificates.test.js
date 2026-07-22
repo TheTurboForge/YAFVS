@@ -5,7 +5,7 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {createActionResultResponse, createHttp} from 'gmp/commands/testing';
+import {createHttp} from 'gmp/commands/testing';
 import {
   TlsCertificateCommand,
   TlsCertificatesCommand,
@@ -37,19 +37,14 @@ describe('TlsCertificateCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
-  test('should delete a TLS certificate', async () => {
-    const response = createActionResultResponse();
-    const fakeHttp = createHttp(response);
+  test('should require native API for TLS certificate deletion', async () => {
+    const fakeHttp = createHttp(undefined);
     const cmd = new TlsCertificateCommand(fakeHttp);
-    await cmd.delete({
-      id: 'foo',
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'delete_tls_certificate',
-        tls_certificate_id: 'foo',
-      },
-    });
+
+    await expect(cmd.delete({id: 'foo'})).rejects.toThrow(
+      'Native TLS certificate API is required for this operation',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should delete a TLS certificate through native API when available', async () => {
@@ -155,6 +150,107 @@ describe('TlsCertificateCommand tests', () => {
 });
 
 describe('TlsCertificatesCommand tests', () => {
+  test('should require native API for bulk TLS certificate deletion', async () => {
+    const fakeHttp = createHttp(undefined);
+    const cmd = new TlsCertificatesCommand(fakeHttp);
+
+    await expect(cmd.deleteByIds(['tls-1'])).rejects.toThrow(
+      'Native TLS certificate API is required for this operation',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should preflight and bulk delete TLS certificates through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'tls-1',
+          name: 'one',
+          writable: true,
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'tls-2',
+          name: 'two',
+          writable: true,
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValue({ok: true, status: 204});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TlsCertificatesCommand(fakeHttp);
+
+    const result = await cmd.deleteByIds(['tls-1', 'tls-2']);
+
+    expect(result.data).toEqual(['tls-1', 'tls-2']);
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock.mock.calls[2][1].method).toEqual('DELETE');
+    expect(fetchMock.mock.calls[3][1].method).toEqual('DELETE');
+  });
+
+  test('should report committed progress when bulk deletion stops', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'tls-1',
+          name: 'one',
+          writable: true,
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'tls-2',
+          name: 'two',
+          writable: true,
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({ok: true, status: 204})
+      .mockResolvedValueOnce({ok: false, status: 409});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TlsCertificatesCommand(fakeHttp);
+
+    await expect(cmd.deleteByIds(['tls-1', 'tls-2'])).rejects.toThrow(
+      'Native TLS certificate bulk delete stopped after 1 of 2 items: Native API request failed with status 409',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should reject a protected TLS certificate before bulk deletion', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'ownerless',
+        name: 'protected',
+        writable: false,
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TlsCertificatesCommand(fakeHttp);
+
+    await expect(cmd.deleteByIds(['ownerless'])).rejects.toThrow(
+      'Native TLS certificate bulk delete includes a protected certificate',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].method).toBeUndefined();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should fetch TLS certificates through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -171,6 +267,7 @@ describe('TlsCertificatesCommand tests', () => {
             name: 'example.org:443',
             subject_dn: 'CN=example.org',
             issuer_dn: 'CN=Example CA',
+            writable: true,
           },
         ],
       }),
@@ -186,6 +283,7 @@ describe('TlsCertificatesCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(result.data[0].id).toEqual('tls-certificate-id');
     expect(result.data[0].subjectDn).toEqual('CN=example.org');
+    expect(result.data[0].isWritable()).toBe(true);
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tls-certificates', {
       token: 'test-token',
       page: 1,

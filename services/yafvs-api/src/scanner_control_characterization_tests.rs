@@ -388,13 +388,21 @@ fn openapi_documents_complete_native_scanner_lifecycle_and_verify_boundary() {
         "x-yafvs-safety-contract: write-control-v1",
         "$ref: '#/components/schemas/ScannerConfigurationRequest'",
         "$ref: '#/components/schemas/ScannerAssetDetail'",
+    ] {
+        assert!(
+            replace.contains(required),
+            "scanner replace docs missing {required}"
+        );
+    }
+    let normalized_replace = replace.split_whitespace().collect::<Vec<_>>().join(" ");
+    for required in [
         "without contacting or verifying it",
         "not referenced by a live non-hidden task",
         "In-use scanners return conflict",
         "Relay configuration is fully replaced",
     ] {
         assert!(
-            replace.contains(required),
+            normalized_replace.contains(required),
             "scanner replace docs missing {required}"
         );
     }

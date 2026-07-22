@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {useCallback, useMemo, useRef, useState} from 'react';
+import {useCallback, useMemo, useRef} from 'react';
 import {showSuccessNotification} from '@greenbone/ui-lib';
 import type CollectionCounts from 'gmp/collection/collection-counts';
 import {type default as Filter, TAGS_FILTER_FILTER} from 'gmp/models/filter';
@@ -18,7 +18,6 @@ import IconDivider from 'web/components/layout/IconDivider';
 import PageTitle from 'web/components/layout/PageTitle';
 import DialogNotification from 'web/components/notification/DialogNotification';
 import useDialogNotification from 'web/components/notification/useDialogNotification';
-import BulkTags from 'web/entities/BulkTags';
 import EntitiesPage from 'web/entities/EntitiesPage';
 import {
   useGetTags,
@@ -64,7 +63,6 @@ const TagsPage = () => {
   const [_] = useTranslation();
 
   const [downloadRef, handleDownload] = useDownload();
-  const [isTagsDialogVisible, setIsTagsDialogVisible] = useState(false);
   const deleteFuncRef = useRef<((tag: Tag) => Promise<void> | void) | null>(
     null,
   );
@@ -187,14 +185,6 @@ const TagsPage = () => {
     handleFilterChanged,
   );
 
-  const closeTagsDialog = useCallback(() => {
-    setIsTagsDialogVisible(false);
-  }, [setIsTagsDialogVisible]);
-
-  const openTagsDialog = useCallback(() => {
-    setIsTagsDialogVisible(true);
-  }, [setIsTagsDialogVisible]);
-
   const handleFilterReset = useCallback(() => {
     resetFilter();
   }, [resetFilter]);
@@ -286,7 +276,6 @@ const TagsPage = () => {
                   onTagDownloadClick={download}
                   onTagEditClick={edit}
                   onTagEnableClick={enable}
-                  onTagsBulk={openTagsDialog}
                 />
               }
               tags={false}
@@ -303,16 +292,6 @@ const TagsPage = () => {
               {...notificationDialogState}
               onCloseClick={closeNotificationDialog}
             />
-            {isTagsDialogVisible && (
-              <BulkTags
-                entities={allEntities}
-                entitiesCounts={entitiesCounts as CollectionCounts}
-                filter={filter}
-                selectedEntities={selectedEntities}
-                selectionType={selectionType}
-                onClose={closeTagsDialog}
-              />
-            )}
           </>
         );
       }}

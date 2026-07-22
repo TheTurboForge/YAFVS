@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -288,6 +289,7 @@ export default createEntitiesTable<
   footer: createEntitiesFooter({
     download: 'tags.xml',
     span: 7,
+    tags: false,
     trash: true,
   }),
 });

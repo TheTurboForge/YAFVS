@@ -433,7 +433,7 @@ describe('TagsListPage tests', () => {
     expect(exportByModels).toHaveBeenCalled();
   });
 
-  test('should open and close the BulkTags dialog', async () => {
+  test('should not expose an Add Tag bulk action', async () => {
     const gmp = createGmp();
 
     const {render, store} = rendererWith({
@@ -448,19 +448,9 @@ describe('TagsListPage tests', () => {
 
     await screen.findByText('test tag');
 
-    // Open BulkTags dialog via the tags icon in the footer
-    const tagsIcon = screen.getByTitle('Add tag to page contents');
-    fireEvent.click(tagsIcon);
-
-    const dialog = await screen.findByRole('dialog');
-    expect(dialog).toBeInTheDocument();
-
-    // Close the dialog using the Cancel button in the footer
-    const cancelButton = screen.getByRole('button', {name: 'Cancel'});
-    fireEvent.click(cancelButton);
-
-    await wait();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTitle('Add tag to page contents'),
+    ).not.toBeInTheDocument();
   });
 
   test('should delete an individual tag', async () => {

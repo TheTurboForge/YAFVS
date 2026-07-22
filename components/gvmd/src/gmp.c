@@ -2283,7 +2283,6 @@ typedef enum
   CLIENT_GET_SETTINGS,
   CLIENT_GET_TARGETS,
   CLIENT_GET_TASKS,
-  CLIENT_GET_TLS_CERTIFICATES,
   CLIENT_GET_USERS,
   CLIENT_GET_VERSION,
   CLIENT_GET_VERSION_AUTHENTIC,
@@ -3143,7 +3142,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
 
             set_client_state (CLIENT_GET_TASKS);
           }
-        ELSE_GET_START (tls_certificates, TLS_CERTIFICATES)
         else if (strcasecmp ("GET_USERS", element_name) == 0)
           {
             get_data_parse_attributes (&get_users_data->get, "user",
@@ -12473,8 +12471,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         handle_get_tasks (gmp_parser, error);
         break;
 
-
-      CASE_GET_END (TLS_CERTIFICATES, tls_certificates);
 
       case CLIENT_GET_USERS:
         handle_get_users (gmp_parser, error);

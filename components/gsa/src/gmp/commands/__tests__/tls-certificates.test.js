@@ -5,11 +5,7 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {
-  createActionResultResponse,
-  createEntityResponse,
-  createHttp,
-} from 'gmp/commands/testing';
+import {createActionResultResponse, createHttp} from 'gmp/commands/testing';
 import {
   TlsCertificateCommand,
   TlsCertificatesCommand,
@@ -31,22 +27,14 @@ const createNativeHttp = () => {
 };
 
 describe('TlsCertificateCommand tests', () => {
-  test('should return a single TLS certificate', async () => {
-    const response = createEntityResponse('tls_certificate', {
-      _id: 'foo',
-      certificate: {__text: 'lorem'},
-    });
-    const fakeHttp = createHttp(response);
+  test('should require native API for TLS certificate PEM data', async () => {
+    const fakeHttp = createHttp(undefined);
     const cmd = new TlsCertificateCommand(fakeHttp);
-    const resp = await cmd.get({id: 'foo'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_tls_certificate',
-        tls_certificate_id: 'foo',
-      },
-    });
-    const {data} = resp;
-    expect(data.id).toEqual('foo');
+
+    await expect(cmd.get({id: 'foo'})).rejects.toThrow(
+      'Native TLS certificate API is required for this operation',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should delete a TLS certificate', async () => {

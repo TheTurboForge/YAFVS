@@ -94,8 +94,6 @@ gsad_init_validator ()
                      "|(get_targets)"
                      "|(get_task)"
                      "|(get_tasks)"
-                     "|(get_tls_certificate)"
-                     "|(get_tls_certificates)"
                      "|(get_user)"
                      "|(get_users)"
                      "|(login)"

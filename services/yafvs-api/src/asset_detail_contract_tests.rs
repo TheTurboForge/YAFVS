@@ -44,6 +44,20 @@ use crate::{
     user_tags::catalog_user_tags_sql,
 };
 
+const GSA_TLS_CERTIFICATE_COMMAND: &str =
+    include_str!("../../../components/gsa/src/gmp/commands/tls-certificates.js");
+const GSA_CAPABILITIES: &str =
+    include_str!("../../../components/gsa/src/gmp/capabilities/capabilities.ts");
+const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSAD_GMP_H: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
+const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
+const GVMD_GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
+const GVMD_GMP_TLS_CERTIFICATES: &str =
+    include_str!("../../../components/gvmd/src/gmp_tls_certificates.c");
+const GVMD_GMP_TLS_CERTIFICATES_H: &str =
+    include_str!("../../../components/gvmd/src/gmp_tls_certificates.h");
+const GVMD_COMMAND_INVENTORY: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
+
 #[test]
 fn cve_catalog_detail_reads_reference_context_without_mutation_workflows() {
     let source = include_str!("cve_catalog.rs");
@@ -97,6 +111,95 @@ fn cve_catalog_detail_reads_reference_context_without_mutation_workflows() {
     for inherited_workflow in ["export", "delete", "modify", "create"] {
         assert!(!detail_source_without_native_metadata_export.contains(inherited_workflow));
     }
+}
+
+#[test]
+fn tls_certificate_reads_are_native_only_while_mutations_remain_separate() {
+    for retired in [
+        "get_tls_certificate_gmp",
+        "get_tls_certificates_gmp",
+        "ELSE (get_tls_certificate)",
+        "ELSE (get_tls_certificates)",
+    ] {
+        assert!(!GSAD_GMP.contains(retired), "gsad still exposes {retired}");
+        assert!(
+            !GSAD_GMP_H.contains(retired),
+            "gsad still declares {retired}"
+        );
+    }
+    for retired in ["|(get_tls_certificate)", "|(get_tls_certificates)"] {
+        assert!(
+            !GSAD_VALIDATOR.contains(retired),
+            "gsad validator still accepts {retired}"
+        );
+    }
+    for retired in [
+        "CLIENT_GET_TLS_CERTIFICATES",
+        "ELSE_GET_START (tls_certificates, TLS_CERTIFICATES)",
+        "CASE_GET_END (TLS_CERTIFICATES, tls_certificates)",
+    ] {
+        assert!(
+            !GVMD_GMP.contains(retired),
+            "GMP parser still exposes {retired}"
+        );
+    }
+    for retired in [
+        "get_tls_certificates_t",
+        "get_tls_certificates_data",
+        "get_tls_certificates_start",
+        "get_tls_certificates_run",
+    ] {
+        assert!(
+            !GVMD_GMP_TLS_CERTIFICATES.contains(retired),
+            "dedicated GMP TLS module still exposes {retired}"
+        );
+        assert!(
+            !GVMD_GMP_TLS_CERTIFICATES_H.contains(retired),
+            "dedicated GMP TLS header still exposes {retired}"
+        );
+    }
+    assert!(!GVMD_COMMAND_INVENTORY.contains("{\"GET_TLS_CERTIFICATES\""));
+    assert!(!GSA_TLS_CERTIFICATE_COMMAND.contains("super.get"));
+    assert!(!GSA_TLS_CERTIFICATE_COMMAND.contains("getElementFromRoot"));
+    assert!(!GSA_TLS_CERTIFICATE_COMMAND.contains("getEntitiesResponse"));
+
+    let bulk_export = GSAD_GMP
+        .split_once("bulk_export_gmp (")
+        .expect("bulk export handler")
+        .1
+        .split_once("/* Assets. */")
+        .expect("bulk export must precede asset handlers")
+        .0;
+    assert!(bulk_export.contains("g_ascii_strcasecmp (type, \"tls_certificate\") == 0"));
+
+    for retained in [
+        "create_tls_certificate_gmp",
+        "save_tls_certificate_gmp",
+        "delete_tls_certificate_gmp",
+    ] {
+        assert!(GSAD_GMP.contains(retained), "gsad must retain {retained}");
+    }
+    for retained in [
+        "create_tls_certificate_start",
+        "modify_tls_certificate_start",
+    ] {
+        assert!(
+            GVMD_GMP_TLS_CERTIFICATES.contains(retained),
+            "GMP TLS mutation module must retain {retained}"
+        );
+    }
+    for retained in [
+        "{\"CREATE_TLS_CERTIFICATE\"",
+        "{\"DELETE_TLS_CERTIFICATE\"",
+        "{\"MODIFY_TLS_CERTIFICATE\"",
+    ] {
+        assert!(
+            GVMD_COMMAND_INVENTORY.contains(retained),
+            "GMP help must retain separately classified mutation {retained}"
+        );
+    }
+    assert!(GSA_TLS_CERTIFICATE_COMMAND.contains("return super.delete({id});"));
+    assert!(GSA_CAPABILITIES.contains("'get_tls_certificates'"));
 }
 
 #[test]

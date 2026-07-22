@@ -6964,15 +6964,16 @@ bulk_export_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
       || g_ascii_strcasecmp (type, "port_list") == 0
       || g_ascii_strcasecmp (type, "report_format") == 0
       || g_ascii_strcasecmp (type, "tag") == 0
+      || g_ascii_strcasecmp (type, "tls_certificate") == 0
       || g_ascii_strcasecmp (type, "vuln") == 0)
     {
       gsad_command_response_data_set_status_code (response_data,
                                                   MHD_HTTP_BAD_REQUEST);
       return gsad_http_create_gsad_message (
         credentials,
-        "Filter, port-list, report-format, tag, and vulnerability XML bulk "
-        "export are no longer supported. Use the native JSON metadata export "
-        "endpoints instead.",
+        "Filter, port-list, report-format, tag, TLS-certificate, and "
+        "vulnerability XML bulk export are no longer supported. Use the "
+        "native JSON metadata export endpoints instead.",
         response_data);
     }
 
@@ -7450,68 +7451,6 @@ save_asset_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
                                "Save Asset", response_data);
   free_entity (entity);
   return html;
-}
-
-/**
- * @brief Get all TLS certificates, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_tls_certificates_gmp (gvm_connection_t *connection,
-                          gsad_credentials_t *credentials, params_t *params,
-                          gsad_command_response_data_t *response_data)
-{
-  gmp_arguments_t *arguments = gmp_arguments_new ();
-  const char *include_certificate_data;
-
-  if (params_given (params, "include_certificate_data"))
-    {
-      include_certificate_data =
-        params_value (params, "include_certificate_data");
-      CHECK_VARIABLE_INVALID (include_certificate_data, "Get TLS Certificate");
-      gmp_arguments_add (arguments, "include_certificate_data",
-                         include_certificate_data);
-    }
-
-  return get_many (connection, "tls_certificates", credentials, params,
-                   arguments, response_data);
-}
-
-/**
- * @brief Get single TLS certificates, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_tls_certificate_gmp (gvm_connection_t *connection,
-                         gsad_credentials_t *credentials, params_t *params,
-                         gsad_command_response_data_t *response_data)
-{
-  gmp_arguments_t *arguments = gmp_arguments_new ();
-  const char *include_certificate_data;
-
-  if (params_given (params, "include_certificate_data"))
-    {
-      include_certificate_data =
-        params_value (params, "include_certificate_data");
-      CHECK_VARIABLE_INVALID (include_certificate_data, "Get TLS Certificate");
-      gmp_arguments_add (arguments, "include_certificate_data",
-                         include_certificate_data);
-    }
-
-  return get_one (connection, "tls_certificate", credentials, params, NULL,
-                  arguments, response_data);
 }
 
 /**
@@ -8321,8 +8260,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_targets)
   ELSE (get_task)
   ELSE (get_tasks)
-  ELSE (get_tls_certificate)
-  ELSE (get_tls_certificates)
   ELSE (get_user)
   ELSE (get_users)
   else if (!strcmp (cmd, "download_ssl_cert"))

@@ -80,7 +80,6 @@ command_t gmp_commands[]
     {"GET_SETTINGS", "Get all settings."},
     {"GET_TARGETS", "Get all targets."},
     {"GET_TASKS", "Get all tasks."},
-    {"GET_TLS_CERTIFICATES", "Get all TLS certificates."},
     {"GET_USERS", "Get all users."},
     {"GET_VERSION", "Get the Greenbone Management Protocol version."},
     {"HELP", "Get this help text."},

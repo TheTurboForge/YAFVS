@@ -29,14 +29,17 @@ const shouldExportAllByFilter = filter => {
   return Number.isFinite(rows) && rows < 0;
 };
 
+const requireNativeTlsCertificateApi = http => {
+  if (!canUseNativeApi(http)) {
+    throw new Error(
+      'Native TLS certificate API is required for this operation',
+    );
+  }
+};
+
 export class TlsCertificateCommand extends EntityCommand {
   constructor(http) {
     super(http, 'tls_certificate', TlsCertificate);
-  }
-
-  getElementFromRoot(root) {
-    return root.get_tls_certificate.get_tls_certificates_response
-      .tls_certificate;
   }
 
   async export({id}) {
@@ -51,14 +54,9 @@ export class TlsCertificateCommand extends EntityCommand {
     return super.delete({id});
   }
 
-  async get({id}, options = {}) {
-    if (
-      Object.keys(options).length === 0 &&
-      typeof this.http?.buildUrl === 'function'
-    ) {
-      return await fetchNativeTlsCertificatePem(this.http, id);
-    }
-    return super.get({id}, options);
+  async get({id}) {
+    requireNativeTlsCertificateApi(this.http);
+    return await fetchNativeTlsCertificatePem(this.http, id);
   }
 }
 
@@ -159,9 +157,6 @@ export class TlsCertificatesCommand extends EntitiesCommand {
       group_column: 'modified',
       filter,
     });
-  }
-  getEntitiesResponse(root) {
-    return root.get_tls_certificates.get_tls_certificates_response;
   }
 }
 

@@ -1,4 +1,5 @@
 /* Copyright (C) 2019-2022 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -36,7 +37,7 @@ user_tls_certificate_match_internal (tls_certificate_t,
                                      const char *,
                                      const char *);
 
-// Iterator for GMP get_tls_certificates
+// Iterator for retained manager TLS certificate queries.
 
 /**
  * @brief Filter columns for tls_certificate iterator.

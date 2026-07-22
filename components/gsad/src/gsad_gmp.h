@@ -346,12 +346,6 @@ get_assets_chart_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                       gsad_command_response_data_t *);
 
 char *
-get_tls_certificates_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                          gsad_command_response_data_t *);
-char *
-get_tls_certificate_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                         gsad_command_response_data_t *);
-char *
 create_tls_certificate_gmp (gvm_connection_t *, gsad_credentials_t *,
                             params_t *, gsad_command_response_data_t *);
 char *

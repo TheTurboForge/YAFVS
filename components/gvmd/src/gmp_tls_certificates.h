@@ -17,12 +17,6 @@
 #include "manage.h"
 
 void
-get_tls_certificates_start (const gchar **, const gchar **);
-
-void
-get_tls_certificates_run (gmp_parser_t *, GError **);
-
-void
 create_tls_certificate_start (gmp_parser_t *, const gchar **, const gchar **);
 
 void

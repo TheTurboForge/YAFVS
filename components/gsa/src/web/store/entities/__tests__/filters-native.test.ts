@@ -39,6 +39,7 @@ describe('native API filters', () => {
             comment: 'operator filter',
             filter_type: 'report',
             term: 'severity>7.0 rows=10',
+            writable: true,
             alert_count: 1,
             alerts: [],
             created_at: '2026-06-18T18:00:00Z',
@@ -96,6 +97,7 @@ describe('native API filters', () => {
         name: 'High Severity Reports',
         filter_type: 'report',
         term: 'severity>7.0',
+        writable: true,
         alerts: [
           {
             id: 'a9483e36-b9e4-43df-9ddc-d28ec1df9c23',
@@ -118,6 +120,7 @@ describe('native API filters', () => {
     expect(filter.alerts).toHaveLength(1);
     expect(filter.alerts[0].id).toEqual('a9483e36-b9e4-43df-9ddc-d28ec1df9c23');
     expect(filter.alerts[0].name).toEqual('Notify SecOps');
+    expect(filter.isWritable()).toEqual(true);
   });
 
   test('maps inherited filter type criteria to the native filter_type query', () => {
@@ -150,6 +153,7 @@ describe('native API filters', () => {
             name: 'High Severity Reports',
             filter_type: 'report',
             term: 'severity>7.0',
+            writable: true,
             alert_count: 1,
           },
         ],
@@ -176,6 +180,7 @@ describe('native API filters', () => {
     expect(successAction.counts.filtered).toEqual(1);
     expect(successAction.data[0].name).toEqual('High Severity Reports');
     expect(successAction.data[0].filter_type).toEqual('report');
+    expect(successAction.data[0].isWritable()).toEqual(true);
   });
 
   test('loads filter detail store entries through same-origin native API', async () => {
@@ -193,6 +198,7 @@ describe('native API filters', () => {
         name: 'High Severity Reports',
         filter_type: 'report',
         term: 'severity>7.0',
+        writable: true,
         alerts: [
           {
             id: 'a9483e36-b9e4-43df-9ddc-d28ec1df9c23',
@@ -217,5 +223,6 @@ describe('native API filters', () => {
     expect(successAction.type).toEqual('ENTITY_LOADING_SUCCESS');
     expect(successAction.data.name).toEqual('High Severity Reports');
     expect(successAction.data.alerts).toHaveLength(1);
+    expect(successAction.data.isWritable()).toEqual(true);
   });
 });

@@ -26,6 +26,7 @@ import sys
 import tempfile
 import time
 import urllib.parse
+import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -12469,6 +12470,206 @@ def native_api_create_cleanup_state(
     return committed, uncertain
 
 
+def native_api_direct_credential_clone_findings(
+    repo_root: Path,
+    *,
+    token: str,
+    env: dict[str, str],
+    admin_uuid: str,
+    credential_id: str,
+    credential_name: str,
+    credential_comment: str,
+) -> list[dict[str, Any]]:
+    """Characterize native clone against live PostgreSQL without exposing secrets."""
+    findings: list[dict[str, Any]] = []
+    clone_id: str | None = None
+    tag_name = f"{credential_name}-clone-tag"
+    ownerless_name = f"{credential_name}-ownerless"
+    missing_id = str(uuid.uuid4())
+    content_type = (("Content-Type", "application/json"),)
+    fixture_sql = (
+        "/* fixed-credential-clone-smoke-fixture */ "
+        "WITH admin_owner AS (SELECT id FROM users "
+        f"WHERE uuid = {sql_literal(admin_uuid)}), "
+        "alternate_owner AS (SELECT id, uuid FROM users "
+        f"WHERE owner IS NOT NULL AND uuid <> {sql_literal(admin_uuid)} ORDER BY id LIMIT 1), "
+        "source AS (UPDATE credentials SET owner = (SELECT id FROM alternate_owner), allow_insecure = 1 "
+        f"WHERE uuid = {sql_literal(credential_id)} AND EXISTS (SELECT 1 FROM alternate_owner) "
+        "RETURNING id, uuid), "
+        "inserted_tag AS (INSERT INTO tags "
+        "(uuid, owner, name, comment, value, resource_type, active, creation_time, modification_time) "
+        "SELECT make_uuid(), id, "
+        f"{sql_literal(tag_name)}, 'Native credential clone characterization', 'clone', "
+        "'credential', 1, m_now(), m_now() FROM admin_owner "
+        "WHERE EXISTS (SELECT 1 FROM source) RETURNING id, uuid), "
+        "inserted_link AS (INSERT INTO tag_resources "
+        "(tag, resource_type, resource, resource_uuid, resource_location) "
+        "SELECT inserted_tag.id, 'credential', source.id, source.uuid, 0 "
+        "FROM inserted_tag CROSS JOIN source RETURNING tag) "
+        "SELECT alternate_owner.uuid::text || '|' || inserted_tag.uuid::text || '|' || "
+        "(SELECT count(*)::text FROM inserted_link) "
+        "FROM alternate_owner CROSS JOIN inserted_tag;"
+    )
+    fixture = psql(repo_root, fixture_sql)
+    fixture_state = psql_value(fixture)
+    fixture_ok = fixture.returncode == 0 and fixture_state.count("|") == 2 and fixture_state.endswith("|1")
+    findings.append(process_step_finding(
+        "pass" if fixture_ok else "fail",
+        "native-api-direct.credential-clone-fixture",
+        "Prepared a human-owned cross-operator credential and one active tag link for native clone characterization."
+        if fixture_ok else
+        "Could not prepare the cross-operator credential clone characterization fixture.",
+        fixture,
+        ["psql", "fixed-credential-clone-smoke-fixture"],
+    ))
+
+    clone = direct_native_api_curl(
+        repo_root,
+        f"/api/v1/credentials/{urllib.parse.quote(credential_id)}/clone",
+        token=token,
+        env=env,
+        method="POST",
+        body="{}",
+        extra_headers=content_type,
+    )
+    clone_json, clone_status = parse_json_output_with_http_status(clone)
+    candidate_clone_id = clone_json.get("id") if isinstance(clone_json, dict) else None
+    if isinstance(candidate_clone_id, str) and UUID_PATTERN.fullmatch(candidate_clone_id):
+        clone_id = candidate_clone_id
+    serialized = json.dumps(clone_json, sort_keys=True) if isinstance(clone_json, dict) else ""
+    response_ok = (
+        fixture_ok
+        and clone.returncode == 0
+        and clone_status == 201
+        and clone_id is not None
+        and clone_json.get("name") == f"{credential_name} Clone 1"
+        and clone_json.get("comment") == credential_comment
+        and clone_json.get("owner_id") == admin_uuid
+        and clone_json.get("credential_type") == "up"
+        and clone_json.get("allow_insecure") is True
+        and "yafvs-direct-write-smoke-secret" not in serialized
+        and not any(field in clone_json for field in ("password", "passphrase", "private_key", "secret", "value"))
+    )
+    findings.append(native_api_probe_finding(
+        "pass" if response_ok else "fail",
+        "native-api-direct.credential-clone-response",
+        "Native clone accepted a teammate-owned source and returned only operator-owned redacted metadata."
+        if response_ok else
+        "Native clone did not preserve the cross-operator redacted response contract.",
+        clone,
+        direct_native_api_display_command(
+            f"/api/v1/credentials/{urllib.parse.quote(credential_id)}/clone",
+            token=token,
+            env=env,
+            method="POST",
+            body="{}",
+            extra_headers=content_type,
+        ),
+        clone_json,
+        {"http_status": clone_status, "clone_id": clone_id, **summarize_native_api_response(clone_json)},
+    ))
+
+    state_sql = (
+        "WITH source AS (SELECT id FROM credentials "
+        f"WHERE uuid = {sql_literal(credential_id)}), "
+        "clone AS (SELECT id, owner, name, comment, type, allow_insecure FROM credentials "
+        f"WHERE uuid = {sql_literal(clone_id or '')}), "
+        "operator_owner AS (SELECT id FROM users "
+        f"WHERE uuid = {sql_literal(admin_uuid)}) "
+        "SELECT (SELECT count(*) FROM clone WHERE owner = (SELECT id FROM operator_owner) "
+        f"AND name = {sql_literal(credential_name + ' Clone 1')} AND comment = {sql_literal(credential_comment)} "
+        "AND type = 'up' AND allow_insecure = 1)::text || '|' || "
+        "(SELECT count(*) FROM ((SELECT type, value FROM credentials_data WHERE credential = (SELECT id FROM source) "
+        "EXCEPT ALL SELECT type, value FROM credentials_data WHERE credential = (SELECT id FROM clone)) "
+        "UNION ALL (SELECT type, value FROM credentials_data WHERE credential = (SELECT id FROM clone) "
+        "EXCEPT ALL SELECT type, value FROM credentials_data WHERE credential = (SELECT id FROM source))) delta)::text || '|' || "
+        "(SELECT count(*) FROM tag_resources tr JOIN tags t ON t.id = tr.tag "
+        f"WHERE t.name = {sql_literal(tag_name)} AND tr.resource_type = 'credential' "
+        "AND tr.resource = (SELECT id FROM clone) AND tr.resource_location = 0)::text;"
+    )
+    state = psql(repo_root, state_sql)
+    state_value = psql_value(state)
+    state_ok = state.returncode == 0 and state_value == "1|0|1"
+    findings.append(process_step_finding(
+        "pass" if state_ok else "fail",
+        "native-api-direct.credential-clone-database-state",
+        "Native clone preserved metadata, every opaque data row, and the active tag link."
+        if state_ok else
+        "Native clone database state did not match the characterized source.",
+        state,
+        ["psql", "fixed-credential-clone-state"],
+    ))
+
+    missing = direct_native_api_curl(repo_root, f"/api/v1/credentials/{missing_id}/clone", token=token, env=env, method="POST", body="{}", extra_headers=content_type)
+    missing_json, missing_status = parse_json_output_with_http_status(missing)
+    missing_ok = missing.returncode == 0 and missing_status == 404 and isinstance(missing_json, dict) and missing_json.get("error", {}).get("code") == "not_found"
+    findings.append(native_api_probe_finding("pass" if missing_ok else "fail", "native-api-direct.credential-clone-missing", "Native clone fails closed for a missing source." if missing_ok else "Native clone did not return the expected missing-source failure.", missing, direct_native_api_display_command(f"/api/v1/credentials/{missing_id}/clone", token=token, env=env, method="POST", body="{}", extra_headers=content_type), missing_json, {"http_status": missing_status, **summarize_native_api_response(missing_json)}))
+
+    ownerless_fixture = psql(repo_root, "WITH inserted AS (INSERT INTO credentials "
+        "(uuid, owner, name, comment, creation_time, modification_time, type, allow_insecure) "
+        f"VALUES (make_uuid(), NULL, {sql_literal(ownerless_name)}, 'ownerless clone denial', "
+        "m_now(), m_now(), 'up', 0) RETURNING uuid) SELECT uuid FROM inserted;")
+    ownerless_id = psql_value(ownerless_fixture)
+    ownerless = direct_native_api_curl(repo_root, f"/api/v1/credentials/{urllib.parse.quote(ownerless_id)}/clone", token=token, env=env, method="POST", body="{}", extra_headers=content_type)
+    ownerless_json, ownerless_status = parse_json_output_with_http_status(ownerless)
+    ownerless_ok = ownerless_fixture.returncode == 0 and UUID_PATTERN.fullmatch(ownerless_id) is not None and ownerless.returncode == 0 and ownerless_status == 403 and isinstance(ownerless_json, dict) and ownerless_json.get("error", {}).get("code") == "forbidden"
+    findings.append(native_api_probe_finding("pass" if ownerless_ok else "fail", "native-api-direct.credential-clone-ownerless", "Native clone rejects an ownerless source before mutation." if ownerless_ok else "Native clone did not enforce the ownerless-source boundary.", ownerless, direct_native_api_display_command(f"/api/v1/credentials/{urllib.parse.quote(ownerless_id)}/clone", token=token, env=env, method="POST", body="{}", extra_headers=content_type), ownerless_json, {"http_status": ownerless_status, **summarize_native_api_response(ownerless_json)}))
+
+    cleanup_sql = (
+        "/* fixed-credential-clone-smoke-cleanup */ "
+        "WITH admin_owner AS (SELECT id FROM users "
+        f"WHERE uuid = {sql_literal(admin_uuid)}), "
+        "source AS (UPDATE credentials SET owner = (SELECT id FROM admin_owner), allow_insecure = 0 "
+        f"WHERE uuid = {sql_literal(credential_id)} RETURNING id), "
+        "clones AS (SELECT id FROM credentials WHERE "
+        f"uuid = {sql_literal(clone_id or '')} OR name LIKE {sql_literal(credential_name + ' Clone%')}), "
+        "fixture_tags AS (SELECT id FROM tags WHERE name = "
+        f"{sql_literal(tag_name)}), "
+        "deleted_links AS (DELETE FROM tag_resources WHERE tag IN (SELECT id FROM fixture_tags) "
+        "OR resource IN (SELECT id FROM clones) RETURNING tag), "
+        "deleted_data AS (DELETE FROM credentials_data WHERE credential IN (SELECT id FROM clones) RETURNING credential), "
+        "deleted_clones AS (DELETE FROM credentials WHERE id IN (SELECT id FROM clones) RETURNING id), "
+        f"deleted_ownerless AS (DELETE FROM credentials WHERE name = {sql_literal(ownerless_name)} RETURNING id), "
+        "deleted_tags AS (DELETE FROM tags WHERE id IN (SELECT id FROM fixture_tags) RETURNING id) "
+        "SELECT (SELECT count(*) FROM source)::text || '|' || "
+        "(SELECT count(*) FROM deleted_clones)::text || '|' || "
+        "(SELECT count(*) FROM deleted_ownerless)::text || '|' || "
+        "(SELECT count(*) FROM deleted_tags)::text;"
+    )
+    cleanup = psql(repo_root, cleanup_sql)
+    cleanup_value = psql_value(cleanup)
+    residue_sql = (
+        "/* fixed-credential-clone-smoke-residue */ "
+        "WITH admin_owner AS (SELECT id FROM users "
+        f"WHERE uuid = {sql_literal(admin_uuid)}) "
+        "SELECT (SELECT count(*) FROM credentials "
+        f"WHERE uuid = {sql_literal(clone_id or '')} OR name LIKE {sql_literal(credential_name + ' Clone%')})::text || '|' || "
+        "(SELECT count(*) FROM credentials "
+        f"WHERE name = {sql_literal(ownerless_name)})::text || '|' || "
+        "(SELECT count(*) FROM tags "
+        f"WHERE name = {sql_literal(tag_name)})::text || '|' || "
+        "(SELECT count(*) FROM credentials WHERE "
+        f"uuid = {sql_literal(credential_id)} AND owner = (SELECT id FROM admin_owner) AND allow_insecure = 0)::text;"
+    )
+    residue = psql(repo_root, residue_sql)
+    residue_value = psql_value(residue)
+    cleanup_ok = cleanup.returncode == 0 and residue.returncode == 0 and residue_value == "0|0|0|1"
+    cleanup_finding = process_step_finding(
+        "pass" if cleanup_ok else "fail",
+        "native-api-direct.credential-clone-cleanup",
+        "Removed clone characterization rows and restored the source credential owner and policy bit."
+        if cleanup_ok else
+        "Could not prove cleanup of the credential clone characterization rows.",
+        cleanup,
+        ["psql", "fixed-credential-clone-smoke-cleanup"],
+    )
+    cleanup_details = cleanup_finding.setdefault("details", {})
+    if isinstance(cleanup_details, dict):
+        cleanup_details.update({"cleanup_state": cleanup_value, "residue_state": residue_value})
+    findings.append(cleanup_finding)
+    return findings
+
+
 def native_api_direct_write_smb_fixture_cleanup(
     repo_root: Path,
     *,
@@ -14472,6 +14673,17 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 credential_secret_after = psql_value(psql(repo_root, credential_secret_sql))
                 credential_patch_ok = credential_patch.returncode == 0 and credential_patch_status == 200 and isinstance(credential_patch_json, dict) and credential_patch_json.get("id") == credential_id and credential_patch_json.get("comment") == credential_updated_comment and credential_secret_before and credential_secret_before == credential_secret_after
                 findings.append(native_api_probe_finding("pass" if credential_patch_ok else "fail", "native-api-direct.credential-write-update", "Direct write-control patched credential metadata without changing sentinel secret rows." if credential_patch_ok else "Direct write-control failed to patch credential metadata or changed sentinel secret rows.", credential_patch, direct_native_api_display_command(f"/api/v1/credentials/{urllib.parse.quote(credential_id)}", token=token, env=env, method="PATCH", body=credential_patch_body, extra_headers=content_type), credential_patch_json, {"http_status": credential_patch_status, "credential_id": credential_id, "secret_checksum_before": credential_secret_before, "secret_checksum_after": credential_secret_after, **summarize_native_api_response(credential_patch_json)}))
+
+                if credential_patch_ok:
+                    findings.extend(native_api_direct_credential_clone_findings(
+                        repo_root,
+                        token=token,
+                        env=env,
+                        admin_uuid=admin_uuid,
+                        credential_id=credential_id,
+                        credential_name=credential_name,
+                        credential_comment=credential_updated_comment,
+                    ))
 
                 smb_report_format_fixture_sql = (
                     "WITH owner_row AS (SELECT id FROM users "

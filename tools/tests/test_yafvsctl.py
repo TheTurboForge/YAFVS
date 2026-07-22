@@ -5167,11 +5167,11 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 214)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 214)
-        self.assertEqual(details["summary"]["inventory_rows"], 214)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 214)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_yafvs_exposure"], 214)
+        self.assertEqual(details["summary"]["total_rows"], 215)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 215)
+        self.assertEqual(details["summary"]["inventory_rows"], 215)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 215)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_yafvs_exposure"], 215)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -6033,7 +6033,7 @@ class YAFVSCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 214)
+        self.assertEqual(len(operation_ids), 215)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(yafvsctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(yafvsctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -10200,7 +10200,7 @@ class YAFVSCtlTests(unittest.TestCase):
                         for index, service in enumerate(yafvsctl.APP_SERVICES)
                     }
                 }
-                with unittest.mock.patch.object(yafvsctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(yafvsctl, "active_feed_generation_finding", return_value=yafvsctl.finding("pass", "feed-generation.current", "Mock completed activation.")), unittest.mock.patch.object(yafvsctl, "require_app_deployment_receipt", return_value=(receipt, None)), unittest.mock.patch.object(yafvsctl, "refresh_app_deployment_receipt_after_image_build", return_value=(receipt, None)), unittest.mock.patch.object(yafvsctl, "native_api_direct_admin_operator_uuid", return_value=(yafvsctl.subprocess.CompletedProcess([], 0, f"admin {operator_uuid}", ""), operator_uuid)), unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct_curl), unittest.mock.patch.object(yafvsctl, "direct_trash_empty_runtime_findings", return_value=[]), unittest.mock.patch.object(yafvsctl, "direct_task_target_replace_runtime_findings", return_value=[yafvsctl.finding("pass", "native-api-direct.task-target-replace-acknowledgement", "ok"), yafvsctl.finding("pass", "native-api-direct.task-target-replace-fixture-cleanup", "ok")]), unittest.mock.patch.object(yafvsctl.time, "time", return_value=1):
+                with unittest.mock.patch.object(yafvsctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(yafvsctl, "active_feed_generation_finding", return_value=yafvsctl.finding("pass", "feed-generation.current", "Mock completed activation.")), unittest.mock.patch.object(yafvsctl, "require_app_deployment_receipt", return_value=(receipt, None)), unittest.mock.patch.object(yafvsctl, "refresh_app_deployment_receipt_after_image_build", return_value=(receipt, None)), unittest.mock.patch.object(yafvsctl, "native_api_direct_admin_operator_uuid", return_value=(yafvsctl.subprocess.CompletedProcess([], 0, f"admin {operator_uuid}", ""), operator_uuid)), unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct_curl), unittest.mock.patch.object(yafvsctl, "native_api_direct_credential_clone_findings", return_value=[yafvsctl.finding("pass", "native-api-direct.credential-clone-characterization", "ok")]), unittest.mock.patch.object(yafvsctl, "direct_trash_empty_runtime_findings", return_value=[]), unittest.mock.patch.object(yafvsctl, "direct_task_target_replace_runtime_findings", return_value=[yafvsctl.finding("pass", "native-api-direct.task-target-replace-acknowledgement", "ok"), yafvsctl.finding("pass", "native-api-direct.task-target-replace-fixture-cleanup", "ok")]), unittest.mock.patch.object(yafvsctl.time, "time", return_value=1):
                     result = yafvsctl.command_runtime_native_api_direct_write_smoke(root, status_only=True)
             finally:
                 if original_token is None:

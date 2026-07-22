@@ -31,21 +31,23 @@ pub(crate) struct TagCreateRequest {
     pub(crate) active: bool,
 }
 
-#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum TagResourceSelectionType {
-    PortList,
-}
-
 #[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct TagResourceSelectionRequest {
-    pub(crate) resource_type: TagResourceSelectionType,
-    #[serde(default)]
-    pub(crate) search: Option<String>,
-    #[serde(default)]
-    pub(crate) predefined: Option<bool>,
-    pub(crate) expected_count: u32,
+#[serde(tag = "resource_type", rename_all = "snake_case", deny_unknown_fields)]
+pub(crate) enum TagResourceSelectionRequest {
+    PortList {
+        #[serde(default)]
+        search: Option<String>,
+        #[serde(default)]
+        predefined: Option<bool>,
+        expected_count: u32,
+    },
+    Credential {
+        #[serde(default)]
+        search: Option<String>,
+        #[serde(default)]
+        credential_type: Option<String>,
+        expected_count: u32,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -129,10 +131,26 @@ pub(crate) struct ValidatedTagResourceUpdate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ValidatedTagResourceSelection {
-    pub(crate) search: Option<String>,
-    pub(crate) predefined: Option<bool>,
-    pub(crate) expected_count: i64,
+pub(crate) enum ValidatedTagResourceSelection {
+    PortList {
+        search: Option<String>,
+        predefined: Option<bool>,
+        expected_count: i64,
+    },
+    Credential {
+        search: Option<String>,
+        credential_type: Option<String>,
+        expected_count: i64,
+    },
+}
+
+impl ValidatedTagResourceSelection {
+    pub(crate) fn resource_type(&self) -> &'static str {
+        match self {
+            Self::PortList { .. } => "port_list",
+            Self::Credential { .. } => "credential",
+        }
+    }
 }
 
 pub(crate) fn default_tag_active() -> bool {
@@ -200,32 +218,54 @@ fn validate_tag_resource_selection_request(
 ) -> Result<Option<ValidatedTagResourceSelection>, ApiError> {
     value
         .map(|value| {
-            let search = value
-                .search
-                .map(|value| {
-                    if value.len() > MAX_COLLECTION_FILTER_LENGTH || value.chars().any(char::is_control) {
-                        return Err(ApiError::BadRequest(format!(
-                            "resource_selection.search must be printable text up to {MAX_COLLECTION_FILTER_LENGTH} bytes"
-                        )));
-                    }
-                    Ok(value)
-                })
-                .transpose()?;
-            if value.expected_count == 0
-                || value.expected_count > MAX_TAG_RESOURCE_SELECTION_MATCHES
-            {
-                return Err(ApiError::BadRequest(
-                    format!(
+            let validate_expected_count = |expected_count: u32| {
+                if expected_count == 0 || expected_count > MAX_TAG_RESOURCE_SELECTION_MATCHES {
+                    Err(ApiError::BadRequest(format!(
                         "resource_selection.expected_count must be between 1 and {MAX_TAG_RESOURCE_SELECTION_MATCHES}"
-                    ),
-                ));
+                    )))
+                } else {
+                    Ok(i64::from(expected_count))
+                }
+            };
+            match value {
+                TagResourceSelectionRequest::PortList {
+                    search,
+                    predefined,
+                    expected_count,
+                } => Ok(ValidatedTagResourceSelection::PortList {
+                    search: validate_tag_selection_text(search, "search")?,
+                    predefined,
+                    expected_count: validate_expected_count(expected_count)?,
+                }),
+                TagResourceSelectionRequest::Credential {
+                    search,
+                    credential_type,
+                    expected_count,
+                } => Ok(ValidatedTagResourceSelection::Credential {
+                    search: validate_tag_selection_text(search, "search")?,
+                    credential_type: validate_tag_selection_text(
+                        credential_type,
+                        "credential_type",
+                    )?,
+                    expected_count: validate_expected_count(expected_count)?,
+                }),
             }
-            let TagResourceSelectionType::PortList = value.resource_type;
-            Ok(ValidatedTagResourceSelection {
-                search,
-                predefined: value.predefined,
-                expected_count: i64::from(value.expected_count),
-            })
+        })
+        .transpose()
+}
+
+fn validate_tag_selection_text(
+    value: Option<String>,
+    field: &str,
+) -> Result<Option<String>, ApiError> {
+    value
+        .map(|value| {
+            if value.len() > MAX_COLLECTION_FILTER_LENGTH || value.chars().any(char::is_control) {
+                return Err(ApiError::BadRequest(format!(
+                    "resource_selection.{field} must be printable text up to {MAX_COLLECTION_FILTER_LENGTH} bytes"
+                )));
+            }
+            Ok(value)
         })
         .transpose()
 }

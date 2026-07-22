@@ -5,6 +5,7 @@
 use tokio_postgres::{Row, Transaction, types::ToSql};
 
 use crate::{
+    credential_query_sql::tag_credential_selection_sql,
     errors::ApiError,
     path_ids::parse_uuid,
     port_list_query_sql::tag_port_list_selection_sql,
@@ -24,7 +25,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct TagResourceWriteRecord {
+pub(crate) struct TagResourceWriteRecord {
     internal_id: i32,
     uuid: String,
     owner_id: Option<i32>,
@@ -190,7 +191,12 @@ async fn resolve_tag_resource_update_records(
     request: &ValidatedTagResourceUpdate,
 ) -> Result<Vec<TagResourceWriteRecord>, ApiError> {
     if let Some(selection) = request.resource_selection.as_ref() {
-        return resolve_tag_port_list_selection_records(tx, state, selection).await;
+        return match selection {
+            ValidatedTagResourceSelection::PortList { .. } => {
+                resolve_tag_port_list_selection_records(tx, state, selection).await
+            }
+            ValidatedTagResourceSelection::Credential { .. } => Err(ApiError::Config),
+        };
     }
     let mut resources = Vec::new();
     for resource_id in &request.resource_ids {
@@ -207,14 +213,23 @@ async fn resolve_tag_port_list_selection_records(
     state: &TagWriteState,
     selection: &ValidatedTagResourceSelection,
 ) -> Result<Vec<TagResourceWriteRecord>, ApiError> {
+    let ValidatedTagResourceSelection::PortList {
+        search,
+        predefined,
+        expected_count,
+    } = selection
+    else {
+        return Err(ApiError::BadRequest(
+            "resource_selection requires a port_list tag".to_string(),
+        ));
+    };
     if state.resource_type != "port_list" {
         return Err(ApiError::BadRequest(
             "resource_selection requires a port_list tag".to_string(),
         ));
     }
-    let search = selection.search.as_deref().unwrap_or("");
-    let predefined = selection
-        .predefined
+    let search = search.as_deref().unwrap_or("");
+    let predefined = predefined
         .map(|value| if value { "1" } else { "0" })
         .unwrap_or("");
     let selection_limit = i64::from(MAX_TAG_RESOURCE_SELECTION_MATCHES) + 1;
@@ -228,7 +243,7 @@ async fn resolve_tag_port_list_selection_records(
             map_tag_write_db_error(error, "select port lists for tag resource selection")
         })?;
     if rows.len() > MAX_TAG_RESOURCE_SELECTION_MATCHES as usize
-        || rows.len() as i64 != selection.expected_count
+        || rows.len() as i64 != *expected_count
     {
         return Err(ApiError::Conflict(
             "tag resource selection no longer matches expected_count".to_string(),
@@ -247,7 +262,53 @@ async fn resolve_tag_port_list_selection_records(
         .collect()
 }
 
-async fn apply_tag_resource_update_transaction(
+pub(crate) async fn resolve_tag_credential_selection_records(
+    tx: &Transaction<'_>,
+    selection: &ValidatedTagResourceSelection,
+) -> Result<Vec<TagResourceWriteRecord>, ApiError> {
+    let ValidatedTagResourceSelection::Credential {
+        search,
+        credential_type,
+        expected_count,
+    } = selection
+    else {
+        return Err(ApiError::BadRequest(
+            "resource_selection requires a credential tag".to_string(),
+        ));
+    };
+    let search = search.as_deref().unwrap_or("");
+    let credential_type = credential_type.as_deref().unwrap_or("");
+    let selection_limit = i64::from(MAX_TAG_RESOURCE_SELECTION_MATCHES) + 1;
+    let rows = tx
+        .query(
+            &tag_credential_selection_sql(),
+            &[&search, &credential_type, &selection_limit],
+        )
+        .await
+        .map_err(|error| {
+            map_tag_write_db_error(error, "select credentials for tag resource selection")
+        })?;
+    if rows.len() > MAX_TAG_RESOURCE_SELECTION_MATCHES as usize
+        || rows.len() as i64 != *expected_count
+    {
+        return Err(ApiError::Conflict(
+            "tag resource selection no longer matches expected_count".to_string(),
+        ));
+    }
+    rows.into_iter()
+        .map(|row| {
+            let resource = TagResourceWriteRecord {
+                internal_id: row.get(0),
+                uuid: row.get(1),
+                owner_id: row.get(2),
+            };
+            ensure_tag_resource_is_team_assignable("credential", resource.owner_id)?;
+            Ok(resource)
+        })
+        .collect()
+}
+
+pub(crate) async fn apply_tag_resource_update_transaction(
     tx: &Transaction<'_>,
     state: &TagWriteState,
     request: &ValidatedTagResourceUpdate,
@@ -345,6 +406,26 @@ pub(crate) async fn execute_tag_patch_transaction(
         Some(resolve_tag_resource_update_records(tx, &effective_state, update).await?)
     } else {
         None
+    };
+    execute_tag_patch_with_resolved_resources(tx, state, request, resources).await
+}
+
+pub(crate) async fn execute_tag_patch_with_resolved_resources(
+    tx: &Transaction<'_>,
+    state: &TagWriteState,
+    request: &ValidatedTagPatch,
+    resources: Option<Vec<TagResourceWriteRecord>>,
+) -> Result<TagWriteRecord, ApiError> {
+    let effective_resource_type = request
+        .resource_type
+        .as_deref()
+        .unwrap_or(&state.resource_type);
+    let effective_state = TagWriteState {
+        internal_id: state.internal_id,
+        uuid: state.uuid.clone(),
+        owner_id: state.owner_id,
+        resource_type: effective_resource_type.to_string(),
+        resource_count: state.resource_count,
     };
     let record = query_tag_write_record(
         tx,

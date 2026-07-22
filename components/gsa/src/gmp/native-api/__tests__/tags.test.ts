@@ -303,6 +303,15 @@ describe('native tag resource assignments', () => {
         expectedCount: 2,
       },
     });
+    await updateNativeTagResources(http, 'tag-1', {
+      action: 'add',
+      resourceSelection: {
+        resourceType: 'credential',
+        search: 'operations',
+        credentialType: 'up',
+        expectedCount: 3,
+      },
+    });
 
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
       action: 'add',
@@ -317,6 +326,15 @@ describe('native tag resource assignments', () => {
       resource_selection: {
         resource_type: 'port_list',
         expected_count: 2,
+      },
+    });
+    expect(JSON.parse(fetchMock.mock.calls[3][1].body)).toEqual({
+      action: 'add',
+      resource_selection: {
+        resource_type: 'credential',
+        search: 'operations',
+        credential_type: 'up',
+        expected_count: 3,
       },
     });
   });

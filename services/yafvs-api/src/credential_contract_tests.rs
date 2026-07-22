@@ -37,7 +37,7 @@ fn openapi_path_block(path: &str) -> String {
 fn credential_list_supports_exact_type_filter_and_redacted_smb_proof() {
     let sql = credential_assets_sql("name ASC");
     assert!(sql.contains("credential_type = $4"));
-    assert!(sql.contains("AND ($4 = '' OR credential_type = $4)"));
+    assert!(sql.contains("AND ($4 = '' OR credential_rows.credential_type = $4)"));
     assert!(sql.contains("u.uuid AS owner_id"));
     assert!(sql.contains("AS smb_compatible"));
     assert!(sql.contains("SELECT count(*)"));

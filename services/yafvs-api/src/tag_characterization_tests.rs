@@ -310,7 +310,7 @@ fn openapi_tag_contract_replaces_filter_and_resource_type_tail() {
         patch_block
             .contains("x-yafvs-replaces: tag-metadata-resource-type-and-atomic-assignment-write")
     );
-    assert!(patch_block.contains("typed port-list collection selections"));
+    assert!(patch_block.contains("typed collection selections"));
     assert!(patch_block.contains("raw filter expressions"));
     let clone_block = openapi_path_block("/tags/{tag_id}/clone");
     assert!(clone_block.contains("x-yafvs-replaces: tag-clone"));

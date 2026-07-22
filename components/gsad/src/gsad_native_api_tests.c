@@ -92,7 +92,7 @@ Ensure (gsad_native_api, should_forward_typed_filters_for_collection_reads)
       "/api/v1/reports?page=2&task_id=12345678-1234-1234-1234-123456789abc"
       "&nvt_oid=1.3.6.1.4.1.25623.1.0.900001"
       "&vulnerability_id=1.3.6.1.4.1.25623.1.0.900001"
-      "&name=192.0.2.10&predefined=1"));
+      "&name=192.0.2.10&predefined=1&credential_type=up"));
   g_free (target);
 }
 
@@ -852,6 +852,8 @@ params_value (params_t *params, const gchar *name)
         return "192.0.2.10";
       if (g_strcmp0 (name, "predefined") == 0)
         return "1";
+      if (g_strcmp0 (name, "credential_type") == 0)
+        return "up";
     }
   return NULL;
 }

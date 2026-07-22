@@ -39,16 +39,50 @@ pub(crate) fn credential_assets_sql(sort_sql: &str) -> String {
          ),
          filtered AS (
              SELECT * FROM credential_rows
-              WHERE ($1 = ''
-                     OR lower(id) LIKE '%' || lower($1) || '%'
-                     OR lower(name) LIKE '%' || lower($1) || '%'
-                     OR lower(comment) LIKE '%' || lower($1) || '%'
-                     OR lower(owner_name) LIKE '%' || lower($1) || '%'
-                     OR lower(credential_type) LIKE '%' || lower($1) || '%')
-                AND ($4 = '' OR credential_type = $4)
+              WHERE {}
          )
          SELECT count(*) OVER()::bigint AS total, * FROM filtered
           ORDER BY {sort_sql}, name ASC, id ASC LIMIT $2 OFFSET $3;"#,
+        credential_collection_predicate_sql(
+            "credential_rows.id",
+            "credential_rows.name",
+            "credential_rows.comment",
+            "credential_rows.owner_name",
+            "credential_rows.credential_type",
+            "$1",
+            "$4",
+        ),
+    )
+}
+
+/// Shared with typed credential tag selection. Search remains literal data
+/// across UUID, name, comment, owner name, and credential type.
+pub(crate) fn credential_collection_predicate_sql(
+    id_expression: &str,
+    name_expression: &str,
+    comment_expression: &str,
+    owner_name_expression: &str,
+    credential_type_expression: &str,
+    search_parameter: &str,
+    credential_type_parameter: &str,
+) -> String {
+    format!(
+        "({search_parameter} = ''\n             OR lower({id_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({name_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({comment_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({owner_name_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({credential_type_expression}) LIKE '%' || lower({search_parameter}) || '%')\n        AND ({credential_type_parameter} = '' OR {credential_type_expression} = {credential_type_parameter})"
+    )
+}
+
+pub(crate) fn tag_credential_selection_sql() -> String {
+    format!(
+        "SELECT c.id::integer, c.uuid::text, c.owner::integer\n           FROM credentials c\n      LEFT JOIN users u ON u.id = c.owner\n          WHERE {}\n          ORDER BY c.id ASC\n          LIMIT $3\n          FOR UPDATE OF c;",
+        credential_collection_predicate_sql(
+            "c.uuid",
+            "coalesce(c.name, '')",
+            "coalesce(c.comment, '')",
+            "coalesce(u.name, '')",
+            "coalesce(c.type, '')",
+            "$1",
+            "$2",
+        )
     )
 }
 

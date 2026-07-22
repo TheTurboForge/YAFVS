@@ -128,12 +128,19 @@ export interface NativeTagResourceUpdateInput {
   resourceSelection?: NativeTagResourceSelectionInput;
 }
 
-export interface NativeTagResourceSelectionInput {
-  resourceType: 'port_list';
-  search?: string;
-  predefined?: boolean;
-  expectedCount: number;
-}
+export type NativeTagResourceSelectionInput =
+  | {
+      resourceType: 'port_list';
+      search?: string;
+      predefined?: boolean;
+      expectedCount: number;
+    }
+  | {
+      resourceType: 'credential';
+      search?: string;
+      credentialType?: string;
+      expectedCount: number;
+    };
 
 export interface TagCommandCreateParams {
   active: boolean;
@@ -158,9 +165,14 @@ const nativeTagResourceSelectionPayload = (
   ...(selection.search === undefined || selection.search === ''
     ? {}
     : {search: selection.search}),
-  ...(selection.predefined === undefined
-    ? {}
-    : {predefined: selection.predefined}),
+  ...(selection.resourceType === 'port_list' &&
+  selection.predefined !== undefined
+    ? {predefined: selection.predefined}
+    : {}),
+  ...(selection.resourceType === 'credential' &&
+  selection.credentialType !== undefined
+    ? {credential_type: selection.credentialType}
+    : {}),
   expected_count: selection.expectedCount,
 });
 

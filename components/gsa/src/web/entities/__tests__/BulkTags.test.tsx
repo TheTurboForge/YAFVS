@@ -15,6 +15,7 @@ import {
 } from 'web/testing';
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Filter from 'gmp/models/filter';
+import Credential from 'gmp/models/credential';
 import PortList from 'gmp/models/port-list';
 import Tag from 'gmp/models/tag';
 import Task from 'gmp/models/task';
@@ -177,6 +178,108 @@ describe('BulkTags tests', () => {
     expect(saveTag).not.toHaveBeenCalled();
     expect(screen.getDialog()).toHaveTextContent(
       'Filtered port-list tagging supports only literal search and predefined filters',
+    );
+  });
+
+  test('should use a typed collection selection for all filtered credentials', async () => {
+    const entities = [
+      new Credential({id: '1', name: 'Operations'}),
+      new Credential({id: '2', name: 'Operations backup'}),
+    ];
+    const entitiesCounts = new CollectionCounts({filtered: 3, all: 8});
+    const filter = Filter.fromString(
+      'search=operations type=up first=1 rows=10 sort=name',
+    );
+    const onClose = testing.fn();
+    const getAllTags = testing
+      .fn()
+      .mockResolvedValue({data: [new Tag({id: 'tag-1', name: 'Managed'})]});
+    const getTag = testing.fn().mockResolvedValue({
+      data: new Tag({id: 'tag-1', name: 'Managed', resourceType: 'credential'}),
+    });
+    const saveTag = testing.fn().mockResolvedValue({data: {id: 'tag-1'}});
+    const gmp = {
+      tags: {getAll: getAllTags},
+      tag: {get: getTag, save: saveTag},
+    };
+    const {render} = rendererWith({gmp, store: true});
+    render(
+      <BulkTags
+        entities={entities}
+        entitiesCounts={entitiesCounts}
+        filter={filter}
+        selectedEntities={[]}
+        selectionType={SelectionType.SELECTION_FILTER}
+        onClose={onClose}
+      />,
+    );
+
+    const select = screen.getSelectElement();
+    const selectItems = await getSelectItemElementsForSelect(select);
+    fireEvent.click(selectItems[0]);
+    await wait();
+    fireEvent.click(screen.getDialogSaveButton());
+    await wait();
+
+    expect(saveTag).toHaveBeenCalledWith({
+      active: true,
+      comment: '',
+      filter: undefined,
+      id: 'tag-1',
+      name: 'Managed',
+      resourceIds: undefined,
+      resourceSelection: {
+        resourceType: 'credential',
+        search: 'operations',
+        credentialType: 'up',
+        expectedCount: 3,
+      },
+      resourceType: 'credential',
+      resourcesAction: 'add',
+      value: '',
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  test('should reject unsupported filtered credential criteria without broadening the selection', async () => {
+    const entities = [new Credential({id: '1', name: 'Operations'})];
+    const entitiesCounts = new CollectionCounts({filtered: 1, all: 8});
+    const filter = Filter.fromString(
+      'name~operations first=1 rows=10 sort=name',
+    );
+    const getAllTags = testing
+      .fn()
+      .mockResolvedValue({data: [new Tag({id: 'tag-1', name: 'Managed'})]});
+    const getTag = testing.fn().mockResolvedValue({
+      data: new Tag({id: 'tag-1', name: 'Managed', resourceType: 'credential'}),
+    });
+    const saveTag = testing.fn().mockResolvedValue({data: {id: 'tag-1'}});
+    const gmp = {
+      tags: {getAll: getAllTags},
+      tag: {get: getTag, save: saveTag},
+    };
+    const {render} = rendererWith({gmp, store: true});
+    render(
+      <BulkTags
+        entities={entities}
+        entitiesCounts={entitiesCounts}
+        filter={filter}
+        selectedEntities={[]}
+        selectionType={SelectionType.SELECTION_FILTER}
+        onClose={testing.fn()}
+      />,
+    );
+
+    const select = screen.getSelectElement();
+    const selectItems = await getSelectItemElementsForSelect(select);
+    fireEvent.click(selectItems[0]);
+    await wait();
+    fireEvent.click(screen.getDialogSaveButton());
+    await wait();
+
+    expect(saveTag).not.toHaveBeenCalled();
+    expect(screen.getDialog()).toHaveTextContent(
+      'Filtered credential tagging supports only literal search and exact credential type filters',
     );
   });
 

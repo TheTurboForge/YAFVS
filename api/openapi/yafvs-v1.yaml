@@ -3015,7 +3015,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-resource-assignment-write
       summary: Atomically update tag metadata and optional resource assignments
-      description: Updates tag metadata and resource assignments. Explicit IDs and typed port-list collection selections use one native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. Transitional raw filter expressions remain on gvmd's compatibility path while the remaining typed selectors migrate.
+      description: Updates tag metadata and resource assignments. Explicit IDs and typed collection selections use a native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. Transitional raw filter expressions remain on gvmd's compatibility path while the remaining typed selectors migrate.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -3294,7 +3294,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: resource-assignment-write
       summary: Add, remove, or replace active tag resource assignments
-      description: Adds, removes, or replaces assignments for the tag's existing resource type using bounded explicit resource_ids, a typed port-list resource_selection, or one transitional gvmd resource_filter. Explicit IDs and typed selections use the native database transaction; raw filter expressions use gvmd's compatibility path. The three selection forms are mutually exclusive. set with none clears all current assignments.
+      description: Adds, removes, or replaces assignments for the tag's existing resource type using bounded explicit resource_ids, a typed port-list or credential resource_selection, or one transitional gvmd resource_filter. Explicit IDs and typed selections use native database transactions; raw filter expressions use gvmd's compatibility path. The three selection forms are mutually exclusive. set with none clears all current assignments.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -10094,10 +10094,12 @@ components:
     TagResourceSelection:
       oneOf:
         - $ref: '#/components/schemas/TagPortListResourceSelection'
+        - $ref: '#/components/schemas/TagCredentialResourceSelection'
       discriminator:
         propertyName: resource_type
         mapping:
           port_list: '#/components/schemas/TagPortListResourceSelection'
+          credential: '#/components/schemas/TagCredentialResourceSelection'
     TagPortListResourceSelection:
       type: object
       required: [resource_type, expected_count]
@@ -10113,6 +10115,27 @@ components:
         predefined:
           type: boolean
           description: Optional exact predefined-state predicate.
+        expected_count:
+          type: integer
+          minimum: 1
+          maximum: 100000
+          description: Number of rows shown as matching when the operator confirmed the action. The transaction fails on drift before mutation.
+    TagCredentialResourceSelection:
+      type: object
+      required: [resource_type, expected_count]
+      additionalProperties: false
+      properties:
+        resource_type:
+          type: string
+          const: credential
+        search:
+          type: string
+          maxLength: 4096
+          description: Optional literal case-insensitive search over credential UUID, name, comment, owner name, and credential type. This is data, not a filter expression.
+        credential_type:
+          type: string
+          maxLength: 4096
+          description: Optional exact credential type predicate.
         expected_count:
           type: integer
           minimum: 1

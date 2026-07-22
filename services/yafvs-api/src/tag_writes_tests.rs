@@ -8,7 +8,7 @@ use crate::tag_write_sql::*;
 use crate::tag_write_validation::{
     MAX_TAG_RESOURCE_ID_BYTES, MAX_TAG_RESOURCE_WRITE_IDS, TagCloneRequest,
     TagResourceUpdateAction, ValidatedTagClone, ValidatedTagCreate, ValidatedTagPatch,
-    ValidatedTagResourceUpdate, default_tag_active,
+    ValidatedTagResourceSelection, ValidatedTagResourceUpdate, default_tag_active,
 };
 
 #[test]
@@ -43,12 +43,34 @@ fn tag_resource_selection_is_closed_bounded_and_exclusive() {
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","search":"  Production  ","predefined":true,"expected_count":2}}"#,
     ).unwrap()).unwrap();
     let selection = selected.resource_selection.unwrap();
-    assert_eq!(selection.search.as_deref(), Some("  Production  "));
-    assert_eq!(selection.predefined, Some(true));
-    assert_eq!(selection.expected_count, 2);
+    assert_eq!(
+        selection,
+        ValidatedTagResourceSelection::PortList {
+            search: Some("  Production  ".to_string()),
+            predefined: Some(true),
+            expected_count: 2,
+        }
+    );
+    let credential = validate_tag_resource_update_request(
+        serde_json::from_str(
+            r#"{"action":"add","resource_selection":{"resource_type":"credential","search":"ops","credential_type":"up","expected_count":3}}"#,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        credential.resource_selection.unwrap(),
+        ValidatedTagResourceSelection::Credential {
+            search: Some("ops".to_string()),
+            credential_type: Some("up".to_string()),
+            expected_count: 3,
+        }
+    );
     for value in [
         r#"{"action":"add","resource_selection":{"resource_type":"target","expected_count":1}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":1,"unknown":true}}"#,
+        r#"{"action":"add","resource_selection":{"resource_type":"credential","expected_count":1,"predefined":true}}"#,
+        r#"{"action":"add","resource_selection":{"resource_type":"credential","expected_count":1,"credential_type":"bad\ntype"}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":0}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":100001}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","search":"bad\nsearch","expected_count":1}}"#,
@@ -84,7 +106,7 @@ fn tag_port_list_selection_stays_native_parameterized_and_pre_mutation() {
     assert!(transactions.contains("tag_port_list_selection_sql()"));
     assert!(transactions.contains("&[&search, &predefined, &selection_limit]"));
     assert!(transactions.contains("i64::from(MAX_TAG_RESOURCE_SELECTION_MATCHES) + 1"));
-    assert!(transactions.contains("rows.len() as i64 != selection.expected_count"));
+    assert!(transactions.contains("rows.len() as i64 != *expected_count"));
     let patch_transaction = transactions
         .split_once("pub(crate) async fn execute_tag_patch_transaction")
         .unwrap()
@@ -102,6 +124,53 @@ fn tag_port_list_selection_stays_native_parameterized_and_pre_mutation() {
         assert!(selector.contains(fragment));
         assert!(collection.contains(fragment));
     }
+    assert!(selector.contains("$1") && selector.contains("$2"));
+}
+
+#[test]
+fn tag_credential_selection_uses_row_locks_before_tag_tables() {
+    let handlers = include_str!("tag_writes.rs");
+    assert!(!handlers.contains("LOCK TABLE credentials"));
+    assert!(handlers.contains("LOCK TABLE users IN SHARE MODE"));
+    let patch = handlers
+        .split_once("pub(crate) async fn patch_tag")
+        .unwrap()
+        .1
+        .split_once("pub(crate) async fn clone_tag")
+        .unwrap()
+        .0;
+    assert!(
+        patch
+            .find("resolve_tag_credential_selection_records")
+            .unwrap()
+            < patch
+                .find("LOCK TABLE tags, tag_resources IN SHARE ROW EXCLUSIVE MODE")
+                .unwrap()
+    );
+    let selector = crate::credential_query_sql::tag_credential_selection_sql();
+    let collection = crate::credential_query_sql::credential_assets_sql("name ASC");
+    let selector_predicate = crate::credential_query_sql::credential_collection_predicate_sql(
+        "c.uuid",
+        "coalesce(c.name, '')",
+        "coalesce(c.comment, '')",
+        "coalesce(u.name, '')",
+        "coalesce(c.type, '')",
+        "$1",
+        "$2",
+    );
+    let collection_predicate = crate::credential_query_sql::credential_collection_predicate_sql(
+        "credential_rows.id",
+        "credential_rows.name",
+        "credential_rows.comment",
+        "credential_rows.owner_name",
+        "credential_rows.credential_type",
+        "$1",
+        "$4",
+    );
+    assert!(selector.contains(&selector_predicate));
+    assert!(collection.contains(&collection_predicate));
+    assert!(selector.contains("LIMIT $3"));
+    assert!(selector.contains("FOR UPDATE OF c"));
     assert!(selector.contains("$1") && selector.contains("$2"));
 }
 
@@ -854,7 +923,7 @@ fn tag_commit_failures_are_classified_as_indeterminate() {
     let handler = include_str!("tag_writes.rs");
     let database_helpers = include_str!("tag_write_db.rs");
 
-    assert_eq!(handler.matches("map_tag_commit_error(error,").count(), 7);
+    assert_eq!(handler.matches("map_tag_commit_error(error,").count(), 9);
     assert!(!handler.contains("map_tag_write_db_error(error, \"commit "));
     assert!(database_helpers.contains("ApiError::MutationOutcomeIndeterminate"));
 }

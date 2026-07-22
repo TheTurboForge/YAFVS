@@ -14,12 +14,16 @@ import {
   fireEvent,
   wait,
 } from 'web/testing';
+import CollectionCounts from 'gmp/collection/collection-counts';
+import type Gmp from 'gmp/gmp';
 import Filter from 'gmp/models/filter';
 import Host from 'gmp/models/host';
 import PortList from 'gmp/models/port-list';
+import Scanner from 'gmp/models/scanner';
 import Tag from 'gmp/models/tag';
 import {createSession} from 'gmp/testing';
 import EntitiesContainer from 'web/entities/EntitiesContainer';
+import SelectionType from 'web/utils/SelectionType';
 
 interface CreateGmpOptions {
   deleteEntities?: ReturnType<typeof testing.fn>;
@@ -28,6 +32,7 @@ interface CreateGmpOptions {
   currentSettings?: ReturnType<typeof testing.fn>;
   getAllTags?: ReturnType<typeof testing.fn>;
   getTag?: ReturnType<typeof testing.fn>;
+  saveTag?: ReturnType<typeof testing.fn>;
   buildUrl?: ReturnType<typeof testing.fn>;
   session?: ReturnType<typeof createSession> & {token?: string};
 }
@@ -139,6 +144,7 @@ const createGmp = ({
   currentSettings = testing.fn().mockResolvedValue(currentSettingsResponse),
   getAllTags = testing.fn().mockResolvedValue({data: []}),
   getTag = testing.fn().mockResolvedValue({data: {id: '1'}}),
+  saveTag = testing.fn().mockResolvedValue({data: {id: '1'}}),
   buildUrl,
   session = createSession(),
 }: CreateGmpOptions = {}) => ({
@@ -146,8 +152,9 @@ const createGmp = ({
   portlists: {
     exportByFilter,
   },
+  scanners: {},
   tags: {delete: deleteEntities, deleteByFilter, getAll: getAllTags},
-  tag: {get: getTag},
+  tag: {get: getTag, save: saveTag},
   user: {currentSettings},
   session,
 });
@@ -306,5 +313,79 @@ describe('EntitiesContainer', () => {
     });
     expect(screen.getByText('native-value')).toBeInTheDocument();
     expect(screen.getByText('native-comment')).toBeInTheDocument();
+  });
+
+  test('should send typed scanner selection from the live entities container', async () => {
+    const saveTag = testing.fn().mockResolvedValue({data: {id: 'tag-1'}});
+    const managedTag = new Tag({
+      id: 'tag-1',
+      name: 'Managed',
+      resourceType: 'scanner',
+    });
+    const gmp = createGmp({
+      getAllTags: testing.fn().mockResolvedValue({data: [managedTag]}),
+      getTag: testing.fn().mockResolvedValue({data: managedTag}),
+      saveTag,
+    });
+    const filter = Filter.fromString('search=remote first=1 rows=10 sort=name');
+    const {render} = rendererWith({gmp, store: true, router: true});
+    render(
+      <EntitiesContainer
+        entities={[new Scanner({id: 'scanner-1', name: 'Remote'})]}
+        entitiesCounts={new CollectionCounts({filtered: 4, all: 6})}
+        filter={filter}
+        gmp={gmp as unknown as Gmp}
+        gmpName="scanner"
+        isLoading={false}
+        loadedFilter={filter}
+        notify={notify}
+        reload={reload}
+        showError={showError}
+        showErrorMessage={showErrorMessage}
+        showSuccessMessage={showSuccessMessage}
+        updateFilter={updateFilter}
+        onDownload={onDownload}
+      >
+        {({onSelectionTypeChange, onTagsBulk}) => (
+          <>
+            <button
+              onClick={() =>
+                onSelectionTypeChange(SelectionType.SELECTION_FILTER)
+              }
+            >
+              Select all filtered
+            </button>
+            <button onClick={() => onTagsBulk()}>Tag filtered</button>
+          </>
+        )}
+      </EntitiesContainer>,
+    );
+
+    fireEvent.click(screen.getByRole('button', {name: 'Select all filtered'}));
+    await wait();
+    fireEvent.click(screen.getByRole('button', {name: 'Tag filtered'}));
+    const select = screen.getSelectElement();
+    const selectItems = await getSelectItemElementsForSelect(select);
+    fireEvent.click(selectItems[0]);
+    await wait();
+    fireEvent.click(screen.getDialogSaveButton());
+    await wait();
+
+    expect(saveTag).toHaveBeenCalledWith({
+      active: true,
+      comment: '',
+      filter: undefined,
+      id: 'tag-1',
+      name: 'Managed',
+      resourceIds: undefined,
+      resourceSelection: {
+        resourceType: 'scanner',
+        search: 'remote',
+        expectedCount: 4,
+      },
+      resourceType: 'scanner',
+      resourcesAction: 'add',
+      value: '',
+    });
   });
 });

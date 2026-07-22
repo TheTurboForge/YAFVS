@@ -19,10 +19,12 @@ import logger from 'gmp/log';
 import Filter, {RESET_FILTER} from 'gmp/models/filter';
 import type Model from 'gmp/models/model';
 import type Tag from 'gmp/models/tag';
+import {nativeTagResourceSelectionFromFilter} from 'gmp/native-api/tag-resource-selection';
 import {
   fetchNativeTag,
   fetchNativeTags,
   nativeTagsQueryFromFilter,
+  type NativeTagResourceSelectionInput,
 } from 'gmp/native-api/tags';
 import {map} from 'gmp/utils/array';
 import {
@@ -508,12 +510,19 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
 
   handleAddMultiTag({comment, id, name, value = ''}: TagsDialogData) {
     const {gmp} = this.props;
-    const {loadedFilter, selectionType, selected, entities = []} = this.state;
+    const {
+      loadedFilter,
+      selectionType,
+      selected,
+      entities = [],
+      entitiesCounts,
+    } = this.state;
 
     const entitiesType = getEntityType(entities[0]);
 
     let resourceIds: string[] | undefined;
     let filter: Filter | undefined;
+    let resourceSelection: NativeTagResourceSelectionInput | undefined;
     if (selectionType === SelectionType.SELECTION_USER) {
       resourceIds = map(selected, res => res.id as string);
       filter = undefined;
@@ -522,6 +531,14 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
       filter = undefined;
     } else {
       filter = (loadedFilter as Filter).all();
+      resourceSelection = nativeTagResourceSelectionFromFilter(
+        entitiesType,
+        filter,
+        (entitiesCounts as CollectionCounts).filtered,
+      );
+      if (resourceSelection !== undefined) {
+        filter = undefined;
+      }
     }
 
     return gmp.tag
@@ -532,6 +549,7 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
         id: id as string,
         name: name as string,
         resourceIds,
+        resourceSelection,
         resourceType: entitiesType,
         resourcesAction: 'add',
         value,

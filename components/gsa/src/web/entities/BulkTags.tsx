@@ -9,10 +9,7 @@ import type CollectionCounts from 'gmp/collection/collection-counts';
 import Filter from 'gmp/models/filter';
 import type Model from 'gmp/models/model';
 import Tag from 'gmp/models/tag';
-import {nativeCredentialsQueryFromFilter} from 'gmp/native-api/credentials';
-import {nativePortListsQueryFromFilter} from 'gmp/native-api/port-lists';
-import {nativeScannersQueryFromFilter} from 'gmp/native-api/scanners';
-import {nativeTargetQueryFromFilter} from 'gmp/native-api/targets';
+import {nativeTagResourceSelectionFromFilter} from 'gmp/native-api/tag-resource-selection';
 import {
   fetchNativeTag,
   fetchNativeTags,
@@ -46,181 +43,6 @@ const tagIdFromResponse = (data: unknown): string =>
   typeof data === 'string'
     ? data
     : String((data as {id?: string | number})?.id ?? '');
-
-const supportedCollectionControlTerms = new Set([
-  'first',
-  'rows',
-  'sort',
-  'sort-reverse',
-]);
-
-const portListResourceSelection = (
-  filter: Filter,
-  expectedCount: number,
-): NativeTagResourceSelectionInput => {
-  const selectionFilter = filter.all();
-  const criteriaTerms = selectionFilter
-    .getAllTerms()
-    .filter(term => !supportedCollectionControlTerms.has(term.keyword ?? ''));
-  const searchTerms = criteriaTerms.filter(term => term.keyword === 'search');
-  const predefinedTerms = criteriaTerms.filter(
-    term => term.keyword === 'predefined',
-  );
-  const literalSearchTerms = criteriaTerms.filter(
-    term => term.keyword === undefined && term.relation === undefined,
-  );
-  const onlySupportedTerms = criteriaTerms.every(
-    term =>
-      (term.keyword === undefined && term.relation === undefined) ||
-      ((term.keyword === 'search' || term.keyword === 'predefined') &&
-        term.relation === '=' &&
-        term.value !== undefined),
-  );
-  if (
-    !onlySupportedTerms ||
-    searchTerms.length > 1 ||
-    predefinedTerms.length > 1 ||
-    (searchTerms.length > 0 && literalSearchTerms.length > 0)
-  ) {
-    throw new Error(
-      'Filtered port-list tagging supports only literal search and predefined filters',
-    );
-  }
-  const query = nativePortListsQueryFromFilter(selectionFilter);
-  if (
-    query.predefined !== undefined &&
-    query.predefined !== '0' &&
-    query.predefined !== '1'
-  ) {
-    throw new Error('Invalid port-list predefined filter');
-  }
-  return {
-    resourceType: 'port_list',
-    ...(query.filter === '' ? {} : {search: query.filter}),
-    ...(query.predefined === undefined
-      ? {}
-      : {predefined: query.predefined === '1'}),
-    expectedCount,
-  };
-};
-
-const targetResourceSelection = (
-  filter: Filter,
-  expectedCount: number,
-): NativeTagResourceSelectionInput => {
-  const selectionFilter = filter.all();
-  const criteriaTerms = selectionFilter
-    .getAllTerms()
-    .filter(term => !supportedCollectionControlTerms.has(term.keyword ?? ''));
-  const searchTerms = criteriaTerms.filter(term => term.keyword === 'search');
-  const literalSearchTerms = criteriaTerms.filter(
-    term => term.keyword === undefined && term.relation === undefined,
-  );
-  const onlySupportedTerms = criteriaTerms.every(
-    term =>
-      (term.keyword === undefined && term.relation === undefined) ||
-      (term.keyword === 'search' &&
-        term.relation === '=' &&
-        term.value !== undefined),
-  );
-  if (
-    !onlySupportedTerms ||
-    searchTerms.length > 1 ||
-    literalSearchTerms.length > 1 ||
-    (searchTerms.length > 0 && literalSearchTerms.length > 0)
-  ) {
-    throw new Error('Filtered target tagging supports only one literal search');
-  }
-  const query = nativeTargetQueryFromFilter(selectionFilter);
-  return {
-    resourceType: 'target',
-    ...(query.filter === '' ? {} : {search: query.filter}),
-    expectedCount,
-  };
-};
-
-const scannerResourceSelection = (
-  filter: Filter,
-  expectedCount: number,
-): NativeTagResourceSelectionInput => {
-  const selectionFilter = filter.all();
-  const criteriaTerms = selectionFilter
-    .getAllTerms()
-    .filter(term => !supportedCollectionControlTerms.has(term.keyword ?? ''));
-  const searchTerms = criteriaTerms.filter(term => term.keyword === 'search');
-  const literalSearchTerms = criteriaTerms.filter(
-    term => term.keyword === undefined && term.relation === undefined,
-  );
-  const onlySupportedTerms = criteriaTerms.every(
-    term =>
-      (term.keyword === undefined && term.relation === undefined) ||
-      (term.keyword === 'search' &&
-        term.relation === '=' &&
-        term.value !== undefined),
-  );
-  if (
-    !onlySupportedTerms ||
-    searchTerms.length > 1 ||
-    literalSearchTerms.length > 1 ||
-    (searchTerms.length > 0 && literalSearchTerms.length > 0)
-  ) {
-    throw new Error(
-      'Filtered scanner tagging supports only one literal search',
-    );
-  }
-  const query = nativeScannersQueryFromFilter(selectionFilter);
-  return {
-    resourceType: 'scanner',
-    ...(query.filter === '' ? {} : {search: query.filter}),
-    expectedCount,
-  };
-};
-
-const credentialResourceSelection = (
-  filter: Filter,
-  expectedCount: number,
-): NativeTagResourceSelectionInput => {
-  const selectionFilter = filter.all();
-  const criteriaTerms = selectionFilter
-    .getAllTerms()
-    .filter(term => !supportedCollectionControlTerms.has(term.keyword ?? ''));
-  const searchTerms = criteriaTerms.filter(term => term.keyword === 'search');
-  const credentialTypeTerms = criteriaTerms.filter(
-    term => term.keyword === 'type' || term.keyword === 'credential_type',
-  );
-  const literalSearchTerms = criteriaTerms.filter(
-    term => term.keyword === undefined && term.relation === undefined,
-  );
-  const onlySupportedTerms = criteriaTerms.every(
-    term =>
-      (term.keyword === undefined && term.relation === undefined) ||
-      ((term.keyword === 'search' ||
-        term.keyword === 'type' ||
-        term.keyword === 'credential_type') &&
-        term.relation === '=' &&
-        term.value !== undefined),
-  );
-  if (
-    !onlySupportedTerms ||
-    searchTerms.length > 1 ||
-    credentialTypeTerms.length > 1 ||
-    (searchTerms.length > 0 && literalSearchTerms.length > 0) ||
-    (credentialTypeTerms.length > 0 && literalSearchTerms.length > 0)
-  ) {
-    throw new Error(
-      'Filtered credential tagging supports only literal search and exact credential type filters',
-    );
-  }
-  const query = nativeCredentialsQueryFromFilter(selectionFilter);
-  return {
-    resourceType: 'credential',
-    ...(query.filter === '' ? {} : {search: query.filter}),
-    ...(query.credentialType === undefined
-      ? {}
-      : {credentialType: query.credentialType}),
-    expectedCount,
-  };
-};
 
 const loadTag = (gmp: ReturnType<typeof useGmp>, data: unknown) => {
   const id = tagIdFromResponse(data);
@@ -328,7 +150,7 @@ const BulkTags = <TEntity extends Model>({
         .then(closeTagDialog)
         .catch(setError);
     },
-    [closeTagDialog, gmp.tag, tags],
+    [closeTagDialog, gmp, tags],
   );
 
   const handleCloseTagDialog = useCallback(() => {
@@ -365,44 +187,19 @@ const BulkTags = <TEntity extends Model>({
         tagEntitiesIds = getEntityIds(selectedEntities);
       } else if (selectionType === SelectionType.SELECTION_PAGE_CONTENTS) {
         tagEntitiesIds = getEntityIds(entities);
-      } else if (entitiesType === 'portlist') {
-        try {
-          resourceSelection = portListResourceSelection(
-            filter,
-            entitiesCounts.filtered,
-          );
-        } catch (error) {
-          return Promise.reject(error);
-        }
-      } else if (entitiesType === 'credential') {
-        try {
-          resourceSelection = credentialResourceSelection(
-            filter,
-            entitiesCounts.filtered,
-          );
-        } catch (error) {
-          return Promise.reject(error);
-        }
-      } else if (entitiesType === 'scanner') {
-        try {
-          resourceSelection = scannerResourceSelection(
-            filter,
-            entitiesCounts.filtered,
-          );
-        } catch (error) {
-          return Promise.reject(error);
-        }
-      } else if (entitiesType === 'target') {
-        try {
-          resourceSelection = targetResourceSelection(
-            filter,
-            entitiesCounts.filtered,
-          );
-        } catch (error) {
-          return Promise.reject(error);
-        }
       } else {
-        loadedFilter = filter.all().toFilterString();
+        try {
+          resourceSelection = nativeTagResourceSelectionFromFilter(
+            entitiesType,
+            filter,
+            entitiesCounts.filtered,
+          );
+        } catch (error) {
+          return Promise.reject(error);
+        }
+        if (resourceSelection === undefined) {
+          loadedFilter = filter.all().toFilterString();
+        }
       }
 
       return gmp.tag

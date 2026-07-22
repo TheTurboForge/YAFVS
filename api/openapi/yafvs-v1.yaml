@@ -3015,7 +3015,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-resource-assignment-write
       summary: Atomically update tag metadata and optional resource assignments
-      description: Updates tag metadata and resource assignments. Explicit IDs and typed collection selections use a native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. Transitional raw filter expressions have no remaining first-party browser caller and remain on gvmd's compatibility path pending removal.
+      description: Updates tag metadata and resource assignments. Explicit IDs and typed collection selections use a native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. Transitional raw filter expressions remain for the filtered Users bulk-tag action on gvmd's compatibility path pending its typed selector and removal.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -10087,7 +10087,7 @@ components:
           type: string
           minLength: 1
           maxLength: 16384
-          description: A transitional gvmd raw-filter compatibility field with no remaining first-party browser caller. Mutually exclusive with resource_ids and resource_selection and retained temporarily pending removal.
+          description: A transitional gvmd raw-filter compatibility field retained for the filtered Users bulk-tag action pending its typed selector and removal. Mutually exclusive with resource_ids and resource_selection.
         resource_selection:
           $ref: '#/components/schemas/TagResourceSelection'
           description: Typed collection selection. Currently accepted only with action=add.

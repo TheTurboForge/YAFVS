@@ -6865,248 +6865,6 @@ get_override_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
  *
  * @return Enveloped XML object.
  */
-char *
-create_override_gmp (gvm_connection_t *connection,
-                     gsad_credentials_t *credentials, params_t *params,
-                     gsad_command_response_data_t *response_data)
-{
-  char *ret;
-  gchar *response;
-  const char *oid, *severity, *custom_severity, *new_severity, *port, *hosts;
-  const char *text, *task_id, *result_id;
-  /* For get_report. */
-  const char *active, *days;
-  entity_t entity;
-
-  oid = params_value (params, "oid");
-  CHECK_VARIABLE_INVALID (oid, "Create Override");
-
-  port = get_port_from_params (params);
-  hosts = get_hosts_from_params (params);
-  task_id = get_task_id_from_params (params);
-  severity = get_severity_from_params (params);
-  result_id = get_result_id_from_params (params);
-
-  custom_severity = params_value (params, "custom_severity");
-  CHECK_VARIABLE_INVALID (custom_severity, "Create Override");
-
-  if (custom_severity != NULL && strcmp (custom_severity, "0"))
-    {
-      if (params_valid (params, "new_severity"))
-        new_severity = params_value (params, "new_severity");
-      else if (params_original_value (params, "new_severity") == NULL
-               || strcmp (params_original_value (params, "new_severity"), ""))
-        new_severity = NULL;
-      else
-        new_severity = "";
-      CHECK_VARIABLE_INVALID (new_severity, "Create Override");
-    }
-  else
-    {
-      if (params_valid (params, "new_severity_from_list"))
-        new_severity = params_value (params, "new_severity_from_list");
-      else if (params_original_value (params, "new_severity_from_list") == NULL
-               || strcmp (
-                 params_original_value (params, "new_severity_from_list"), ""))
-        new_severity = NULL;
-      else
-        new_severity = "";
-      CHECK_VARIABLE_INVALID (new_severity, "Create Override");
-    }
-
-  active = params_value (params, "active");
-  CHECK_VARIABLE_INVALID (active, "Create Override");
-
-  text = params_value (params, "text");
-  days = params_value (params, "days");
-
-  response = NULL;
-  entity = NULL;
-  switch (gmpf (connection, credentials, &response, &entity, response_data,
-                "<create_override>"
-                "<active>%s</active>"
-                "<nvt oid=\"%s\"/>"
-                "<hosts>%s</hosts>"
-                "<port>%s</port>"
-                "<severity>%s</severity>"
-                "<new_severity>%s</new_severity>"
-                "<text>%s</text>"
-                "<task id=\"%s\"/>"
-                "<result id=\"%s\"/>"
-                "</create_override>",
-                strcmp (active, "1") ? active : (days ? days : "-1"), oid,
-                hosts ? hosts : "", port ? port : "", severity ? severity : "",
-                new_severity, text ? text : "", task_id ? task_id : "",
-                result_id ? result_id : ""))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new override. "
-        "No new override was created. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new override. "
-        "It is unclear whether the override has been created or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new override. "
-        "It is unclear whether the override has been created or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  if (entity_attribute (entity, "id"))
-    params_add (params, "override_id", entity_attribute (entity, "id"));
-  ret = response_from_entity (connection, credentials, params, entity,
-                              "Create Override", response_data);
-  free_entity (entity);
-  g_free (response);
-  return ret;
-}
-
-/**
- * @brief Delete override, get next page, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-delete_override_gmp (gvm_connection_t *connection,
-                     gsad_credentials_t *credentials, params_t *params,
-                     gsad_command_response_data_t *response_data)
-{
-  return move_resource_to_trash (connection, "override", credentials, params,
-                                 response_data);
-}
-
-/**
- * @brief Save override, get next page, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials     Username and password for authentication.
- * @param[in]  params          Request parameters.
- * @param[out] response_data   Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-save_override_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  gchar *response;
-  entity_t entity;
-  const char *override_id, *text, *hosts, *port;
-  const char *severity, *custom_severity, *new_severity;
-  const char *task_id, *result_id, *active, *days, *oid;
-  char *ret;
-
-  override_id = params_value (params, "override_id");
-
-  port = get_port_from_params (params);
-  hosts = get_hosts_from_params (params);
-  task_id = get_task_id_from_params (params);
-  severity = get_severity_from_params (params);
-  result_id = get_result_id_from_params (params);
-
-  text = params_value (params, "text");
-  if (text == NULL)
-    params_given (params, "text") || (text = "");
-
-  custom_severity = params_value (params, "custom_severity");
-  if (custom_severity && strcmp (custom_severity, "0") != 0)
-    new_severity = params_value (params, "new_severity");
-  else
-    new_severity = params_value (params, "new_severity_from_list");
-
-  active = params_value (params, "active");
-  days = params_value (params, "days");
-  oid = params_value (params, "oid");
-
-  CHECK_VARIABLE_INVALID (active, "Save Override");
-  CHECK_VARIABLE_INVALID (override_id, "Save Override");
-  CHECK_VARIABLE_INVALID (new_severity, "Save Override");
-  CHECK_VARIABLE_INVALID (days, "Save Override");
-  CHECK_VARIABLE_INVALID (oid, "Save Override");
-
-  response = NULL;
-  entity = NULL;
-  switch (gmpf (connection, credentials, &response, &entity, response_data,
-                "<modify_override override_id=\"%s\">"
-                "<active>%s</active>"
-                "<nvt oid=\"%s\"/>"
-                "<hosts>%s</hosts>"
-                "<port>%s</port>"
-                "<severity>%s</severity>"
-                "<new_severity>%s</new_severity>"
-                "<text>%s</text>"
-                "<task id=\"%s\"/>"
-                "<result id=\"%s\"/>"
-                "</modify_override>",
-                override_id,
-                strcmp (active, "1") ? active : (days ? days : "-1"), oid,
-                hosts ? hosts : "", port ? port : "", severity ? severity : "",
-                new_severity, text ? text : "", task_id ? task_id : "",
-                result_id ? result_id : ""))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a override. "
-        "The override remains the same. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a override. "
-        "It is unclear whether the override has been saved or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a override. "
-        "It is unclear whether the override has been saved or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  ret = response_from_entity (connection, credentials, params, entity,
-                              "Save Override", response_data);
-
-  free_entity (entity);
-  g_free (response);
-  return ret;
-}
-
 /* Scanners. */
 
 /**
@@ -11076,7 +10834,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (create_asset)
   ELSE (create_credential)
   ELSE (create_host)
-  ELSE (create_override)
   ELSE (create_scanner)
   ELSE (create_task)
   ELSE (create_tag)
@@ -11088,7 +10845,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_config)
   ELSE (delete_credential)
   ELSE (delete_from_trash)
-  ELSE (delete_override)
   ELSE (delete_report)
   ELSE (delete_scanner)
   ELSE (delete_schedule)
@@ -11107,7 +10863,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (save_config_nvt)
   ELSE (save_credential)
   ELSE (save_license)
-  ELSE (save_override)
   ELSE (save_scanner)
   ELSE (save_tag)
   ELSE (save_target)

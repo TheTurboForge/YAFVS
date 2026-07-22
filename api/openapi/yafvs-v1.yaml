@@ -122,7 +122,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: result-detail-metadata-tags-and-overrides-read
       summary: Read one scan result metadata row
-      description: Read-only raw result detail backed by gvmd/PostgreSQL. Native detail includes result/NVT explanatory text, NVT-level EPSS context, active result user tags, and effective active override metadata for display. Inherited paths still own exports, actions, create-override, and override/tag mutation workflows.
+      description: Read-only raw result detail backed by gvmd/PostgreSQL. Native detail includes result/NVT explanatory text, NVT-level EPSS context, active result user tags, and effective active override metadata for display. Inherited paths still own result exports, actions, tag mutation, and richer compatibility-only detail surfaces; override creation and mutation use the native override lifecycle.
       parameters:
         - $ref: '#/components/parameters/ResultId'
       responses:
@@ -11352,7 +11352,7 @@ components:
             $ref: '#/components/schemas/ReportUserTag'
         overrides:
           type: array
-          description: Effective active override metadata for this result, resolved through gvmd's result_overrides view. Override mutation and create/export workflows remain inherited.
+          description: Effective active override metadata for this result, resolved through gvmd's result_overrides view. Override creation and mutation use the native override lifecycle; retained legacy result expansion may still consume the same underlying override state.
           items:
             $ref: '#/components/schemas/ResultOverride'
     RawResultEvidence:

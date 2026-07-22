@@ -509,49 +509,6 @@ create_credential_data_reset (create_credential_data_t *data)
 }
 
 /**
- * @brief Command data for the create_override command.
- */
-typedef struct
-{
-  char *active;       ///< Whether the override is active.
-  char *copy;         ///< UUID of resource to copy.
-  char *hosts;        ///< Hosts to which to limit override.
-  char *new_threat;   ///< New threat value of overridden results.
-  char *new_severity; ///< New severity score of overridden results.
-  char *nvt_oid;      ///< NVT to which to limit override.
-  char *port;         ///< Port to which to limit override.
-  char *result_id;    ///< ID of result to which to limit override.
-  char *severity;     ///< Severity score of results to override.
-  char *task_id;      ///< ID of task to which to limit override.
-  char *text;         ///< Text of override.
-  char *threat;       ///< Threat to which to limit override.
-} create_override_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-create_override_data_reset (create_override_data_t *data)
-{
-  free (data->active);
-  free (data->copy);
-  free (data->hosts);
-  free (data->new_threat);
-  free (data->new_severity);
-  free (data->nvt_oid);
-  free (data->port);
-  free (data->result_id);
-  free (data->task_id);
-  free (data->text);
-  free (data->threat);
-  free (data->severity);
-
-  memset (data, 0, sizeof (create_override_data_t));
-}
-
-/**
  * @brief Command data for the create_scanner command.
  */
 typedef struct
@@ -876,28 +833,6 @@ delete_credential_data_reset (delete_credential_data_t *data)
   free (data->credential_id);
 
   memset (data, 0, sizeof (delete_credential_data_t));
-}
-
-/**
- * @brief Command data for the delete_override command.
- */
-typedef struct
-{
-  char *override_id;   ///< ID of override to delete.
-  int ultimate;        ///< Boolean.  Whether to remove entirely or to trashcan.
-} delete_override_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_override_data_reset (delete_override_data_t *data)
-{
-  free (data->override_id);
-
-  memset (data, 0, sizeof (delete_override_data_t));
 }
 
 /**
@@ -1769,49 +1704,6 @@ modify_credential_data_reset (modify_credential_data_t *data)
 }
 
 /**
- * @brief Command data for the modify_override command.
- */
-typedef struct
-{
-  char *active;       ///< Whether the override is active.
-  char *hosts;        ///< Hosts to which to limit override.
-  char *new_severity; ///< New severity score of overridden results.
-  char *new_threat;   ///< New threat value of overridden results.
-  char *nvt_oid;      ///< NVT to which to limit override.
-  char *override_id;  ///< ID of override to modify.
-  char *port;         ///< Port to which to limit override.
-  char *result_id;    ///< ID of result to which to limit override.
-  char *severity;     ///< Severity score of results to override.
-  char *task_id;      ///< ID of task to which to limit override.
-  char *text;         ///< Text of override.
-  char *threat;       ///< Threat to which to limit override.
-} modify_override_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-modify_override_data_reset (modify_override_data_t *data)
-{
-  free (data->active);
-  free (data->hosts);
-  free (data->new_severity);
-  free (data->new_threat);
-  free (data->nvt_oid);
-  free (data->override_id);
-  free (data->port);
-  free (data->result_id);
-  free (data->severity);
-  free (data->task_id);
-  free (data->text);
-  free (data->threat);
-
-  memset (data, 0, sizeof (modify_override_data_t));
-}
-
-/**
  * @brief Command data for the modify_user command.
  */
 typedef struct
@@ -2292,7 +2184,6 @@ typedef union
 {
   create_asset_data_t create_asset;                   ///< create_asset
   create_credential_data_t create_credential;         ///< create_credential
-  create_override_data_t create_override;             ///< create_override
   create_scanner_data_t create_scanner;               ///< create_scanner
   create_tag_data_t create_tag;                       ///< create_tag
   create_target_data_t create_target;                 ///< create_target
@@ -2302,7 +2193,6 @@ typedef union
   delete_credential_data_t delete_credential;         ///< delete_credential
   delete_config_data_t delete_config;                 ///< delete_config
   delete_alert_data_t delete_alert;                   ///< delete_alert
-  delete_override_data_t delete_override;             ///< delete_override
   delete_report_data_t delete_report;                 ///< delete_report
   delete_scanner_data_t delete_scanner;               ///< delete_scanner
   delete_schedule_data_t delete_schedule;             ///< delete_schedule
@@ -2387,12 +2277,6 @@ static create_credential_data_t *create_credential_data
  = (create_credential_data_t*) &(command_data.create_credential);
 
 /**
- * @brief Parser callback data for CREATE_OVERRIDE.
- */
-static create_override_data_t *create_override_data
- = (create_override_data_t*) &(command_data.create_override);
-
-/**
  * @brief Parser callback data for CREATE_SCANNER.
  */
 static create_scanner_data_t *create_scanner_data
@@ -2445,12 +2329,6 @@ static delete_alert_data_t *delete_alert_data
  */
 static delete_credential_data_t *delete_credential_data
  = (delete_credential_data_t*) &(command_data.delete_credential);
-
-/**
- * @brief Parser callback data for DELETE_OVERRIDE.
- */
-static delete_override_data_t *delete_override_data
- = (delete_override_data_t*) &(command_data.delete_override);
 
 /**
  * @brief Parser callback data for DELETE_REPORT.
@@ -2670,12 +2548,6 @@ static modify_credential_data_t *modify_credential_data
  = &(command_data.modify_credential);
 
 /**
- * @brief Parser callback data for MODIFY_OVERRIDE.
- */
-static modify_override_data_t *modify_override_data
- = (modify_override_data_t*) &(command_data.create_override);
-
-/**
  * @brief Parser callback data for MODIFY_SCANNER.
  */
 static modify_scanner_data_t *modify_scanner_data
@@ -2819,19 +2691,6 @@ typedef enum
   CLIENT_CREATE_CREDENTIAL_PRIVACY_PASSWORD,
   CLIENT_CREATE_CREDENTIAL_REALM,
   CLIENT_CREATE_CREDENTIAL_TYPE,
-  CLIENT_CREATE_OVERRIDE,
-  CLIENT_CREATE_OVERRIDE_ACTIVE,
-  CLIENT_CREATE_OVERRIDE_COPY,
-  CLIENT_CREATE_OVERRIDE_HOSTS,
-  CLIENT_CREATE_OVERRIDE_NEW_SEVERITY,
-  CLIENT_CREATE_OVERRIDE_NEW_THREAT,
-  CLIENT_CREATE_OVERRIDE_NVT,
-  CLIENT_CREATE_OVERRIDE_PORT,
-  CLIENT_CREATE_OVERRIDE_RESULT,
-  CLIENT_CREATE_OVERRIDE_SEVERITY,
-  CLIENT_CREATE_OVERRIDE_TASK,
-  CLIENT_CREATE_OVERRIDE_TEXT,
-  CLIENT_CREATE_OVERRIDE_THREAT,
   CLIENT_CREATE_SCANNER,
   CLIENT_CREATE_SCANNER_COMMENT,
   CLIENT_CREATE_SCANNER_COPY,
@@ -2905,7 +2764,6 @@ typedef enum
   CLIENT_DELETE_ASSET,
   CLIENT_DELETE_CONFIG,
   CLIENT_DELETE_CREDENTIAL,
-  CLIENT_DELETE_OVERRIDE,
   CLIENT_DELETE_REPORT,
   CLIENT_DELETE_SCANNER,
   CLIENT_DELETE_SCHEDULE,
@@ -2977,18 +2835,6 @@ typedef enum
   CLIENT_MODIFY_CREDENTIAL_REALM,
   CLIENT_MODIFY_INTEGRATION_CONFIG,
   CLIENT_MODIFY_LICENSE,
-  CLIENT_MODIFY_OVERRIDE,
-  CLIENT_MODIFY_OVERRIDE_ACTIVE,
-  CLIENT_MODIFY_OVERRIDE_HOSTS,
-  CLIENT_MODIFY_OVERRIDE_NEW_SEVERITY,
-  CLIENT_MODIFY_OVERRIDE_NEW_THREAT,
-  CLIENT_MODIFY_OVERRIDE_PORT,
-  CLIENT_MODIFY_OVERRIDE_RESULT,
-  CLIENT_MODIFY_OVERRIDE_SEVERITY,
-  CLIENT_MODIFY_OVERRIDE_TASK,
-  CLIENT_MODIFY_OVERRIDE_TEXT,
-  CLIENT_MODIFY_OVERRIDE_THREAT,
-  CLIENT_MODIFY_OVERRIDE_NVT,
   CLIENT_MODIFY_SCANNER,
   CLIENT_MODIFY_SCANNER_COMMENT,
   CLIENT_MODIFY_SCANNER_NAME,
@@ -3248,8 +3094,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             gvm_append_string (&create_credential_data->name, "");
             set_client_state (CLIENT_CREATE_CREDENTIAL);
           }
-        else if (strcasecmp ("CREATE_OVERRIDE", element_name) == 0)
-          set_client_state (CLIENT_CREATE_OVERRIDE);
         else if (strcasecmp ("CREATE_SCANNER", element_name) == 0)
           set_client_state (CLIENT_CREATE_SCANNER);
         else if (strcasecmp ("CREATE_TAG", element_name) == 0)
@@ -3324,18 +3168,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             else
               delete_credential_data->ultimate = 0;
             set_client_state (CLIENT_DELETE_CREDENTIAL);
-          }
-        else if (strcasecmp ("DELETE_OVERRIDE", element_name) == 0)
-          {
-            const gchar* attribute;
-            append_attribute (attribute_names, attribute_values, "override_id",
-                              &delete_override_data->override_id);
-            if (find_attribute (attribute_names, attribute_values,
-                                "ultimate", &attribute))
-              delete_override_data->ultimate = strcmp (attribute, "0");
-            else
-              delete_override_data->ultimate = 0;
-            set_client_state (CLIENT_DELETE_OVERRIDE);
           }
         else if (strcasecmp ("DELETE_REPORT", element_name) == 0)
           {
@@ -4060,12 +3892,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                                   attribute_values);
             set_client_state (CLIENT_MODIFY_LICENSE);
           }
-        else if (strcasecmp ("MODIFY_OVERRIDE", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "override_id",
-                              &modify_override_data->override_id);
-            set_client_state (CLIENT_MODIFY_OVERRIDE);
-          }
         else if (strcasecmp ("MODIFY_SCANNER", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values, "scanner_id",
@@ -4710,55 +4536,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           {
             modify_user_data->sources = make_array ();
             set_client_state (CLIENT_MODIFY_USER_SOURCES);
-          }
-        ELSE_READ_OVER;
-
-      case CLIENT_MODIFY_OVERRIDE:
-        if (strcasecmp ("ACTIVE", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_OVERRIDE_ACTIVE);
-        else if (strcasecmp ("HOSTS", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_OVERRIDE_HOSTS);
-        else if (strcasecmp ("NEW_SEVERITY", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_OVERRIDE_NEW_SEVERITY);
-        else if (strcasecmp ("NEW_THREAT", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_OVERRIDE_NEW_THREAT);
-        else if (strcasecmp ("PORT", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_OVERRIDE_PORT);
-        else if (strcasecmp ("RESULT", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_override_data->result_id);
-            if (modify_override_data->result_id
-                && modify_override_data->result_id[0] == '\0')
-              {
-                g_free (modify_override_data->result_id);
-                modify_override_data->result_id = NULL;
-              }
-            set_client_state (CLIENT_MODIFY_OVERRIDE_RESULT);
-          }
-        else if (strcasecmp ("SEVERITY", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_OVERRIDE_SEVERITY);
-        else if (strcasecmp ("TASK", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_override_data->task_id);
-            if (modify_override_data->task_id
-                && modify_override_data->task_id[0] == '\0')
-              {
-                g_free (modify_override_data->task_id);
-                modify_override_data->task_id = NULL;
-              }
-            set_client_state (CLIENT_MODIFY_OVERRIDE_TASK);
-          }
-        else if (strcasecmp ("TEXT", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_OVERRIDE_TEXT);
-        else if (strcasecmp ("THREAT", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_OVERRIDE_THREAT);
-        else if (strcasecmp ("NVT", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "oid",
-                              &modify_override_data->nvt_oid);
-            set_client_state (CLIENT_MODIFY_OVERRIDE_NVT);
           }
         ELSE_READ_OVER;
 
@@ -15112,7 +14889,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
       CASE_DELETE (CONFIG, config, "Config");
       CASE_DELETE (CREDENTIAL, credential, "Credential");
-      CASE_DELETE (OVERRIDE, override, "Override");
 
       case CLIENT_DELETE_REPORT:
         if (delete_report_data->report_id)
@@ -16063,188 +15839,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_CREATE_CREDENTIAL_PRIVACY, PASSWORD);
       CLOSE (CLIENT_CREATE_CREDENTIAL, REALM);
       CLOSE (CLIENT_CREATE_CREDENTIAL, TYPE);
-
-
-      case CLIENT_CREATE_OVERRIDE:
-        {
-          task_t task = 0;
-          result_t result = 0;
-          override_t new_override;
-          int max;
-
-          if (create_override_data->copy)
-            switch (copy_override (create_override_data->copy, &new_override))
-              {
-                case 0:
-                  {
-                    char *uuid;
-                    override_uuid (new_override, &uuid);
-                    SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_override"),
-                                             uuid);
-                    log_event ("override", "Override", uuid, "created");
-                    free (uuid);
-                    break;
-                  }
-                case 1:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_override",
-                                      "Override exists already"));
-                  log_event_fail ("override", "Override", NULL, "created");
-                  break;
-                case 2:
-                  if (send_find_error_to_client ("create_override", "override",
-                                                 create_override_data->copy,
-                                                 gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  log_event_fail ("override", "Override", NULL, "created");
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_override",
-                                      "Permission denied"));
-                  log_event_fail ("override", "Override", NULL, "created");
-                  break;
-                case -1:
-                default:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_INTERNAL_ERROR ("create_override"));
-                  log_event_fail ("override", "Override", NULL, "created");
-                  break;
-              }
-          else if (create_override_data->nvt_oid == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_override",
-                                "An NVT entity is required"));
-          else if (create_override_data->text == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_override",
-                                "A TEXT entity is required"));
-          else if (create_override_data->hosts
-                   && ((max = manage_count_hosts (create_override_data->hosts,
-                                                  NULL))
-                       == -1))
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_override",
-                                "Error in host specification"));
-          else if (create_override_data->hosts && (max > manage_max_hosts ()))
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_override",
-                                "Host specification exceeds maximum number"
-                                " of hosts"));
-          else if (create_override_data->new_threat == NULL
-                   && create_override_data->new_severity == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_override",
-                                "A NEW_THREAT"
-                                " or NEW_SEVERITY entity is required"));
-          else if (create_override_data->task_id
-              && find_task_with_permission (create_override_data->task_id,
-                                            &task,
-                                            NULL))
-            SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_override"));
-          else if (create_override_data->task_id && task == 0)
-            {
-              if (send_find_error_to_client ("create_override", "task",
-                                             create_override_data->task_id,
-                                             gmp_parser))
-                {
-                  error_send_to_client (error);
-                  return;
-                }
-            }
-          else if (create_override_data->result_id
-                   && find_result_with_permission (create_override_data->result_id,
-                                                   &result,
-                                                   NULL))
-            SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_override"));
-          else if (create_override_data->result_id && result == 0)
-            {
-              if (send_find_error_to_client ("create_override", "result",
-                                             create_override_data->result_id,
-                                             gmp_parser))
-                {
-                  error_send_to_client (error);
-                  return;
-                }
-            }
-          else switch (create_override (create_override_data->active,
-                                        create_override_data->nvt_oid,
-                                        create_override_data->text,
-                                        create_override_data->hosts,
-                                        create_override_data->port,
-                                        create_override_data->threat,
-                                        create_override_data->new_threat,
-                                        create_override_data->severity,
-                                        create_override_data->new_severity,
-                                        task,
-                                        result,
-                                        &new_override))
-            {
-              case 0:
-                {
-                  char *uuid;
-                  override_uuid (new_override, &uuid);
-                  SENDF_TO_CLIENT_OR_FAIL
-                   (XML_OK_CREATED_ID ("create_override"), uuid);
-                  log_event ("override", "Override", uuid, "created");
-                  free (uuid);
-                  break;
-                }
-              case 1:
-                if (send_find_error_to_client ("create_override", "nvt",
-                                               create_override_data->nvt_oid,
-                                               gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 2:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_override",
-                                    "Error in port specification"));
-                log_event_fail ("override", "Override", NULL, "created");
-                break;
-              case 3:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_override",
-                                    "Error in new_severity specification"));
-                log_event_fail ("override", "Override", NULL, "created");
-                break;
-              case 99:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_override",
-                                    "Permission denied"));
-                break;
-              case -1:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_INTERNAL_ERROR ("create_override"));
-                break;
-              default:
-                assert (0);
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_INTERNAL_ERROR ("create_override"));
-                break;
-            }
-          create_override_data_reset (create_override_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-      CLOSE (CLIENT_CREATE_OVERRIDE, ACTIVE);
-      CLOSE (CLIENT_CREATE_OVERRIDE, COPY);
-      CLOSE (CLIENT_CREATE_OVERRIDE, HOSTS);
-      CLOSE (CLIENT_CREATE_OVERRIDE, NEW_SEVERITY);
-      CLOSE (CLIENT_CREATE_OVERRIDE, NEW_THREAT);
-      CLOSE (CLIENT_CREATE_OVERRIDE, NVT);
-      CLOSE (CLIENT_CREATE_OVERRIDE, PORT);
-      CLOSE (CLIENT_CREATE_OVERRIDE, SEVERITY);
-      CLOSE (CLIENT_CREATE_OVERRIDE, RESULT);
-      CLOSE (CLIENT_CREATE_OVERRIDE, TASK);
-      CLOSE (CLIENT_CREATE_OVERRIDE, TEXT);
-      CLOSE (CLIENT_CREATE_OVERRIDE, THREAT);
 
 
       case CLIENT_CREATE_SCANNER:
@@ -17573,179 +17167,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
             set_client_state (CLIENT_AUTHENTIC);
           break;
         }
-
-      case CLIENT_MODIFY_OVERRIDE:
-        {
-          int max;
-
-          if (acl_user_may ("modify_override") == 0)
-            {
-              SEND_TO_CLIENT_OR_FAIL
-               (XML_ERROR_SYNTAX ("modify_override",
-                                  "Permission denied"));
-              modify_override_data_reset (modify_override_data);
-              set_client_state (CLIENT_AUTHENTIC);
-              break;
-            }
-
-          if (modify_override_data->override_id == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("modify_override",
-                                "An override_id attribute is required"));
-          else if (modify_override_data->text == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("modify_override",
-                                "A TEXT entity is required"));
-          else if (modify_override_data->hosts
-                   && ((max = manage_count_hosts (modify_override_data->hosts,
-                                                  NULL))
-                       == -1))
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("modify_override",
-                                "Error in host specification"));
-          else if (modify_override_data->hosts && (max > manage_max_hosts ()))
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("modify_override",
-                                "Host specification exceeds maximum number"
-                                " of hosts"));
-          else switch (modify_override (modify_override_data->override_id,
-                                        modify_override_data->active,
-                                        modify_override_data->nvt_oid,
-                                        modify_override_data->text,
-                                        modify_override_data->hosts,
-                                        modify_override_data->port,
-                                        modify_override_data->threat,
-                                        modify_override_data->new_threat,
-                                        modify_override_data->severity,
-                                        modify_override_data->new_severity,
-                                        modify_override_data->task_id,
-                                        modify_override_data->result_id))
-            {
-              case 0:
-                SENDF_TO_CLIENT_OR_FAIL (XML_OK ("modify_override"));
-                break;
-              case 1:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_override",
-                                    "ACTIVE must be an integer >= -2"));
-                break;
-              case 2:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_override",
-                                    "Error in port specification"));
-                log_event_fail ("override", "Override",
-                                modify_override_data->override_id,
-                                "modified");
-                break;
-              case 3:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_override",
-                                    "Error in severity specification"));
-                log_event_fail ("override", "Override",
-                                modify_override_data->override_id,
-                                "modified");
-                break;
-              case 4:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_override",
-                                    "Invalid nvt oid"));
-                log_event_fail ("override", "Override",
-                                modify_override_data->override_id,
-                                "modified");
-                break;
-              case 5:
-                if (send_find_error_to_client ("modify_override", "override",
-                                               modify_override_data->override_id,
-                                               gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                log_event_fail ("override", "Override",
-                                modify_override_data->override_id,
-                                "modified");
-                break;
-              case 6:
-                if (send_find_error_to_client ("modify_override", "task",
-                                               modify_override_data->task_id,
-                                               gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                log_event_fail ("override", "Override",
-                                modify_override_data->override_id,
-                                "modified");
-                break;
-              case 7:
-                if (send_find_error_to_client ("modify_override", "result",
-                                               modify_override_data->result_id,
-                                               gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                log_event_fail ("override", "Override",
-                                modify_override_data->override_id,
-                                "modified");
-                break;
-              case 8:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_override",
-                                    "Error in threat specification"));
-                log_event_fail ("override", "Override",
-                                modify_override_data->override_id,
-                                "modified");
-                break;
-              case 9:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_override",
-                                    "Error in new_threat specification"));
-                log_event_fail ("override", "Override",
-                                modify_override_data->override_id,
-                                "modified");
-                break;
-              case 10:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_override",
-                                    "Error in new_severity specification"));
-                log_event_fail ("override", "Override",
-                                modify_override_data->override_id,
-                                "modified");
-                break;
-              case 11:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_override",
-                                    "new_severity is required"));
-                log_event_fail ("override", "Override",
-                                modify_override_data->override_id,
-                                "modified");
-                break;
-              case -1:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_INTERNAL_ERROR ("modify_override"));
-                break;
-              default:
-                assert (0);
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_INTERNAL_ERROR ("modify_override"));
-                break;
-            }
-          modify_override_data_reset (modify_override_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-      CLOSE (CLIENT_MODIFY_OVERRIDE, ACTIVE);
-      CLOSE (CLIENT_MODIFY_OVERRIDE, HOSTS);
-      CLOSE (CLIENT_MODIFY_OVERRIDE, NEW_SEVERITY);
-      CLOSE (CLIENT_MODIFY_OVERRIDE, NEW_THREAT);
-      CLOSE (CLIENT_MODIFY_OVERRIDE, PORT);
-      CLOSE (CLIENT_MODIFY_OVERRIDE, RESULT);
-      CLOSE (CLIENT_MODIFY_OVERRIDE, SEVERITY);
-      CLOSE (CLIENT_MODIFY_OVERRIDE, TASK);
-      CLOSE (CLIENT_MODIFY_OVERRIDE, TEXT);
-      CLOSE (CLIENT_MODIFY_OVERRIDE, THREAT);
-      CLOSE (CLIENT_MODIFY_OVERRIDE, NVT);
 
       case CLIENT_MODIFY_SCANNER:
         handle_modify_scanner (gmp_parser, error);
@@ -19427,32 +18848,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
 
 
-      APPEND (CLIENT_CREATE_OVERRIDE_ACTIVE,
-              &create_override_data->active);
-
-      APPEND (CLIENT_CREATE_OVERRIDE_COPY,
-              &create_override_data->copy);
-
-      APPEND (CLIENT_CREATE_OVERRIDE_HOSTS,
-              &create_override_data->hosts);
-
-      APPEND (CLIENT_CREATE_OVERRIDE_NEW_SEVERITY,
-              &create_override_data->new_severity);
-
-      APPEND (CLIENT_CREATE_OVERRIDE_NEW_THREAT,
-              &create_override_data->new_threat);
-
-      APPEND (CLIENT_CREATE_OVERRIDE_PORT,
-              &create_override_data->port);
-
-      APPEND (CLIENT_CREATE_OVERRIDE_SEVERITY,
-              &create_override_data->severity);
-
-      APPEND (CLIENT_CREATE_OVERRIDE_TEXT,
-              &create_override_data->text);
-
-      APPEND (CLIENT_CREATE_OVERRIDE_THREAT,
-              &create_override_data->threat);
 
 
 
@@ -19636,29 +19031,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
 
 
-      APPEND (CLIENT_MODIFY_OVERRIDE_ACTIVE,
-              &modify_override_data->active);
-
-      APPEND (CLIENT_MODIFY_OVERRIDE_HOSTS,
-              &modify_override_data->hosts);
-
-      APPEND (CLIENT_MODIFY_OVERRIDE_NEW_SEVERITY,
-              &modify_override_data->new_severity);
-
-      APPEND (CLIENT_MODIFY_OVERRIDE_NEW_THREAT,
-              &modify_override_data->new_threat);
-
-      APPEND (CLIENT_MODIFY_OVERRIDE_PORT,
-              &modify_override_data->port);
-
-      APPEND (CLIENT_MODIFY_OVERRIDE_SEVERITY,
-              &modify_override_data->severity);
-
-      APPEND (CLIENT_MODIFY_OVERRIDE_TEXT,
-              &modify_override_data->text);
-
-      APPEND (CLIENT_MODIFY_OVERRIDE_THREAT,
-              &modify_override_data->threat);
 
 
 

@@ -298,15 +298,6 @@ char *
 get_override_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                   gsad_command_response_data_t *);
 char *
-create_override_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                     gsad_command_response_data_t *);
-char *
-delete_override_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                     gsad_command_response_data_t *);
-char *
-save_override_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                   gsad_command_response_data_t *);
-char *
 export_override_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                      gsad_command_response_data_t *);
 char *

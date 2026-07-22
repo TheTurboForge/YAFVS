@@ -1689,6 +1689,74 @@ class YAFVSCtlTests(unittest.TestCase):
         ):
             self.assertIn(marker, native_write_source)
 
+    def test_legacy_override_mutation_commands_are_removed_full_stack(self):
+        root = Path(__file__).resolve().parents[2]
+        retired_sources = {
+            "gvm-libs GMP client": root / "components" / "gvm-libs" / "gmp" / "gmp.c",
+            "gvm-libs GMP declarations": root / "components" / "gvm-libs" / "gmp" / "gmp.h",
+            "gsa capabilities": root / "components" / "gsa" / "src" / "gmp" / "capabilities" / "capabilities.ts",
+            "gsad dispatch": root / "components" / "gsad" / "src" / "gsad_gmp.c",
+            "gsad declarations": root / "components" / "gsad" / "src" / "gsad_gmp.h",
+            "gsad validation": root / "components" / "gsad" / "src" / "gsad_validator.c",
+            "gvmd command inventory": root / "components" / "gvmd" / "src" / "manage_commands.c",
+            "gvmd parser": root / "components" / "gvmd" / "src" / "gmp.c",
+            "gvmd override SQL": root / "components" / "gvmd" / "src" / "manage_sql_overrides.c",
+            "gvmd override declarations": root / "components" / "gvmd" / "src" / "manage_overrides.h",
+            "GMP schema": root / "components" / "gvmd" / "src" / "schema_formats" / "XML" / "GMP.xml.in",
+        }
+        retired_markers = (
+            "create_override_gmp",
+            "delete_override_gmp",
+            "save_override_gmp",
+            "ELSE (create_override)",
+            "ELSE (delete_override)",
+            "ELSE (save_override)",
+            "CLIENT_CREATE_OVERRIDE",
+            "CLIENT_DELETE_OVERRIDE",
+            "CLIENT_MODIFY_OVERRIDE",
+            "create_override (",
+            "copy_override (",
+            "delete_override (",
+            "modify_override (",
+            '"CREATE_OVERRIDE"',
+            '"DELETE_OVERRIDE"',
+            '"MODIFY_OVERRIDE"',
+            "'create_override'",
+            "'delete_override'",
+            "'modify_override'",
+            "<name>create_override</name>",
+            "<name>delete_override</name>",
+            "<name>modify_override</name>",
+        )
+
+        for label, path in retired_sources.items():
+            source = path.read_text(encoding="utf-8")
+            for marker in retired_markers:
+                self.assertNotIn(marker, source, f"{label} still exposes {marker}")
+
+        gsad_source = retired_sources["gsad dispatch"].read_text(encoding="utf-8")
+        gvmd_source = retired_sources["gvmd parser"].read_text(encoding="utf-8")
+        override_sql = retired_sources["gvmd override SQL"].read_text(encoding="utf-8")
+        manage_sql = (root / "components" / "gvmd" / "src" / "manage_sql.c").read_text(encoding="utf-8")
+        native_write_source = (root / "services" / "yafvs-api" / "src" / "override_writes.rs").read_text(encoding="utf-8")
+        self.assertIn("get_override_gmp", gsad_source)
+        self.assertIn("get_overrides_gmp", gsad_source)
+        self.assertIn("export_override_gmp", gsad_source)
+        self.assertIn("CLIENT_GET_OVERRIDES", gvmd_source)
+        self.assertIn("override_count", override_sql)
+        self.assertIn("init_override_iterator", override_sql)
+        self.assertIn('find_trash ("override"', manage_sql)
+        self.assertIn("reports_for_override (override)", manage_sql)
+        for marker in (
+            "pub(crate) async fn create_override",
+            "pub(crate) async fn patch_override",
+            "pub(crate) async fn clone_override",
+            "pub(crate) async fn delete_override",
+            "pub(crate) async fn restore_override",
+            "pub(crate) async fn hard_delete_override",
+        ):
+            self.assertIn(marker, native_write_source)
+
     def test_full_test_scan_load_state_uses_native_api_when_repo_root_is_available(self):
         root = Path("/tmp/yafvs-test")
         payloads = {

@@ -385,14 +385,15 @@ Native override rows include override identity, owner, NVT identity/name, text,
 host/port constraints, original and replacement severity values, active/end-time
 state, shallow task/result links, permissions, and timestamps. Override metadata
 is operator policy data, so these endpoints stay inside the authenticated
-operator boundary. `DELETE /api/v1/overrides/{override_id}` implements one
-owner-scoped live-to-trash move. It transactionally preserves override metadata,
-relocates associated tag-resource rows, removes the live row, and clears affected
-report override-count caches so later reads rebuild them from source evidence.
-It returns `204` only for the authenticated operator's live override and never
-hard-deletes the trash record. Create, modify, clone, export, trashcan hard
-deletion, and result-specific override expansion remain inherited until their
-native write/control semantics are designed.
+operator boundary. Native write-control owns create, metadata patch, clone,
+live-to-trash delete, restore, and trash-only hard delete. Those transactions
+preserve the established owner attribution, relocate associated tag-resource
+rows, and clear the affected report override-count caches so later reads rebuild
+them from source evidence. Metadata export is native JSON. The GSA capability
+surface, gsad dispatch, gvmd parser/schema, and gvmd SQL layer no longer expose
+the duplicate legacy create/copy/modify/delete commands. Override evaluation,
+result-specific expansion, trash-empty accounting, user cleanup, and retained
+legacy read/export plumbing remain inherited while their callers are retired.
 
 Native port-list rows include port-list identity, comment, port counts, concrete
 port ranges, target backlink references, predefined/deprecated flags, and
@@ -483,9 +484,10 @@ helpers to stitch raw XML report payloads together client-side.
 `GET /api/v1/results/{result_id}` returns the same basic metadata for one raw
 result row plus result description and NVT explanatory fields for the existing
 Information view. The GSA result detail page tries this native detail first and
-falls back to inherited GMP when the native read fails. The native detail
-intentionally does not replace inherited overrides, tags, EPSS/CVE context,
-export, actions, or create-override surfaces.
+falls back to inherited GMP when the native read fails. The native detail does
+not replace inherited result export/action behavior, result-tag mutation, or
+still-unmigrated rich detail surfaces. Effective override display and override
+create/mutation workflows use the native override contract.
 `runtime-report-export --json` and the raw report Results tab now read native
 raw-report detail/result-row endpoints, then write or render their familiar
 JSON/table views. The

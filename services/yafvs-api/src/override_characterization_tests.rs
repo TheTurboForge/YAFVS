@@ -7,22 +7,10 @@ use axum::http::Method;
 use crate::direct_api::direct_api_v1_method_is_allowed;
 
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
-const MANAGE_SQL_OVERRIDES: &str =
-    include_str!("../../../components/gvmd/src/manage_sql_overrides.c");
 const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 const OVERRIDES_RS: &str = include_str!("overrides.rs");
 const OVERRIDE_QUERY_SQL_RS: &str = include_str!("override_query_sql.rs");
-
-fn inherited_function(source: &str, name: &str) -> String {
-    let marker = format!("\n{name} (");
-    let start = source
-        .find(&marker)
-        .unwrap_or_else(|| panic!("{name} function marker must exist"));
-    let tail = &source[start..];
-    let end = tail.find("\n/**").unwrap_or(tail.len());
-    tail[..end].to_string()
-}
 
 fn openapi_path_block(path: &str) -> String {
     let marker = format!("  {path}:");
@@ -68,84 +56,6 @@ fn inherited_override_schema_has_live_trash_result_and_scope_columns() {
         ] {
             assert!(table_block.contains(column), "{table} missing {column}");
         }
-    }
-}
-
-#[test]
-fn inherited_create_override_validates_severity_scope_and_rebuilds_report_caches() {
-    let create_override = inherited_function(MANAGE_SQL_OVERRIDES, "create_override");
-    for required in [
-        "acl_user_may (\"create_override\")",
-        "nvt_exists (nvt)",
-        "validate_results_port (port)",
-        "sscanf (severity, \"%lf\"",
-        "sscanf (new_severity, \"%lf\"",
-        "result_nvt_notice (nvt)",
-        "INSERT INTO overrides",
-        "SELECT id FROM users WHERE users.uuid",
-        "SELECT id FROM result_nvts WHERE nvt",
-        "acl_users_with_access_where (\"override\"",
-        "reports_for_override (new_override)",
-        "setting_auto_cache_rebuild_int ()",
-        "report_cache_counts",
-        "report_clear_count_cache",
-    ] {
-        assert!(
-            create_override.contains(required),
-            "create_override missing {required}"
-        );
-    }
-}
-
-#[test]
-fn inherited_modify_override_validates_targets_results_and_cache_invalidation() {
-    let modify_override = inherited_function(MANAGE_SQL_OVERRIDES, "modify_override");
-    for required in [
-        "find_override_with_permission (override_id, &override, \"modify_override\")",
-        "find_task_with_permission (task_id, &task, NULL)",
-        "find_trash_task_with_permission (task_id, &task, NULL)",
-        "find_result_with_permission (result_id, &result, NULL)",
-        "validate_results_port (port)",
-        "nvt_exists (nvt)",
-        "cache_invalidated_sql",
-        "reports_for_override (override)",
-        "result_nvt_notice (quoted_nvt)",
-        "UPDATE overrides SET",
-        "reports_add_for_override (reports, override)",
-        "acl_users_with_access_where (\"override\"",
-        "report_cache_counts",
-        "report_clear_count_cache",
-    ] {
-        assert!(
-            modify_override.contains(required),
-            "modify_override missing {required}"
-        );
-    }
-}
-
-#[test]
-fn inherited_delete_override_moves_trash_permissions_tags_and_rebuilds_report_caches() {
-    let delete_override = inherited_function(MANAGE_SQL_OVERRIDES, "delete_override");
-    for required in [
-        "acl_user_may (\"delete_override\")",
-        "find_override_with_permission (override_id, &override, \"delete_override\")",
-        "find_trash (\"override\", override_id, &override)",
-        "reports_for_override (override)",
-        "acl_users_with_access_where (\"override\"",
-        "INSERT INTO overrides_trash",
-        "permissions_set_locations (\"override\"",
-        "tags_set_locations (\"override\"",
-        "permissions_set_orphans (\"override\"",
-        "tags_remove_resource (\"override\"",
-        "DELETE FROM overrides WHERE id",
-        "setting_auto_cache_rebuild_int ()",
-        "report_cache_counts",
-        "report_clear_count_cache",
-    ] {
-        assert!(
-            delete_override.contains(required),
-            "delete_override missing {required}"
-        );
     }
 }
 

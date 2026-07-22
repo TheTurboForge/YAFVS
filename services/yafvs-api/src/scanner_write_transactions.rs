@@ -199,6 +199,8 @@ pub(crate) async fn execute_scanner_create_transaction(
             &request.scanner_type,
             &request.ca_pub,
             &credential_internal_id,
+            &request.relay_host,
+            &request.relay_port,
         ],
         "create scanner configuration",
     )
@@ -223,6 +225,8 @@ pub(crate) async fn execute_scanner_replace_transaction(
             &request.scanner_type,
             &request.ca_pub,
             &credential_internal_id,
+            &request.relay_host,
+            &request.relay_port,
         ],
         "replace scanner configuration",
     )

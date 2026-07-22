@@ -327,7 +327,7 @@ fn openapi_documents_complete_native_scanner_lifecycle_and_verify_boundary() {
         "'201':",
         "Location:",
         "without contacting or verifying the scanner",
-        "Relay configuration is initialized empty",
+        "Relay configuration is validated and stored",
     ] {
         assert!(
             list.contains(required),
@@ -346,7 +346,7 @@ fn openapi_documents_complete_native_scanner_lifecycle_and_verify_boundary() {
     for residual in [
         "Credential secrets, credential certificate metadata",
         "remote/TLS/relay verification",
-        "relay mutation",
+        "external relay-file synchronization",
         "inherited file export/download formats remain inherited",
     ] {
         assert!(detail.contains(residual), "detail docs missing {residual}");
@@ -366,7 +366,7 @@ fn openapi_documents_complete_native_scanner_lifecycle_and_verify_boundary() {
         "without contacting or verifying it",
         "not referenced by a live non-hidden task",
         "In-use scanners return conflict",
-        "Existing relay host and relay port are preserved",
+        "Relay configuration is fully replaced",
     ] {
         assert!(
             replace.contains(required),

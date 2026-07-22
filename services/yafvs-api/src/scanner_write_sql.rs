@@ -68,7 +68,7 @@ pub(crate) fn scanner_create_configuration_sql() -> &'static str {
         (uuid, owner, name, comment, host, port, type, ca_pub, credential,
          relay_host, relay_port, creation_time, modification_time)
      VALUES
-        (make_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, NULL, 0, m_now(), m_now())
+        (make_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, m_now(), m_now())
      RETURNING uuid::text;"
 }
 
@@ -208,6 +208,8 @@ pub(crate) fn scanner_replace_configuration_sql() -> &'static str {
             type = $6,
             ca_pub = $7,
             credential = $8,
+            relay_host = $9,
+            relay_port = $10,
             modification_time = m_now()
       WHERE id = $1
       RETURNING uuid::text;"

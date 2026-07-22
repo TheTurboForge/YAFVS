@@ -35,7 +35,12 @@ fn clone_request(name: Option<&str>, comment: Option<&str>) -> ScannerCloneReque
     }
 }
 
-fn configuration_request(host: &str, port: i64) -> ScannerConfigurationRequest {
+fn configuration_request(
+    host: &str,
+    port: i64,
+    relay_host: Option<&str>,
+    relay_port: i64,
+) -> ScannerConfigurationRequest {
     ScannerConfigurationRequest {
         name: " scanner ".to_string(),
         comment: " comment ".to_string(),
@@ -44,6 +49,8 @@ fn configuration_request(host: &str, port: i64) -> ScannerConfigurationRequest {
         scanner_type: i64::from(ScannerType::Openvas.database_value()),
         ca_pub: Some(CERTIFICATE_SHAPED_PEM.to_string()),
         credential_id: Some(CREDENTIAL_ID.to_string()),
+        relay_host: relay_host.map(str::to_string),
+        relay_port,
     }
 }
 
@@ -69,10 +76,15 @@ fn scanner_clone_request_accepts_defaults_and_bounded_metadata_overrides() {
 }
 
 #[test]
-fn scanner_configuration_validates_network_and_unix_socket_shapes() {
+fn scanner_configuration_validates_primary_and_relay_network_and_unix_socket_shapes() {
     for host in ["127.0.0.1", "2001:db8::1", "scanner.example.test"] {
-        let validated = validate_scanner_configuration_request(configuration_request(host, 9390))
-            .expect("network scanner configuration");
+        let validated = validate_scanner_configuration_request(configuration_request(
+            host,
+            9390,
+            Some(" relay.example.test "),
+            9391,
+        ))
+        .expect("network scanner configuration");
         assert_eq!(validated.name, "scanner");
         assert_eq!(validated.comment, "comment");
         assert_eq!(validated.port, 9390);
@@ -83,10 +95,26 @@ fn scanner_configuration_validates_network_and_unix_socket_shapes() {
         assert_eq!(validated.ca_pub.as_deref(), Some(CERTIFICATE_SHAPED_PEM));
         assert_eq!(validated.credential_id.as_deref(), Some(CREDENTIAL_ID));
         assert!(!validated.unix_socket);
+        assert_eq!(validated.relay_host.as_deref(), Some("relay.example.test"));
+        assert_eq!(validated.relay_port, 9391);
+    }
+
+    for relay_host in ["127.0.0.2", "2001:db8::2", "relay.example.test"] {
+        let validated = validate_scanner_configuration_request(configuration_request(
+            "scanner.example",
+            9390,
+            Some(relay_host),
+            9391,
+        ))
+        .expect("network relay configuration");
+        assert_eq!(validated.relay_host.as_deref(), Some(relay_host));
+        assert_eq!(validated.relay_port, 9391);
     }
 
     let unix = validate_scanner_configuration_request(configuration_request(
         "/run/ospd/ospd-openvas.sock",
+        0,
+        Some(" /run/ospd/relay.sock "),
         0,
     ))
     .expect("Unix socket scanner configuration");
@@ -94,6 +122,128 @@ fn scanner_configuration_validates_network_and_unix_socket_shapes() {
     assert_eq!(unix.port, 0);
     assert_eq!(unix.ca_pub, None);
     assert_eq!(unix.credential_id, None);
+    assert_eq!(unix.relay_host.as_deref(), Some("/run/ospd/relay.sock"));
+    assert_eq!(unix.relay_port, 0);
+
+    for scanner_type in [2, 5, 6, 8] {
+        let validated = validate_scanner_configuration_request(ScannerConfigurationRequest {
+            scanner_type,
+            ..configuration_request("scanner.example", 9390, Some("/run/ospd/relay.sock"), 0)
+        })
+        .expect("all retained scanner types support Unix socket relays");
+        assert_eq!(
+            validated.relay_host.as_deref(),
+            Some("/run/ospd/relay.sock")
+        );
+    }
+}
+
+#[test]
+fn scanner_configuration_defaults_and_clears_relay_configuration() {
+    let omitted = serde_json::from_value::<ScannerConfigurationRequest>(serde_json::json!({
+        "name": "Scanner",
+        "comment": "",
+        "host": "scanner.example",
+        "port": 9390,
+        "scanner_type": 2
+    }))
+    .expect("relay fields are optional");
+    let omitted = validate_scanner_configuration_request(omitted).expect("no relay by default");
+    assert_eq!(omitted.relay_host, None);
+    assert_eq!(omitted.relay_port, 0);
+
+    for relay_host in [None, Some("   ")] {
+        let validated = validate_scanner_configuration_request(configuration_request(
+            "scanner.example",
+            9390,
+            relay_host,
+            0,
+        ))
+        .expect("blank relay clears configuration");
+        assert_eq!(validated.relay_host, None);
+        assert_eq!(validated.relay_port, 0);
+    }
+
+    let null_relay = serde_json::from_value::<ScannerConfigurationRequest>(serde_json::json!({
+        "name": "Scanner",
+        "comment": "",
+        "host": "scanner.example",
+        "port": 9390,
+        "scanner_type": 2,
+        "relay_host": null,
+        "relay_port": 0
+    }))
+    .expect("null relay host is accepted");
+    let null_relay = validate_scanner_configuration_request(null_relay).expect("null clears relay");
+    assert_eq!(null_relay.relay_host, None);
+    assert_eq!(null_relay.relay_port, 0);
+}
+
+#[test]
+fn scanner_configuration_enforces_relay_host_length_boundaries() {
+    let max_network_host = format!(
+        "{}.{}.{}.{}",
+        "a".repeat(63),
+        "b".repeat(63),
+        "c".repeat(63),
+        "d".repeat(61)
+    );
+    assert_eq!(max_network_host.len(), 253);
+    let validated = validate_scanner_configuration_request(configuration_request(
+        "scanner.example",
+        9390,
+        Some(&max_network_host),
+        9391,
+    ))
+    .expect("253-byte DNS relay host");
+    assert_eq!(
+        validated.relay_host.as_deref(),
+        Some(max_network_host.as_str())
+    );
+
+    let oversized_network_host = format!(
+        "{}.{}.{}.{}",
+        "a".repeat(63),
+        "b".repeat(63),
+        "c".repeat(63),
+        "d".repeat(62)
+    );
+    assert_eq!(oversized_network_host.len(), 254);
+    assert!(matches!(
+        validate_scanner_configuration_request(configuration_request(
+            "scanner.example",
+            9390,
+            Some(&oversized_network_host),
+            9391,
+        )),
+        Err(ApiError::BadRequest(_))
+    ));
+
+    let max_unix_host = format!("/{}", "r".repeat(MAX_SCANNER_TEXT_BYTES - 1));
+    assert_eq!(max_unix_host.len(), MAX_SCANNER_TEXT_BYTES);
+    let validated = validate_scanner_configuration_request(configuration_request(
+        "scanner.example",
+        9390,
+        Some(&max_unix_host),
+        0,
+    ))
+    .expect("maximum-length Unix relay path");
+    assert_eq!(
+        validated.relay_host.as_deref(),
+        Some(max_unix_host.as_str())
+    );
+
+    let oversized_unix_host = format!("/{}", "r".repeat(MAX_SCANNER_TEXT_BYTES));
+    assert_eq!(oversized_unix_host.len(), MAX_SCANNER_TEXT_BYTES + 1);
+    assert!(matches!(
+        validate_scanner_configuration_request(configuration_request(
+            "scanner.example",
+            9390,
+            Some(&oversized_unix_host),
+            0,
+        )),
+        Err(ApiError::BadRequest(_))
+    ));
 }
 
 #[test]
@@ -146,7 +296,32 @@ fn scanner_configuration_rejects_bad_hosts_ports_types_and_unknown_fields() {
         ("/run/ospd.sock", 9390),
     ] {
         assert!(matches!(
-            validate_scanner_configuration_request(configuration_request(host, port)),
+            validate_scanner_configuration_request(configuration_request(host, port, None, 0)),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+    for (relay_host, relay_port) in [
+        (None, 1),
+        (Some("   "), 1),
+        (Some("bad host"), 9390),
+        (Some("-relay.example"), 9390),
+        (Some("relay..example"), 9390),
+        (Some("/"), 0),
+        (Some("/run//unsafe.sock"), 0),
+        (Some("/run/./unsafe.sock"), 0),
+        (Some("/run/../unsafe.sock"), 0),
+        (Some("relay.example"), 0),
+        (Some("relay.example"), -1),
+        (Some("relay.example"), 65_536),
+        (Some("/run/relay.sock"), 9390),
+    ] {
+        assert!(matches!(
+            validate_scanner_configuration_request(configuration_request(
+                "scanner.example",
+                9390,
+                relay_host,
+                relay_port,
+            )),
             Err(ApiError::BadRequest(_))
         ));
     }
@@ -154,7 +329,7 @@ fn scanner_configuration_rejects_bad_hosts_ports_types_and_unknown_fields() {
         assert!(matches!(
             validate_scanner_configuration_request(ScannerConfigurationRequest {
                 scanner_type,
-                ..configuration_request("scanner.example", 9390)
+                ..configuration_request("scanner.example", 9390, None, 0)
             }),
             Err(ApiError::BadRequest(_))
         ));
@@ -166,7 +341,9 @@ fn scanner_configuration_rejects_bad_hosts_ports_types_and_unknown_fields() {
             "host": "scanner.example",
             "port": 9390,
             "scanner_type": 2,
-            "relay_host": "relay.example"
+            "relay_host": "relay.example",
+            "relay_port": 9390,
+            "unknown": true
         }))
         .is_err()
     );
@@ -184,7 +361,7 @@ fn scanner_configuration_requires_bounded_certificate_shaped_pem() {
         assert!(matches!(
             validate_scanner_configuration_request(ScannerConfigurationRequest {
                 ca_pub: Some(ca_pub.to_string()),
-                ..configuration_request("scanner.example", 9390)
+                ..configuration_request("scanner.example", 9390, None, 0)
             }),
             Err(ApiError::BadRequest(_))
         ));
@@ -192,7 +369,7 @@ fn scanner_configuration_requires_bounded_certificate_shaped_pem() {
     assert!(matches!(
         validate_scanner_configuration_request(ScannerConfigurationRequest {
             ca_pub: Some("x".repeat(MAX_SCANNER_CA_PUB_BYTES + 1)),
-            ..configuration_request("scanner.example", 9390)
+            ..configuration_request("scanner.example", 9390, None, 0)
         }),
         Err(ApiError::BadRequest(_))
     ));
@@ -200,7 +377,7 @@ fn scanner_configuration_requires_bounded_certificate_shaped_pem() {
     let bundle = format!("{CERTIFICATE_SHAPED_PEM}\n{CERTIFICATE_SHAPED_PEM}");
     let validated = validate_scanner_configuration_request(ScannerConfigurationRequest {
         ca_pub: Some(bundle.clone()),
-        ..configuration_request("scanner.example", 9390)
+        ..configuration_request("scanner.example", 9390, None, 0)
     })
     .expect("certificate bundle");
     assert_eq!(validated.ca_pub.as_deref(), Some(bundle.as_str()));
@@ -214,7 +391,7 @@ fn scanner_configuration_requires_bounded_certificate_shaped_pem() {
         assert!(matches!(
             validate_scanner_configuration_request(ScannerConfigurationRequest {
                 ca_pub: Some(trailing),
-                ..configuration_request("scanner.example", 9390)
+                ..configuration_request("scanner.example", 9390, None, 0)
             }),
             Err(ApiError::BadRequest(_))
         ));
@@ -354,7 +531,7 @@ fn scanner_patch_sql_is_metadata_only_and_preserves_secret_control_fields() {
 }
 
 #[test]
-fn scanner_configuration_sql_has_bounded_complete_shape_and_preserves_relays() {
+fn scanner_configuration_sql_has_bounded_complete_shape_and_writes_relays() {
     let credential = scanner_credential_state_sql();
     for required in ["owner::integer", "type::text", "WHERE uuid = $1"] {
         assert!(credential.contains(required));
@@ -365,7 +542,7 @@ fn scanner_configuration_sql_has_bounded_complete_shape_and_preserves_relays() {
         "make_uuid()",
         "uuid, owner, name, comment, host, port, type, ca_pub, credential",
         "relay_host, relay_port",
-        "$1, $2, $3, $4, $5, $6, $7, $8, NULL, 0",
+        "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10",
         "m_now(), m_now()",
         "RETURNING uuid::text",
     ] {
@@ -384,6 +561,8 @@ fn scanner_configuration_sql_has_bounded_complete_shape_and_preserves_relays() {
         "type = $6",
         "ca_pub = $7",
         "credential = $8",
+        "relay_host = $9",
+        "relay_port = $10",
         "modification_time = m_now()",
         "WHERE id = $1",
         "RETURNING uuid::text",
@@ -393,10 +572,14 @@ fn scanner_configuration_sql_has_bounded_complete_shape_and_preserves_relays() {
             "scanner replace SQL missing {required}"
         );
     }
-    for preserved in ["relay_host", "relay_port"] {
+    for hardcoded in [
+        "NULL, 0",
+        "relay_host = relay_host",
+        "relay_port = relay_port",
+    ] {
         assert!(
-            !replace.contains(preserved),
-            "scanner replacement must preserve {preserved}"
+            !replace.contains(hardcoded),
+            "scanner replacement must not preserve or hardcode {hardcoded}"
         );
     }
 }

@@ -311,14 +311,17 @@ Native scanner metadata rows include scanner identity, host/socket, port,
 inherited scanner type, safe credential references, relay metadata, and
 timestamps. Scanner detail adds active User Tags and non-hidden task backlinks
 for safe socket/builtin page-load reads. Native write-control owns scanner
-create, metadata patch, retained configuration replacement, clone, live-to-trash,
-restore, hard-delete, and bounded local verification. Clone copies the retained
-scanner configuration and active tag links but intentionally initializes relay
-configuration empty; trash and restore preserve relay fields losslessly. Live
-non-hidden task references block trash, and trash-side task references block
-hard-delete. Inherited paths remain only for remote TLS/relay verification,
-credential/certificate download context, legacy file export/download formats,
-and deeper scanner-control behavior. The browser-side and GMP/XML
+create, metadata patch, full configuration replacement including validated relay
+configuration, clone, live-to-trash, restore, hard-delete, and bounded local
+verification. POST omission creates no relay; because replacement is full,
+omitting, nulling, or blanking relay_host clears an existing relay. Clone copies
+the retained scanner configuration and active tag links but intentionally
+initializes relay configuration empty; trash and restore preserve relay fields
+losslessly. Live non-hidden task references block trash, and trash-side task
+references block hard-delete. Inherited paths remain only for remote TLS/relay
+verification, external relay-file synchronization, credential/certificate
+download context, legacy file export/download formats, and deeper scanner-control
+behavior. The browser-side and GMP/XML
 create/copy/modify/delete scanner commands are removed; retained manager CLI
 and internal scanner functions continue to own the explicitly listed
 compatibility behavior until those responsibilities migrate. Direct scriptable

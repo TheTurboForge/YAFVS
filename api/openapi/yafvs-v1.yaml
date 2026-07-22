@@ -1372,7 +1372,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-configuration-write
       summary: Create an operator-owned scanner
-      description: Creates one scanner configuration owned by the authenticated operator without contacting or verifying the scanner. Supported scanner types are 2, 5, 6, and 8; type 3 CVE scanners cannot be created. Network scanners require a valid host and port plus optional CA certificate and a human-owned certificate credential visible to the trusted operator team. Unix socket scanners store port 0 and clear CA and credential fields. Relay configuration is initialized empty. Remote verification beyond the bounded native probe and relay mutation remain inherited.
+      description: Creates one scanner configuration owned by the authenticated operator without contacting or verifying the scanner. Supported scanner types are 2, 5, 6, and 8; type 3 CVE scanners cannot be created. Network scanners require a valid host and port plus optional CA certificate and a human-owned certificate credential visible to the trusted operator team. Unix socket scanners store port 0 and clear CA and credential fields. Relay configuration is validated and stored as part of this request; omitting it creates no relay. Remote TLS/relay verification and external relay-file synchronization remain inherited.
       requestBody:
         required: true
         content:
@@ -1419,7 +1419,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scanner-metadata-detail-info-tags-and-task-backlink-read
       summary: Read one scanner metadata record with safe backlinks
-      description: Scanner metadata backed by PostgreSQL. Detail includes active user tags, non-hidden task backlinks, and scanner CA public certificate text when present. Native direct write-control owns create, clone, retained configuration replacement, metadata patch, trash, restore, hard-delete, and bounded verification. Credential secrets, credential certificate metadata, live status beyond verify, remote/TLS/relay verification, relay mutation, and inherited file export/download formats remain inherited.
+      description: Scanner metadata backed by PostgreSQL. Detail includes active user tags, non-hidden task backlinks, and scanner CA public certificate text when present. Native direct write-control owns create, clone, full configuration replacement including relay configuration, metadata patch, trash, restore, hard-delete, and bounded verification. Credential secrets, credential certificate metadata, live status beyond verify, remote/TLS/relay verification, external relay-file synchronization, and inherited file export/download formats remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:
@@ -1543,7 +1543,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-configuration-write
       summary: Replace complete retained scanner editor configuration
-      description: Atomically replaces name, comment, host, port, scanner type, CA certificate, and optional human-owned certificate credential for a human-owned non-built-in scanner that is not referenced by a live non-hidden task, without contacting or verifying it. Any authenticated stack operator may continue this work; the scanner's existing owner remains attribution. In-use scanners return conflict; their name/comment can still be changed through the metadata PATCH endpoint. Supported scanner types are 2, 5, 6, and 8. Unix socket configurations store port 0 and clear CA and credential fields. Existing relay host and relay port are preserved because the retained editor has no relay controls. Remote verification beyond the bounded native probe and relay mutation remain inherited.
+      description: Atomically replaces name, comment, host, port, scanner type, CA certificate, optional human-owned certificate credential, relay host, and relay port for a human-owned non-built-in scanner that is not referenced by a live non-hidden task, without contacting or verifying it. Any authenticated stack operator may continue this work; the scanner's existing owner remains attribution. In-use scanners return conflict; their name/comment can still be changed through the metadata PATCH endpoint. Supported scanner types are 2, 5, 6, and 8. Unix socket configurations store port 0 and clear CA and credential fields. Relay configuration is fully replaced: omitting, setting null, or sending a blank relay_host clears an existing relay and requires relay_port 0. Remote TLS/relay verification and external relay-file synchronization remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       requestBody:
@@ -10903,6 +10903,17 @@ components:
           type: [string, 'null']
           format: uuid
           description: Optional operator-owned certificate credential of type cc. Stored as null for Unix socket scanners.
+        relay_host:
+          type: [string, 'null']
+          maxLength: 4096
+          default: null
+          description: Optional IPv4 address, IPv6 address, DNS name, or normalized absolute Unix socket path. Values are trimmed; omission, null, or blank means no relay and requires relay_port 0.
+        relay_port:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          default: 0
+          description: Port 1 through 65535 for a network relay, 0 for a Unix socket relay, and 0 when relay_host is omitted, null, or blank. POST omission creates no relay; this full-replacement request clears an existing relay when omitted.
     SchedulePatchRequest:
       type: object
       minProperties: 1

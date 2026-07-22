@@ -43,6 +43,10 @@ pub(crate) struct ScannerConfigurationRequest {
     pub(crate) ca_pub: Option<String>,
     #[serde(default)]
     pub(crate) credential_id: Option<String>,
+    #[serde(default)]
+    pub(crate) relay_host: Option<String>,
+    #[serde(default)]
+    pub(crate) relay_port: i64,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -70,6 +74,8 @@ pub(crate) struct ValidatedScannerConfiguration {
     pub(crate) ca_pub: Option<String>,
     pub(crate) credential_id: Option<String>,
     pub(crate) unix_socket: bool,
+    pub(crate) relay_host: Option<String>,
+    pub(crate) relay_port: i32,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -137,6 +143,41 @@ pub(crate) fn validate_scanner_configuration_request(
     } else {
         request.credential_id
     };
+    let relay_host = request
+        .relay_host
+        .map(|relay_host| normalize_scanner_text_value(relay_host, "relay_host"))
+        .transpose()?
+        .filter(|relay_host| !relay_host.is_empty());
+    let relay_port = match relay_host.as_deref() {
+        None => {
+            if request.relay_port != 0 {
+                return Err(ApiError::BadRequest(
+                    "relay_port must be 0 when relay_host is empty".to_string(),
+                ));
+            }
+            0
+        }
+        Some(relay_host) if relay_host.starts_with('/') => {
+            validate_unix_socket_host(relay_host)?;
+            if request.relay_port != 0 {
+                return Err(ApiError::BadRequest(
+                    "relay_port must be 0 for a Unix socket relay".to_string(),
+                ));
+            }
+            0
+        }
+        Some(relay_host) => {
+            validate_network_host(relay_host)?;
+            i32::try_from(request.relay_port)
+                .ok()
+                .filter(|relay_port| (1..=65_535).contains(relay_port))
+                .ok_or_else(|| {
+                    ApiError::BadRequest(
+                        "relay_port must be between 1 and 65535 for a network relay".to_string(),
+                    )
+                })?
+        }
+    };
 
     Ok(ValidatedScannerConfiguration {
         name,
@@ -147,6 +188,8 @@ pub(crate) fn validate_scanner_configuration_request(
         ca_pub,
         credential_id,
         unix_socket,
+        relay_host,
+        relay_port,
     })
 }
 

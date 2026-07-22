@@ -19,7 +19,6 @@ use crate::scan_config_query_sql::{
 
 const GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GMP_CONFIGS: &str = include_str!("../../../components/gvmd/src/gmp_configs.c");
-const MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
 const MANAGE_SQL_CONFIGS: &str = include_str!("../../../components/gvmd/src/manage_sql_configs.c");
 const MANAGE_SQL_NVTS: &str = include_str!("../../../components/gvmd/src/manage_sql_nvts.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
@@ -294,7 +293,7 @@ fn inherited_scan_config_modify_surface_stays_task_gated_and_rewrites_selectors_
 }
 
 #[test]
-fn inherited_scan_config_delete_and_restore_remain_trash_permissions_tags_and_task_rebinding() {
+fn inherited_scan_config_delete_retains_trash_permissions_tags_and_task_rebinding() {
     let delete_config = inherited_function(MANAGE_SQL_CONFIGS, "delete_config");
     for required in [
         "acl_user_may (\"delete_config\")",
@@ -316,28 +315,6 @@ fn inherited_scan_config_delete_and_restore_remain_trash_permissions_tags_and_ta
         assert!(
             delete_config.contains(required),
             "delete_config missing {required}"
-        );
-    }
-
-    let manage_restore = inherited_function(MANAGE_SQL, "manage_restore");
-    for required in [
-        "acl_user_may (\"restore\")",
-        "find_trash (\"config\", id, &resource)",
-        "scanner_location = ",
-        "LOCATION_TRASH",
-        "SELECT count(*) FROM configs",
-        "INSERT INTO configs",
-        "INSERT INTO config_preferences",
-        "UPDATE tasks",
-        "permissions_set_locations (\"config\"",
-        "tags_set_locations (\"config\"",
-        "DELETE FROM config_preferences_trash",
-        "DELETE FROM configs_trash",
-        "sql_commit ()",
-    ] {
-        assert!(
-            manage_restore.contains(required),
-            "manage_restore missing {required}"
         );
     }
 }

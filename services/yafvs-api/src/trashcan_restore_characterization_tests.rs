@@ -9,12 +9,21 @@ const GSA_TRASHCAN_PAGE: &str =
     include_str!("../../../components/gsa/src/web/pages/trashcan/TrashCanPage.tsx");
 const GSA_TRASH_ACTIONS: &str =
     include_str!("../../../components/gsa/src/web/pages/extras/TrashActions.jsx");
+const GSA_CAPABILITIES: &str =
+    include_str!("../../../components/gsa/src/gmp/capabilities/capabilities.ts");
 const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GVMD_GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GVMD_GMP_GET: &str = include_str!("../../../components/gvmd/src/gmp_get.c");
 const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
+const GVMD_MANAGE_HEADER: &str = include_str!("../../../components/gvmd/src/manage.h");
+const GVMD_MANAGE_COMMANDS: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
+const GVMD_PORT_LISTS: &str = include_str!("../../../components/gvmd/src/manage_sql_port_lists.c");
+const GVMD_PORT_LISTS_HEADER: &str =
+    include_str!("../../../components/gvmd/src/manage_sql_port_lists.h");
+const GVMD_GMP_SCHEMA: &str =
+    include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 const GVMD_REPORT_FORMATS: &str =
     include_str!("../../../components/gvmd/src/manage_sql_report_formats.c");
 const GVMD_REPORT_FORMATS_HEADER: &str =
@@ -260,4 +269,23 @@ fn retired_restore_bridge_stays_absent_and_native_restore_fails_closed() {
     assert!(!GSAD_GMP.contains("\nrestore_gmp ("));
     assert!(!GSAD_GMP_HEADER.contains("restore_gmp"));
     assert!(!GSAD_VALIDATOR.contains("\"(restore)\""));
+
+    for retired in [
+        "restore_data_t",
+        "CLIENT_RESTORE",
+        "strcasecmp (\"RESTORE\"",
+        "case CLIENT_RESTORE",
+    ] {
+        assert!(
+            !GVMD_GMP.contains(retired),
+            "raw GMP restore residue: {retired}"
+        );
+    }
+    assert!(!GVMD_MANAGE_SQL.contains("\nmanage_restore ("));
+    assert!(!GVMD_MANAGE_HEADER.contains("manage_restore (const char *);"));
+    assert!(!GVMD_PORT_LISTS.contains("\nrestore_port_list ("));
+    assert!(!GVMD_PORT_LISTS_HEADER.contains("restore_port_list (const char *);"));
+    assert!(!GVMD_MANAGE_COMMANDS.contains("{\"RESTORE\""));
+    assert!(!GVMD_GMP_SCHEMA.contains("<name>restore</name>"));
+    assert!(!GSA_CAPABILITIES.contains("  'restore',"));
 }

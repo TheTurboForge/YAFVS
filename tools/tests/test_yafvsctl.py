@@ -1699,7 +1699,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("create_port_list_no_acl", port_list_sql)
         self.assertIn("create_port_list_unique", port_list_sql)
         self.assertIn("insert_port_range", port_list_sql)
-        self.assertIn("restore_port_list", port_list_sql)
+        self.assertNotIn("restore_port_list", port_list_sql)
         self.assertIn("empty_trashcan_port_lists", port_list_sql)
         self.assertIn("parse_port_list_entity", feed_source)
         self.assertIn("manage_sync_port_lists", feed_source)
@@ -1772,8 +1772,8 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("CLIENT_GET_OVERRIDES", gvmd_source)
         self.assertIn("override_count", override_sql)
         self.assertIn("init_override_iterator", override_sql)
-        self.assertIn('find_trash ("override"', manage_sql)
-        self.assertIn("reports_for_override (override)", manage_sql)
+        self.assertNotIn('find_trash ("override"', manage_sql)
+        self.assertNotIn("reports_for_override (override)", manage_sql)
         for marker in (
             "pub(crate) async fn create_override",
             "pub(crate) async fn patch_override",
@@ -7619,11 +7619,8 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/trashcan/summary", docs)
         self.assertIn("redacted row inventory", docs)
         self.assertRegex(contract, r"intentionally excludes credential\s+secrets,\s+target\s+hosts")
-        self.assertIn(
-            "Only task permanent delete",
-            docs,
-        )
         self.assertIn("generic GSA/gsad GMP restore bridge is removed", docs)
+        self.assertIn("raw gvmd/GMP `RESTORE` parser", docs)
         self.assertIn("alert method data", docs)
         self.assertIn("/api/v1/trashcan/summary", native_tooling)
         self.assertIn("/api/v1/trashcan/items", native_tooling)

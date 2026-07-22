@@ -795,12 +795,6 @@ mod tests {
                 first_resource_access: "acl_user_may",
             },
             LegacyTrashCountWriter {
-                file: "components/gvmd/src/manage_sql.c",
-                source: manage_sql,
-                definition: "manage_restore (const char *id)",
-                first_resource_access: "restore_port_list",
-            },
-            LegacyTrashCountWriter {
                 file: "components/gvmd/src/manage_sql_alerts.c",
                 source: alerts,
                 definition: "delete_alert (const char *alert_id, int ultimate)",
@@ -828,7 +822,7 @@ mod tests {
 
         assert_eq!(
             writers.len(),
-            10,
+            9,
             "the remaining legacy trash writer inventory is explicit"
         );
         assert_eq!(

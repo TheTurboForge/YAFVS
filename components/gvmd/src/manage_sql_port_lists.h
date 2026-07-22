@@ -1,4 +1,5 @@
 /* Copyright (C) 2020-2022 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -35,9 +36,6 @@ port_list_is_predefined (port_list_t);
 
 port_protocol_t
 port_range_iterator_type_int (iterator_t *);
-
-int
-restore_port_list (const char *);
 
 void
 empty_trashcan_port_lists ();

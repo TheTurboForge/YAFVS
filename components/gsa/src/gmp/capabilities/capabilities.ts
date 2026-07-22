@@ -82,7 +82,6 @@ const CAPABILITY_NAMES = [
   'modify_tls_certificate',
   'modify_user',
   'move_task',
-  'restore',
   'start_task',
   'stop_task',
   'sync_config',

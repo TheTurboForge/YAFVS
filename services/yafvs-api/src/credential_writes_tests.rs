@@ -15,6 +15,8 @@ use crate::{
 
 const YAFVSCTL: &str = include_str!("../../../tools/yafvsctl");
 const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
+const RETIRED_GVMD_RESTORE_CONTRACT: &str =
+    include_str!("characterization/gvmd_restore_contract.md");
 
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> CredentialPatchRequest {
     CredentialPatchRequest {
@@ -182,12 +184,12 @@ fn credential_hard_delete_is_guarded_reference_safe_and_secret_opaque() {
 
 #[test]
 fn credential_restore_preserves_secret_rows_without_loading_them_into_rust() {
-    let inherited = GVMD_MANAGE_SQL
-        .split_once("  /* Credential. */")
-        .expect("imported credential restore block")
+    let inherited = RETIRED_GVMD_RESTORE_CONTRACT
+        .split_once("## Credential")
+        .expect("retired credential restore contract")
         .1
-        .split_once("  /* Override. */")
-        .expect("imported credential restore end")
+        .split_once("## Task")
+        .expect("retired credential restore contract end")
         .0;
     for required in [
         "INSERT INTO credentials",

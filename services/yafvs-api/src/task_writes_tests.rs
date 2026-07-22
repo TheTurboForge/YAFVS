@@ -22,6 +22,8 @@ const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 const GVMD_OSP: &str = include_str!("../../../components/gvmd/src/manage_osp.c");
 const GVMD_OPENVASD: &str = include_str!("../../../components/gvmd/src/manage_openvasd.c");
 const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
+const RETIRED_GVMD_RESTORE_CONTRACT: &str =
+    include_str!("characterization/gvmd_restore_contract.md");
 const GVMD_MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const VALID_TARGET_ID: &str = "11111111-1111-4111-8111-111111111111";
 const VALID_CONFIG_ID: &str = "22222222-2222-4222-8222-222222222222";
@@ -111,12 +113,12 @@ fn task_restore_handler_is_operator_guarded_and_transactional() {
 
 #[test]
 fn task_restore_sql_matches_imported_manager_authority_and_fails_closed() {
-    let inherited = GVMD_MANAGE_SQL
-        .split_once("  /* Task. */")
-        .expect("inherited task restore block")
+    let inherited = RETIRED_GVMD_RESTORE_CONTRACT
+        .split_once("## Task")
+        .expect("retired task restore contract")
         .1
-        .split_once("  sql_rollback ();\n  return 2;")
-        .expect("inherited task restore end")
+        .split_once("## Other Families")
+        .expect("retired task restore contract end")
         .0;
     for required in [
         "target_location",

@@ -381,10 +381,8 @@ strict-whitelist references for the current tag detail Assigned Items tab.
 Tag metadata export and the supported create, modify, clone, enable/disable,
 trash, restore, hard-delete, and explicit or typed-filter assignment lifecycles
 are native. The raw gvmd/GMP tag create, copy-on-create, modify, delete, and
-tag-specific generic restore paths are retired. Unsupported resource types and
-unbounded raw filter expressions are rejected rather than delegated to the
-legacy manager; generic GMP restore for other resource families remains a
-separate compatibility concern.
+generic restore paths are retired. Unsupported resource types and unbounded raw
+filter expressions are rejected rather than delegated to the legacy manager.
 
 Native scan-config rows include config identity, owner, comment, family/NVT
 counts, growth flags, predefined/deprecated state, in-use state, and
@@ -449,8 +447,8 @@ returns only redacted credential metadata. Credential hard-delete blocks trash
 target/scanner/alert-delivery references and deletes opaque secret rows without
 selecting, returning, or logging their values. All supported browser restore
 operations are therefore native; the generic GSA/gsad GMP restore bridge is removed.
-Only task permanent delete retains declared browser/GMP compatibility
-while that native owner remains incomplete. Individual
+The raw gvmd/GMP `RESTORE` parser, public command/schema surface, and duplicate
+resource-specific SQL implementations are removed as well. Individual
 report-format restore and permanent delete are deliberately unavailable: gvmd
 has no retained command handler, and restoring a row could reintroduce a
 retired custom executable report format. Confirmed owner-scoped Trashcan

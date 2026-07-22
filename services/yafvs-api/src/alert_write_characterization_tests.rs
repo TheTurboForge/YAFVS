@@ -35,6 +35,8 @@ const MANAGE_SQL_C: &str = include_str!("../../../components/gvmd/src/manage_sql
 const MANAGE_SQL_ALERTS_C: &str = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
 const MANAGE_SQL_REPORT_FORMATS_C: &str =
     include_str!("../../../components/gvmd/src/manage_sql_report_formats.c");
+const RETIRED_GVMD_RESTORE_CONTRACT: &str =
+    include_str!("characterization/gvmd_restore_contract.md");
 const ALERT_QUERY_SQL: &str = include_str!("alert_query_sql.rs");
 const ALERT_WRITES: &str = include_str!("alert_writes.rs");
 const YAFVS_CONTROL_C: &str = include_str!("../../../components/gvmd/src/yafvs_control.c");
@@ -429,7 +431,7 @@ fn inherited_alert_copy_delete_restore_and_test_keep_child_tables_and_task_links
         "DELETE FROM alert_method_data_trash WHERE alert = %llu;",
     ] {
         assert!(
-            MANAGE_SQL_C.contains(required),
+            RETIRED_GVMD_RESTORE_CONTRACT.contains(required),
             "alert restore path missing {required}"
         );
     }

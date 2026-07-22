@@ -103,7 +103,6 @@ command_t gmp_commands[]
     {"MODIFY_TLS_CERTIFICATE", "Modify an existing TLS certificate."},
     {"MODIFY_USER", "Modify a user."},
     {"MOVE_TASK", "Assign task to another slave scanner, even while running."},
-    {"RESTORE", "Restore a resource."},
     {"START_TASK", "Manually start an existing task."},
     {"STOP_TASK", "Stop a running task."},
     {"SYNC_CONFIG", "Synchronize a config with a scanner."},

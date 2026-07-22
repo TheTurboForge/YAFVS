@@ -17047,48 +17047,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     </example>
   </command>
   <command>
-    <name>restore</name>
-    <summary>Restore a resource</summary>
-    <description>
-      <p>
-        The client uses the restore command to restore a resource from the trashcan.
-      </p>
-    </description>
-    <pattern>
-      <attrib>
-        <name>id</name>
-        <type>uuid</type>
-        <required>1</required>
-      </attrib>
-    </pattern>
-    <response>
-      <pattern>
-        <attrib>
-          <name>status</name>
-          <type>status</type>
-          <required>1</required>
-        </attrib>
-        <attrib>
-          <name>status_text</name>
-          <type>text</type>
-          <required>1</required>
-        </attrib>
-      </pattern>
-    </response>
-    <example>
-      <summary>Restore a target</summary>
-      <request>
-        <restore id="97390ade-e075-11df-9973-002264764cea">
-        </restore>
-      </request>
-      <response>
-        <restore_response status="200" status_text="OK"/>
-      </response>
-    </example>
-  </command>
-
-
-  <command>
     <name>start_task</name>
     <summary>Manually start an existing task</summary>
     <description>

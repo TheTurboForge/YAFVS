@@ -370,7 +370,7 @@ fn inherited_tag_schema_has_live_trash_and_resource_tables() {
 }
 
 #[test]
-fn raw_gmp_tag_mutation_and_tag_specific_generic_restore_are_retired() {
+fn raw_gmp_tag_mutation_and_generic_restore_are_retired() {
     for retired in [
         "CLIENT_CREATE_TAG",
         "CLIENT_DELETE_TAG",
@@ -429,12 +429,11 @@ fn raw_gmp_tag_mutation_and_tag_specific_generic_restore_are_retired() {
     }
     assert!(GMP_SCHEMA.contains("CREATE_TAG, GET_TAGS, MODIFY_TAG"));
 
-    let restore = inherited_function(MANAGE_SQL, "manage_restore");
-    assert!(!restore.contains("find_trash (\"tag\""));
-    assert!(!restore.contains("FROM tags_trash"));
-    assert!(!restore.contains("FROM tag_resources_trash WHERE tag"));
-    assert!(restore.contains("find_trash (\"target\""));
-    assert!(MANAGE_COMMANDS.contains("{\"RESTORE\""));
+    assert!(!MANAGE_SQL.contains("\nmanage_restore ("));
+    assert!(!GVMD_GMP.contains("CLIENT_RESTORE"));
+    assert!(!GVMD_GMP.contains("strcasecmp (\"RESTORE\""));
+    assert!(!MANAGE_COMMANDS.contains("{\"RESTORE\""));
+    assert!(!GMP_SCHEMA.contains("<name>restore</name>"));
 }
 
 #[test]

@@ -3393,7 +3393,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Restore tag from trash
-      description: Direct write-control endpoint for restoring a trashed tag and its trash assignments to live state when the tag resource type is supported by native explicit resource writes. Unsupported resource types and unbounded raw filter expressions fail closed. The tag-specific branch of generic GMP RESTORE is retired; generic RESTORE for other resource families remains separate compatibility behavior.
+      description: Direct write-control endpoint for restoring a trashed tag and its trash assignments to live state when the tag resource type is supported by native explicit resource writes. Unsupported resource types and unbounded raw filter expressions fail closed. The generic raw GMP RESTORE command is retired because all supported restore lifecycles are native.
       parameters:
         - $ref: '#/components/parameters/TagId'
       responses:

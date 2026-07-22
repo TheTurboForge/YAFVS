@@ -75,11 +75,11 @@ The native tag contract owns the supported operator lifecycle:
   expressions.
 
 The raw gvmd/GMP `CREATE_TAG` (including copy-on-create), `MODIFY_TAG`, and
-`DELETE_TAG` paths are retired, as is the tag-specific branch of generic GMP
-`RESTORE`. Generic `RESTORE` remains available only as separately classified
-compatibility behavior for other resource families. Unsupported tag resource
-types and unbounded raw filter expressions fail closed; they do not fall back
-to the legacy manager.
+`DELETE_TAG` paths are retired. The generic raw GMP `RESTORE` command and its
+duplicate resource-specific SQL implementations are also retired because all
+supported restore lifecycles are native. Unsupported tag resource types and
+unbounded raw filter expressions fail closed; they do not fall back to the
+legacy manager.
 
 ### First-Slice Scope Write Semantics
 

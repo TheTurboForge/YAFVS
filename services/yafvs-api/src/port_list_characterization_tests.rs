@@ -8,8 +8,6 @@ use crate::direct_api::direct_api_v1_method_is_allowed;
 
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const MANAGE_PORT_LISTS: &str = include_str!("../../../components/gvmd/src/manage_port_lists.c");
-const MANAGE_SQL_PORT_LISTS: &str =
-    include_str!("../../../components/gvmd/src/manage_sql_port_lists.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 
@@ -168,30 +166,6 @@ fn port_list_native_metadata_export_no_longer_uses_singular_gsad_xml_export() {
         assert!(
             !bulk_export.contains(forbidden),
             "bulk port-list export must not include mutation boundary {forbidden}"
-        );
-    }
-}
-
-#[test]
-fn inherited_restore_port_list_moves_ranges_targets_permissions_and_tags_back_to_live_tables() {
-    let restore_port_list = inherited_function(MANAGE_SQL_PORT_LISTS, "restore_port_list");
-    for required in [
-        "find_trash (\"port_list\", port_list_id, &port_list)",
-        "SELECT count(*) FROM port_lists",
-        "ACL_USER_OWNS",
-        "INSERT INTO port_lists",
-        "INSERT INTO port_ranges",
-        "UPDATE targets_trash",
-        "port_list_location = ",
-        "permissions_set_locations (\"port_list\"",
-        "tags_set_locations (\"port_list\"",
-        "DELETE FROM port_ranges_trash WHERE port_list",
-        "DELETE FROM port_lists_trash WHERE id",
-        "sql_commit ()",
-    ] {
-        assert!(
-            restore_port_list.contains(required),
-            "restore_port_list missing {required}"
         );
     }
 }

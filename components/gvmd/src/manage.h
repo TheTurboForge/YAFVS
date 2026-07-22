@@ -2161,11 +2161,6 @@ manage_schema (gchar *, gchar **, gsize *, gchar **, gchar **);
 
 
 
-/* Trashcan. */
-
-int
-manage_restore (const char *);
-
 /* SecInfo */
 
 int

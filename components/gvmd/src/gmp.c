@@ -1673,27 +1673,6 @@ move_task_data_reset (move_task_data_t *data)
 }
 
 /**
- * @brief Command data for the restore command.
- */
-typedef struct
-{
-  char *id;   ///< ID of resource to restore.
-} restore_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-restore_data_reset (restore_data_t *data)
-{
-  free (data->id);
-
-  memset (data, 0, sizeof (restore_data_t));
-}
-
-/**
  * @brief Command data for the start_task command.
  */
 typedef struct
@@ -1905,7 +1884,6 @@ typedef union
   modify_task_data_t modify_task;                     ///< modify_task
   modify_user_data_t modify_user;                     ///< modify_user
   move_task_data_t move_task;                         ///< move_task
-  restore_data_t restore;                             ///< restore
   start_task_data_t start_task;                       ///< start_task
   stop_task_data_t stop_task;                         ///< stop_task
   test_alert_data_t test_alert;                       ///< test_alert
@@ -2184,12 +2162,6 @@ static modify_user_data_t *modify_user_data = &(command_data.modify_user);
 static move_task_data_t *move_task_data = &(command_data.move_task);
 
 /**
- * @brief Parser callback data for RESTORE.
- */
-static restore_data_t *restore_data
- = (restore_data_t*) &(command_data.restore);
-
-/**
  * @brief Parser callback data for START_TASK.
  */
 static start_task_data_t *start_task_data
@@ -2447,7 +2419,6 @@ typedef enum
   CLIENT_MODIFY_USER_SOURCES,
   CLIENT_MODIFY_USER_SOURCES_SOURCE,
   CLIENT_MOVE_TASK,
-  CLIENT_RESTORE,
   CLIENT_START_TASK,
   CLIENT_STOP_TASK,
   CLIENT_TEST_ALERT,
@@ -3349,12 +3320,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "slave_id",
                               &move_task_data->slave_id);
             set_client_state (CLIENT_MOVE_TASK);
-          }
-        else if (strcasecmp ("RESTORE", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &restore_data->id);
-            set_client_state (CLIENT_RESTORE);
           }
         else if (strcasecmp ("START_TASK", element_name) == 0)
           {
@@ -15635,61 +15600,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                               "An alert_id"
                               " attribute is required"));
         test_alert_data_reset (test_alert_data);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
-
-      case CLIENT_RESTORE:
-        if (restore_data->id)
-          {
-            switch (manage_restore (restore_data->id))
-              {
-                case 0:
-                  SEND_TO_CLIENT_OR_FAIL (XML_OK ("restore"));
-                  log_event ("resource", "Resource", restore_data->id,
-                             "restored");
-                  break;
-                case 1:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("restore",
-                                      "Resource refers into trashcan"));
-                  break;
-                case 2:
-                  if (send_find_error_to_client ("restore", "resource",
-                                                 restore_data->id, gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  break;
-                case 3:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("restore",
-                                      "A resource with this name exists"
-                                      " already"));
-                  break;
-                case 4:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("restore",
-                                      "A resource with this UUID exists"
-                                      " already"));
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("restore",
-                                      "Permission denied"));
-                  break;
-                default:  /* Programming error. */
-                  assert (0);
-                case -1:
-                  SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("restore"));
-                  break;
-              }
-          }
-        else
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("restore",
-                              "An id attribute is required"));
-        restore_data_reset (restore_data);
         set_client_state (CLIENT_AUTHENTIC);
         break;
 

@@ -1918,9 +1918,6 @@ create_scanner (const char*, const char *, const char *, const char *,
                 const char *, scanner_t *, const char *, const char *,
                 const char *, const char *);
 
-int
-copy_scanner (const char*, const char*, const char *, scanner_t *);
-
 typedef enum {
   MODIFY_SCANNER_INTERNAL_ERROR = -1,         ///< Internal error
   MODIFY_SCANNER_SUCCESS = 0,                 ///< Success

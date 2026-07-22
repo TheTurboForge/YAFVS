@@ -10,6 +10,8 @@ const MANAGE_SQL_C: &str = include_str!("../../../components/gvmd/src/manage_sql
 const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
+const GSA_SCANNER_TS: &str = include_str!("../../../components/gsa/src/gmp/commands/scanner.ts");
+const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -42,7 +44,7 @@ fn openapi_path_block(path: &str) -> String {
 }
 
 #[test]
-fn inherited_create_scanner_couples_metadata_host_relay_ca_and_credentials() {
+fn retained_cli_create_scanner_couples_metadata_host_relay_ca_and_credentials() {
     let create = inherited_function(MANAGE_SQL_C, "create_scanner");
     for required in [
         "acl_user_may (\"create_scanner\") == 0",
@@ -67,7 +69,7 @@ fn inherited_create_scanner_couples_metadata_host_relay_ca_and_credentials() {
 }
 
 #[test]
-fn inherited_modify_scanner_revalidates_connectivity_fields_and_secret_links() {
+fn retained_cli_modify_scanner_revalidates_connectivity_fields_and_secret_links() {
     let modify = inherited_function(MANAGE_SQL_C, "modify_scanner");
     for required in [
         "acl_user_may (\"modify_scanner\") == 0",
@@ -93,7 +95,7 @@ fn inherited_modify_scanner_revalidates_connectivity_fields_and_secret_links() {
 }
 
 #[test]
-fn inherited_delete_scanner_has_predefined_in_use_trash_and_tag_permission_semantics() {
+fn retained_internal_delete_scanner_has_predefined_in_use_trash_and_tag_semantics() {
     let delete = inherited_function(MANAGE_SQL_C, "delete_scanner");
     for required in [
         "acl_user_may (\"delete_scanner\") == 0",
@@ -140,64 +142,60 @@ fn inherited_verify_scanner_can_contact_osp_scanners_and_maps_other_types() {
 }
 
 #[test]
-fn inherited_gsad_and_gmp_layers_proxy_scanner_control_and_secret_fields() {
-    let create = inherited_function(GSAD_GMP_C, "create_scanner_gmp");
-    for required in [
-        "params_value (params, \"scanner_host\")",
-        "params_value (params, \"scanner_type\")",
-        "params_value (params, \"ca_pub\")",
-        "params_value (params, \"credential_id\")",
-        "<create_scanner>",
-        "<ca_pub>%s</ca_pub>",
-        r#"<credential id=\"%s\"/>"#,
+fn retired_browser_gmp_scanner_mutations_stay_absent_while_control_compatibility_remains() {
+    for retired in [
+        "create_scanner_gmp",
+        "save_scanner_gmp",
+        "delete_scanner_gmp",
+        "ELSE (create_scanner)",
+        "ELSE (save_scanner)",
+        "ELSE (delete_scanner)",
+        "CLIENT_CREATE_SCANNER",
+        "CLIENT_MODIFY_SCANNER",
+        "CLIENT_DELETE_SCANNER",
+        "<name>create_scanner</name>",
+        "<name>modify_scanner</name>",
+        "<name>delete_scanner</name>",
     ] {
         assert!(
-            create.contains(required),
-            "create_scanner_gmp missing {required}"
+            !GSAD_GMP_C.contains(retired),
+            "gsad still exposes {retired}"
+        );
+        assert!(
+            !GMP_C.contains(retired),
+            "GMP parser still exposes {retired}"
+        );
+        assert!(
+            !GMP_SCHEMA.contains(retired),
+            "GMP schema still exposes {retired}"
+        );
+    }
+    for retired in ["|(create_scanner)", "|(save_scanner)", "|(delete_scanner)"] {
+        assert!(
+            !GSAD_VALIDATOR_C.contains(retired),
+            "validator still accepts {retired}"
+        );
+    }
+    for retired in ["super.clone({id})", "super.delete({id})"] {
+        assert!(
+            !GSA_SCANNER_TS.contains(retired),
+            "GSA scanner command still has inherited fallback {retired}"
         );
     }
 
-    let modify = inherited_function(GSAD_GMP_C, "save_scanner_gmp");
-    for required in [
-        r#"<modify_scanner scanner_id=\"%s\">"#,
-        "<host>%s</host>",
-        "<port>%s</port>",
-        "<type>%s</type>",
-        "<ca_pub>%s</ca_pub>",
-        r#"<credential id=\"%s\"/>"#,
-    ] {
-        assert!(
-            modify.contains(required),
-            "save_scanner_gmp missing {required}"
-        );
-    }
-
-    let delete = inherited_function(GSAD_GMP_C, "delete_scanner_gmp");
-    assert!(delete.contains("move_resource_to_trash (connection, \"scanner\""));
     let verify = inherited_function(GSAD_GMP_C, "verify_scanner_gmp");
     assert!(verify.contains(r#"<verify_scanner scanner_id=\"%s\"/>"#));
-
-    for command in [
-        "|(create_scanner)",
-        "|(delete_scanner)",
-        "|(get_scanner)",
-        "|(get_scanners)",
-        "|(verify_scanner)",
-    ] {
+    for command in ["|(get_scanner)", "|(get_scanners)", "|(verify_scanner)"] {
         assert!(
             GSAD_VALIDATOR_C.contains(command),
             "validator missing {command}"
         );
     }
-
-    for state in [
-        "CLIENT_CREATE_SCANNER",
-        "CLIENT_MODIFY_SCANNER",
-        "CLIENT_DELETE_SCANNER",
-        "CLIENT_VERIFY_SCANNER",
-    ] {
-        assert!(GMP_C.contains(state), "GMP parser missing {state}");
-    }
+    assert!(GSAD_GMP_C.contains("get_scanner_gmp"));
+    assert!(GSAD_GMP_C.contains("export_scanner_gmp"));
+    assert!(GSAD_GMP_C.contains("get_trash_scanners_gmp"));
+    assert!(GMP_C.contains("CLIENT_VERIFY_SCANNER"));
+    assert!(GMP_SCHEMA.contains("<name>verify_scanner</name>"));
 }
 
 #[test]

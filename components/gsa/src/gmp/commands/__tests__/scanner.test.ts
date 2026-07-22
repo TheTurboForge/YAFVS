@@ -150,6 +150,22 @@ describe('ScannerCommand tests', () => {
     expect(result.data.id).toEqual('clone-id');
   });
 
+  test('should not fall back to GMP when native scanner clone fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScannerCommand(fakeHttp);
+
+    await expect(cmd.clone({id: 'scanner-id'})).rejects.toThrow(
+      'Native API request failed with status 503',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should delete a scanner through the native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       ok: true,
@@ -174,6 +190,21 @@ describe('ScannerCommand tests', () => {
         },
       },
     );
+  });
+
+  test('should not fall back to GMP when native scanner delete fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScannerCommand(fakeHttp);
+
+    await expect(cmd.delete({id: 'scanner-id'})).rejects.toThrow(
+      'Native API request failed with status 409',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should replace scanner configuration through the native API', async () => {

@@ -509,45 +509,6 @@ create_credential_data_reset (create_credential_data_t *data)
 }
 
 /**
- * @brief Command data for the create_scanner command.
- */
-typedef struct
-{
-  char *name;               ///< Name for new scanner.
-  char *copy;               ///< UUID of scanner to copy.
-  char *comment;            ///< Comment.
-  char *host;               ///< Host of new scanner.
-  char *port;               ///< Port of new scanner.
-  char *type;               ///< Type of new scanner.
-  char *ca_pub;             ///< CA Certificate of new scanner.
-  char *credential_id;      ///< UUID of credential for new scanner.
-  char *relay_host;         ///< Relay host of new scanner.
-  char *relay_port;         ///< Relay port of new scanner.
-} create_scanner_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-create_scanner_data_reset (create_scanner_data_t *data)
-{
-  free (data->name);
-  free (data->copy);
-  free (data->comment);
-  free (data->host);
-  free (data->port);
-  free (data->type);
-  free (data->ca_pub);
-  free (data->credential_id);
-  free (data->relay_host);
-  free (data->relay_port);
-
-  memset (data, 0, sizeof (create_scanner_data_t));
-}
-
-/**
  * @brief Command data for the create_target command.
  */
 typedef struct
@@ -866,28 +827,6 @@ typedef struct
   char *schedule_id;   ///< ID of schedule to delete.
   int ultimate;        ///< Boolean.  Whether to remove entirely or to trashcan.
 } delete_schedule_data_t;
-
-/**
- * @brief Command data for the delete_scanner command.
- */
-typedef struct
-{
-  char *scanner_id; ///< ID of scanner to delete.
-  int ultimate;     ///< Boolean.  Whether to remove entirely or to trashcan.
-} delete_scanner_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_scanner_data_reset (delete_scanner_data_t *data)
-{
-  g_free (data->scanner_id);
-
-  memset (data, 0, sizeof (delete_scanner_data_t));
-}
 
 /**
  * @brief Reset command data.
@@ -1739,45 +1678,6 @@ modify_user_data_reset (modify_user_data_t * data)
 }
 
 /**
- * @brief Command data for the modify_scanner command.
- */
-typedef struct
-{
-  char *comment;            ///< Comment.
-  char *name;               ///< Name of scanner.
-  char *host;               ///< Host of scanner.
-  char *port;               ///< Port of scanner.
-  char *type;               ///< Type of scanner.
-  char *scanner_id;         ///< scanner UUID.
-  char *ca_pub;             ///< CA Certificate of scanner.
-  char *credential_id;      ///< UUID of credential of scanner.
-  char *relay_host;         ///< Relay host of scanner.
-  char *relay_port;         ///< Relay port of scanner.
-} modify_scanner_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-modify_scanner_data_reset (modify_scanner_data_t *data)
-{
-  g_free (data->comment);
-  g_free (data->name);
-  g_free (data->host);
-  g_free (data->port);
-  g_free (data->type);
-  g_free (data->scanner_id);
-  free (data->ca_pub);
-  free (data->credential_id);
-  g_free (data->relay_host);
-  g_free (data->relay_port);
-
-  memset (data, 0, sizeof (modify_scanner_data_t));
-}
-
-/**
  * @brief Command data for the modify_tag command.
  */
 typedef struct
@@ -2184,7 +2084,6 @@ typedef union
 {
   create_asset_data_t create_asset;                   ///< create_asset
   create_credential_data_t create_credential;         ///< create_credential
-  create_scanner_data_t create_scanner;               ///< create_scanner
   create_tag_data_t create_tag;                       ///< create_tag
   create_target_data_t create_target;                 ///< create_target
   create_task_data_t create_task;                     ///< create_task
@@ -2194,7 +2093,6 @@ typedef union
   delete_config_data_t delete_config;                 ///< delete_config
   delete_alert_data_t delete_alert;                   ///< delete_alert
   delete_report_data_t delete_report;                 ///< delete_report
-  delete_scanner_data_t delete_scanner;               ///< delete_scanner
   delete_schedule_data_t delete_schedule;             ///< delete_schedule
   delete_tag_data_t delete_tag;                       ///< delete_tag
   delete_target_data_t delete_target;                 ///< delete_target
@@ -2230,7 +2128,6 @@ typedef union
   modify_asset_data_t modify_asset;                   ///< modify_asset
   modify_config_data_t modify_config;                 ///< modify_config
   modify_credential_data_t modify_credential;         ///< modify_credential
-  modify_scanner_data_t modify_scanner;               ///< modify_scanner
   modify_setting_data_t modify_setting;               ///< modify_setting
   modify_tag_data_t modify_tag;                       ///< modify_tag
   modify_target_data_t modify_target;                 ///< modify_target
@@ -2275,12 +2172,6 @@ static create_asset_data_t *create_asset_data
  */
 static create_credential_data_t *create_credential_data
  = (create_credential_data_t*) &(command_data.create_credential);
-
-/**
- * @brief Parser callback data for CREATE_SCANNER.
- */
-static create_scanner_data_t *create_scanner_data
- = (create_scanner_data_t*) &(command_data.create_scanner);
 
 /**
  * @brief Parser callback data for CREATE_TAG.
@@ -2336,12 +2227,6 @@ static delete_credential_data_t *delete_credential_data
 static delete_report_data_t *delete_report_data
  = (delete_report_data_t*) &(command_data.delete_report);
 
-
-/**
- * @brief Parser callback data for DELETE_SCANNER.
- */
-static delete_scanner_data_t *delete_scanner_data
- = (delete_scanner_data_t*) &(command_data.delete_scanner);
 
 /**
  * @brief Parser callback data for DELETE_SCHEDULE.
@@ -2548,12 +2433,6 @@ static modify_credential_data_t *modify_credential_data
  = &(command_data.modify_credential);
 
 /**
- * @brief Parser callback data for MODIFY_SCANNER.
- */
-static modify_scanner_data_t *modify_scanner_data
- = &(command_data.modify_scanner);
-
-/**
  * @brief Parser callback data for MODIFY_SETTING.
  */
 static modify_setting_data_t *modify_setting_data
@@ -2691,17 +2570,6 @@ typedef enum
   CLIENT_CREATE_CREDENTIAL_PRIVACY_PASSWORD,
   CLIENT_CREATE_CREDENTIAL_REALM,
   CLIENT_CREATE_CREDENTIAL_TYPE,
-  CLIENT_CREATE_SCANNER,
-  CLIENT_CREATE_SCANNER_COMMENT,
-  CLIENT_CREATE_SCANNER_COPY,
-  CLIENT_CREATE_SCANNER_NAME,
-  CLIENT_CREATE_SCANNER_HOST,
-  CLIENT_CREATE_SCANNER_PORT,
-  CLIENT_CREATE_SCANNER_TYPE,
-  CLIENT_CREATE_SCANNER_CA_PUB,
-  CLIENT_CREATE_SCANNER_CREDENTIAL,
-  CLIENT_CREATE_SCANNER_RELAY_HOST,
-  CLIENT_CREATE_SCANNER_RELAY_PORT,
   CLIENT_CREATE_TAG,
   CLIENT_CREATE_TAG_ACTIVE,
   CLIENT_CREATE_TAG_COMMENT,
@@ -2765,7 +2633,6 @@ typedef enum
   CLIENT_DELETE_CONFIG,
   CLIENT_DELETE_CREDENTIAL,
   CLIENT_DELETE_REPORT,
-  CLIENT_DELETE_SCANNER,
   CLIENT_DELETE_SCHEDULE,
   CLIENT_DELETE_TAG,
   CLIENT_DELETE_TARGET,
@@ -2835,16 +2702,6 @@ typedef enum
   CLIENT_MODIFY_CREDENTIAL_REALM,
   CLIENT_MODIFY_INTEGRATION_CONFIG,
   CLIENT_MODIFY_LICENSE,
-  CLIENT_MODIFY_SCANNER,
-  CLIENT_MODIFY_SCANNER_COMMENT,
-  CLIENT_MODIFY_SCANNER_NAME,
-  CLIENT_MODIFY_SCANNER_HOST,
-  CLIENT_MODIFY_SCANNER_PORT,
-  CLIENT_MODIFY_SCANNER_TYPE,
-  CLIENT_MODIFY_SCANNER_CA_PUB,
-  CLIENT_MODIFY_SCANNER_CREDENTIAL,
-  CLIENT_MODIFY_SCANNER_RELAY_HOST,
-  CLIENT_MODIFY_SCANNER_RELAY_PORT,
   CLIENT_MODIFY_SETTING,
   CLIENT_MODIFY_SETTING_NAME,
   CLIENT_MODIFY_SETTING_VALUE,
@@ -3094,8 +2951,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             gvm_append_string (&create_credential_data->name, "");
             set_client_state (CLIENT_CREATE_CREDENTIAL);
           }
-        else if (strcasecmp ("CREATE_SCANNER", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCANNER);
         else if (strcasecmp ("CREATE_TAG", element_name) == 0)
           {
             create_tag_data->resource_ids = NULL;
@@ -3174,18 +3029,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "report_id",
                               &delete_report_data->report_id);
             set_client_state (CLIENT_DELETE_REPORT);
-          }
-        else if (strcasecmp ("DELETE_SCANNER", element_name) == 0)
-          {
-            const gchar* attribute;
-            append_attribute (attribute_names, attribute_values,
-                              "scanner_id", &delete_scanner_data->scanner_id);
-            if (find_attribute (attribute_names, attribute_values, "ultimate",
-                                &attribute))
-              delete_scanner_data->ultimate = strcmp (attribute, "0");
-            else
-              delete_scanner_data->ultimate = 0;
-            set_client_state (CLIENT_DELETE_SCANNER);
           }
         else if (strcasecmp ("DELETE_SCHEDULE", element_name) == 0)
           {
@@ -3892,12 +3735,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                                   attribute_values);
             set_client_state (CLIENT_MODIFY_LICENSE);
           }
-        else if (strcasecmp ("MODIFY_SCANNER", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "scanner_id",
-                              &modify_scanner_data->scanner_id);
-            set_client_state (CLIENT_MODIFY_SCANNER);
-          }
         else if (strcasecmp ("MODIFY_SETTING", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values,
@@ -4122,33 +3959,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             gvm_append_string (&create_credential_data->privacy_password, "");
             set_client_state (CLIENT_CREATE_CREDENTIAL_PRIVACY_PASSWORD);
           }
-        ELSE_READ_OVER;
-
-      case CLIENT_CREATE_SCANNER:
-        if (strcasecmp ("COMMENT", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCANNER_COMMENT);
-        else if (strcasecmp ("COPY", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCANNER_COPY);
-        else if (strcasecmp ("NAME", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCANNER_NAME);
-        else if (strcasecmp ("HOST", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCANNER_HOST);
-        else if (strcasecmp ("PORT", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCANNER_PORT);
-        else if (strcasecmp ("TYPE", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCANNER_TYPE);
-        else if (strcasecmp ("CA_PUB", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCANNER_CA_PUB);
-        else if (strcasecmp ("CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &create_scanner_data->credential_id);
-            set_client_state (CLIENT_CREATE_SCANNER_CREDENTIAL);
-          }
-        else if (strcasecmp ("RELAY_HOST", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCANNER_RELAY_HOST);
-        else if (strcasecmp ("RELAY_PORT", element_name) == 0)
-          set_client_state (CLIENT_CREATE_SCANNER_RELAY_PORT);
         ELSE_READ_OVER;
 
       case CLIENT_CREATE_TARGET:
@@ -14218,382 +14028,6 @@ handle_get_vulns (gmp_parser_t *gmp_parser, GError **error)
   set_client_state (CLIENT_AUTHENTIC);
 }
 
-/**
- * @brief Handle end of CREATE_SCANNER element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_create_scanner (gmp_parser_t *gmp_parser, GError **error)
-{
-  scanner_t new_scanner;
-
-  if (create_scanner_data->copy)
-    switch (copy_scanner (create_scanner_data->name,
-                          create_scanner_data->comment,
-                          create_scanner_data->copy, &new_scanner))
-      {
-        case 0:
-          {
-            char *uuid;
-            uuid = scanner_uuid (new_scanner);
-            SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_scanner"),
-                                     uuid);
-            log_event ("scanner", "scanner", uuid, "created");
-            g_free (uuid);
-            goto create_scanner_leave;
-          }
-        case 1:
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("create_scanner", "Scanner name exists already"));
-          log_event_fail ("scanner", "Scanner", NULL, "created");
-          goto create_scanner_leave;
-        case 2:
-          if (send_find_error_to_client ("create_scanner", "scanner",
-                                         create_scanner_data->copy, gmp_parser))
-            {
-              error_send_to_client (error);
-              goto create_scanner_leave;
-            }
-          log_event_fail ("scanner", "Scanner", NULL, "created");
-          goto create_scanner_leave;
-        case 98:
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("create_scanner", "It is not possible to clone a "
-                              "CVE scanner "));
-          log_event_fail ("scanner", "Scanner", NULL, "created");
-          goto create_scanner_leave;
-        case 99:
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("create_scanner", "Permission denied"));
-          log_event_fail ("scanner", "Scanner", NULL, "created");
-          goto create_scanner_leave;
-        case -1:
-        default:
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_INTERNAL_ERROR ("create_scanner"));
-          log_event_fail ("scanner", "Scanner", NULL, "created");
-          goto create_scanner_leave;
-      }
-
-  if (!create_scanner_data->name)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-       (XML_ERROR_SYNTAX ("create_scanner", "Missing NAME"));
-      goto create_scanner_leave;
-    }
-
-  if (!create_scanner_data->host)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-       (XML_ERROR_SYNTAX ("create_scanner", "Missing HOST"));
-      goto create_scanner_leave;
-    }
-
-  if (!create_scanner_data->port)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-       (XML_ERROR_SYNTAX ("create_scanner", "Missing PORT"));
-      goto create_scanner_leave;
-    }
-
-  if (!create_scanner_data->type)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-       (XML_ERROR_SYNTAX ("create_scanner", "Missing TYPE"));
-      goto create_scanner_leave;
-    }
-
-  /* Specifying unix file socket over GMP is not allowed. */
-  if (*create_scanner_data->host == '/')
-    {
-      SEND_TO_CLIENT_OR_FAIL
-       (XML_ERROR_SYNTAX ("create_scanner", "Erroneous host value."));
-      goto create_scanner_leave;
-    }
-  if (create_scanner_data->ca_pub
-      && check_certificate_x509 (create_scanner_data->ca_pub))
-    {
-      SEND_TO_CLIENT_OR_FAIL
-       (XML_ERROR_SYNTAX ("create_scanner", "Erroneous CA Certificate."));
-      goto create_scanner_leave;
-    }
-  switch (create_scanner
-           (create_scanner_data->name, create_scanner_data->comment,
-            create_scanner_data->host, create_scanner_data->port,
-            create_scanner_data->type, &new_scanner,
-            create_scanner_data->ca_pub, create_scanner_data->credential_id,
-            create_scanner_data->relay_host, create_scanner_data->relay_port))
-    {
-      case CREATE_SCANNER_SUCCESS:
-        {
-          char *uuid = scanner_uuid (new_scanner);
-          SENDF_TO_CLIENT_OR_FAIL
-           (XML_OK_CREATED_ID ("create_scanner"), uuid);
-          log_event ("scanner", "Scanner", uuid, "created");
-          g_free (uuid);
-          break;
-        }
-      case CREATE_SCANNER_ALREADY_EXISTS:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("create_scanner", "Scanner exists already"));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      case CREATE_SCANNER_MISSING_TYPE:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("create_scanner",
-                            "Scanner requires a TYPE"));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      case CREATE_SCANNER_MISSING_HOST:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("create_scanner",
-                            "Scanner requires a HOST"));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      case CREATE_SCANNER_CREDENTIAL_NOT_FOUND:
-        if (send_find_error_to_client ("create_scanner", "credential",
-                                       create_scanner_data->credential_id,
-                                       gmp_parser))
-          {
-            error_send_to_client (error);
-            return;
-          }
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      case CREATE_SCANNER_CREDENTIAL_NOT_CC:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("create_scanner",
-                            "Credential must be of type 'cc'"
-                            " (client certificate)"));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      case CREATE_SCANNER_INVALID_TYPE:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("create_scanner",
-                            "Invalid scanner TYPE"));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      case CREATE_SCANNER_INVALID_PORT:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("create_scanner",
-                            "Scanner PORT must be a valid port number"
-                            " (1 - 65535)"
-                            " if HOST is not a UNIX socket path"));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      case CREATE_SCANNER_INVALID_HOST:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("create_scanner",
-                            "Scanner HOST must be a valid hostname,"
-                            " IP address or UNIX socket path."));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      case CREATE_SCANNER_INVALID_RELAY_PORT:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("create_scanner",
-                            "Scanner RELAY_PORT must be a valid port number"
-                            " (1 - 65535)"
-                            " if RELAY_HOST is not a UNIX socket path"));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      case CREATE_SCANNER_INVALID_RELAY_HOST:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("create_scanner",
-                            "Scanner RELAY_HOST must be a valid hostname,"
-                            " IP address, UNIX socket path or empty."));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      case CREATE_SCANNER_UNIX_SOCKET_UNSUPPORTED:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("create_scanner",
-                            "Scanner type does not support UNIX sockets."));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      case CREATE_SCANNER_OPENVASD_DISABLED:
-        SEND_TO_CLIENT_OR_FAIL
-        (XML_ERROR_SYNTAX ("create_scanner",
-          "openvasd scanner type is not supported "
-          "because the openvasd feature flag is disabled."
-        ));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      case CREATE_SCANNER_PERMISSION_DENIED:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("create_scanner", "Permission denied"));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      case CREATE_SCANNER_INTERNAL_ERROR:
-        SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_scanner"));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-      default:
-        assert (0);
-        SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_scanner"));
-        log_event_fail ("scanner", "Scanner", NULL, "created");
-        break;
-    }
-
-create_scanner_leave:
-  create_scanner_data_reset (create_scanner_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
- * @brief Handle end of MODIFY_SCANNER element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_modify_scanner (gmp_parser_t *gmp_parser, GError **error)
-{
-  if (modify_scanner_data->ca_pub && *modify_scanner_data->ca_pub
-      && check_certificate_x509 (modify_scanner_data->ca_pub))
-    {
-      SEND_TO_CLIENT_OR_FAIL
-       (XML_ERROR_SYNTAX ("modify_scanner", "Erroneous CA Certificate."));
-      goto modify_scanner_leave;
-    }
-
-  /* Specifying unix file socket over GMP is not allowed. */
-  if (modify_scanner_data->host
-      && *modify_scanner_data->host == '/')
-    {
-      SEND_TO_CLIENT_OR_FAIL
-       (XML_ERROR_SYNTAX ("create_scanner", "Erroneous host value."));
-      goto modify_scanner_leave;
-    }
-  switch (modify_scanner
-           (modify_scanner_data->scanner_id, modify_scanner_data->name,
-            modify_scanner_data->comment, modify_scanner_data->host,
-            modify_scanner_data->port, modify_scanner_data->type,
-            modify_scanner_data->ca_pub, modify_scanner_data->credential_id,
-            modify_scanner_data->relay_host, modify_scanner_data->relay_port))
-    {
-      case MODIFY_SCANNER_SUCCESS:
-        SENDF_TO_CLIENT_OR_FAIL (XML_OK ("modify_scanner"));
-        log_event ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                   "modified");
-        break;
-      case MODIFY_SCANNER_NOT_FOUND:
-        if (send_find_error_to_client ("modify_scanner", "scanner",
-                                       modify_scanner_data->scanner_id,
-                                       gmp_parser))
-          {
-            error_send_to_client (error);
-            return;
-          }
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      case MODIFY_SCANNER_ALREADY_EXISTS:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("modify_scanner",
-                            "Scanner with new name exists already"));
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      case MODIFY_SCANNER_MISSING_ID:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("modify_scanner", "Missing scanner_id"));
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      case MODIFY_SCANNER_CREDENTIAL_NOT_FOUND:
-        if (send_find_error_to_client ("create_scanner", "credential",
-                                       modify_scanner_data->credential_id,
-                                       gmp_parser))
-          {
-            error_send_to_client (error);
-            return;
-          }
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      case MODIFY_SCANNER_CREDENTIAL_NOT_CC:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("modify_scanner",
-                            "Credential must be of type 'cc'"
-                            " (client certificate)"));
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      case MODIFY_SCANNER_INVALID_TYPE:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("modify_scanner",
-                            "Invalid scanner TYPE"));
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      case MODIFY_SCANNER_INVALID_PORT:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("modify_scanner",
-                            "Scanner PORT must be a valid port number"
-                            " (1 - 65535)"
-                            " if HOST is not a UNIX socket path"));
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      case MODIFY_SCANNER_INVALID_HOST:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("modify_scanner",
-                            "Scanner HOST must be a valid hostname,"
-                            " IP address or UNIX socket path."));
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      case MODIFY_SCANNER_INVALID_RELAY_PORT:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("modify_scanner",
-                            "Scanner RELAY_PORT must be a valid port number"
-                            " (1 - 65535)"
-                            " if RELAY_HOST is not a UNIX socket path"));
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      case MODIFY_SCANNER_INVALID_RELAY_HOST:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("modify_scanner",
-                            "Scanner RELAY_HOST must be a valid hostname,"
-                            " IP address, UNIX socket path or empty."));
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      case MODIFY_SCANNER_UNIX_SOCKET_UNSUPPORTED:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("modify_scanner",
-                            "Scanner type does not support UNIX sockets."));
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      case MODIFY_SCANNER_OPENVASD_DISABLED:
-        SEND_TO_CLIENT_OR_FAIL
-        (XML_ERROR_SYNTAX ("modify_scanner",
-          "openvasd scanner type is not supported "
-          "because the openvasd feature flag is disabled."
-        ));
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      case MODIFY_SCANNER_PERMISSION_DENIED:
-        SEND_TO_CLIENT_OR_FAIL
-         (XML_ERROR_SYNTAX ("modify_scanner", "Permission denied"));
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-      default:
-        SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("modify_scanner"));
-        log_event_fail ("scanner", "Scanner", modify_scanner_data->scanner_id,
-                        "modified");
-        break;
-    }
-modify_scanner_leave:
-  modify_scanner_data_reset (modify_scanner_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
 extern char client_address[];
 
 /**
@@ -14964,7 +14398,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
 
 
-      CASE_DELETE (SCANNER, scanner, "Scanner");
       CASE_DELETE (SCHEDULE, schedule, "Schedule");
       CASE_DELETE (TAG, tag, "Tag");
       CASE_DELETE (TARGET, target, "Target");
@@ -15840,20 +15273,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_CREATE_CREDENTIAL, REALM);
       CLOSE (CLIENT_CREATE_CREDENTIAL, TYPE);
 
-
-      case CLIENT_CREATE_SCANNER:
-        handle_create_scanner (gmp_parser, error);
-        break;
-      CLOSE (CLIENT_CREATE_SCANNER, COMMENT);
-      CLOSE (CLIENT_CREATE_SCANNER, COPY);
-      CLOSE (CLIENT_CREATE_SCANNER, NAME);
-      CLOSE (CLIENT_CREATE_SCANNER, HOST);
-      CLOSE (CLIENT_CREATE_SCANNER, PORT);
-      CLOSE (CLIENT_CREATE_SCANNER, TYPE);
-      CLOSE (CLIENT_CREATE_SCANNER, CA_PUB);
-      CLOSE (CLIENT_CREATE_SCANNER, CREDENTIAL);
-      CLOSE (CLIENT_CREATE_SCANNER, RELAY_HOST);
-      CLOSE (CLIENT_CREATE_SCANNER, RELAY_PORT);
 
       case CLIENT_CREATE_TAG:
         {
@@ -17167,19 +16586,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
             set_client_state (CLIENT_AUTHENTIC);
           break;
         }
-
-      case CLIENT_MODIFY_SCANNER:
-        handle_modify_scanner (gmp_parser, error);
-        break;
-      CLOSE (CLIENT_MODIFY_SCANNER, TYPE);
-      CLOSE (CLIENT_MODIFY_SCANNER, PORT);
-      CLOSE (CLIENT_MODIFY_SCANNER, HOST);
-      CLOSE (CLIENT_MODIFY_SCANNER, COMMENT);
-      CLOSE (CLIENT_MODIFY_SCANNER, NAME);
-      CLOSE (CLIENT_MODIFY_SCANNER, CA_PUB);
-      CLOSE (CLIENT_MODIFY_SCANNER, CREDENTIAL);
-      CLOSE (CLIENT_MODIFY_SCANNER, RELAY_HOST);
-      CLOSE (CLIENT_MODIFY_SCANNER, RELAY_PORT);
 
       case CLIENT_MODIFY_SETTING:
         {
@@ -18855,34 +18261,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
 
 
-      APPEND (CLIENT_CREATE_SCANNER_NAME,
-              &create_scanner_data->name);
-
-      APPEND (CLIENT_CREATE_SCANNER_COMMENT,
-              &create_scanner_data->comment);
-
-      APPEND (CLIENT_CREATE_SCANNER_COPY,
-              &create_scanner_data->copy);
-
-      APPEND (CLIENT_CREATE_SCANNER_HOST,
-              &create_scanner_data->host);
-
-      APPEND (CLIENT_CREATE_SCANNER_PORT,
-              &create_scanner_data->port);
-
-      APPEND (CLIENT_CREATE_SCANNER_TYPE,
-              &create_scanner_data->type);
-
-      APPEND (CLIENT_CREATE_SCANNER_CA_PUB,
-              &create_scanner_data->ca_pub);
-
-      APPEND (CLIENT_CREATE_SCANNER_RELAY_HOST,
-              &create_scanner_data->relay_host);
-
-      APPEND (CLIENT_CREATE_SCANNER_RELAY_PORT,
-              &create_scanner_data->relay_port);
-
-
       APPEND (CLIENT_CREATE_TAG_ACTIVE,
               &create_tag_data->active);
 
@@ -19036,31 +18414,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
 
 
-
-
-      APPEND (CLIENT_MODIFY_SCANNER_COMMENT,
-              &modify_scanner_data->comment);
-
-      APPEND (CLIENT_MODIFY_SCANNER_NAME,
-              &modify_scanner_data->name);
-
-      APPEND (CLIENT_MODIFY_SCANNER_HOST,
-              &modify_scanner_data->host);
-
-      APPEND (CLIENT_MODIFY_SCANNER_PORT,
-              &modify_scanner_data->port);
-
-      APPEND (CLIENT_MODIFY_SCANNER_TYPE,
-              &modify_scanner_data->type);
-
-      APPEND (CLIENT_MODIFY_SCANNER_CA_PUB,
-              &modify_scanner_data->ca_pub);
-
-      APPEND (CLIENT_MODIFY_SCANNER_RELAY_HOST,
-              &modify_scanner_data->relay_host);
-
-      APPEND (CLIENT_MODIFY_SCANNER_RELAY_PORT,
-              &modify_scanner_data->relay_port);
 
 
       APPEND (CLIENT_MODIFY_TAG_ACTIVE,

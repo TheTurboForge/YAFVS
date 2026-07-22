@@ -61,6 +61,12 @@ const nativeScannerDetailSupportsFilter = (filter?: string): boolean => {
 
 const SCANNER_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
 
+const requireNativeScannerApi = (http: Http) => {
+  if (!canUseNativeApi(http)) {
+    throw new Error('Native scanner API is required for scanner mutation');
+  }
+};
+
 const isScannerMetadataOnlySave = (
   args: ScannerCommandSaveArgs,
 ): args is ScannerCommandMetadataSaveParams => {
@@ -79,18 +85,13 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
   }
 
   async clone({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      return cloneNativeScanner(this.http, id);
-    }
-    return super.clone({id});
+    requireNativeScannerApi(this.http);
+    return cloneNativeScanner(this.http, id);
   }
 
   async delete({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      await deleteNativeScanner(this.http, id);
-      return;
-    }
-    return super.delete({id});
+    requireNativeScannerApi(this.http);
+    await deleteNativeScanner(this.http, id);
   }
 
   getElementFromRoot(root: Element): ScannerElement {

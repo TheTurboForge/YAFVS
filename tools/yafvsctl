@@ -3212,7 +3212,7 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
     if name == "alert.ts":
         return "alert-delivery-and-credentials", "Alert delivery payload mutation, credentials, and broad alert-definition editing remain inherited; native control covers retained creation, metadata, cloning, deletion, testing, and manual report delivery."
     if name == "scanner.ts":
-        return "scanner-control-or-credential", "Scanner and credential surfaces remain inherited until control/secret handling is designed."
+        return "scanner-control-or-credential", "Scanner lifecycle mutations are native; retained detail, remote TLS/relay verification, file compatibility, and credential context still use inherited plumbing."
     if name == "hosts.js":
         return "asset-action-or-rich-context", "Host actions and richer inherited context remain outside the current native read contract."
     if name == "port-lists.ts":

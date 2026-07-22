@@ -238,8 +238,10 @@ semantics remain inherited. Scanner metadata list
 and safe socket/builtin detail page-load reads are browser-proxied, including
 active User Tags and non-hidden task backlinks. Direct scanner metadata export
 reuses the same redacted detail JSON for scriptable operator reads. Remote
-scanner certificate context, verify/file export/download,
-credential/certificate download context, and scanner writes remain inherited.
+scanner certificate context, remote TLS/relay verification, legacy file
+export/download, credential/certificate download context, and deeper scanner
+control remain inherited. Browser and GMP/XML scanner lifecycle mutations are
+removed; native Rust owns the retained scanner writes.
 Port-list list/detail reads are browser-proxied, including port ranges and target
 backlinks. Port-list typed create, metadata/range update, clone, trash, restore,
 hard-delete, and exported-XML import with explicit TCP/UDP ranges are native

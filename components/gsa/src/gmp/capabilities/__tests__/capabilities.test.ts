@@ -114,6 +114,19 @@ describe('Capabilities tests', () => {
     expect(caps.mayDelete('task')).toEqual(false);
   });
 
+  test('should retain scanner capabilities for native lifecycle controls', () => {
+    const caps = new Capabilities([
+      'create_scanner',
+      'delete_scanner',
+      'modify_scanner',
+    ]);
+
+    expect(caps.mayCreate('scanner')).toEqual(true);
+    expect(caps.mayClone('scanner')).toEqual(true);
+    expect(caps.mayDelete('scanner')).toEqual(true);
+    expect(caps.mayEdit('scanner')).toEqual(true);
+  });
+
   test('should support asset types', () => {
     const caps = new Capabilities([
       'get_assets',

@@ -223,12 +223,16 @@ notes = "Move retained event evaluation and delivery methods behind an explicit 
 [[responsibilities]]
 id = "scanner-registry-capability"
 target_owner = "scanner"
-status = "characterized"
+status = "migrating"
 weight = 3
-evidence = ["services/yafvs-api/src/scanner_writes.rs::create_scanner"]
+evidence = [
+  "services/yafvs-api/src/scanner_writes.rs::create_scanner",
+  "services/yafvs-api/src/scanner_writes.rs::clone_scanner",
+  "tools/tests/test_yafvsctl.py::def test_legacy_scanner_mutation_commands_are_removed_full_stack",
+]
 independent_authority = ["components/gvmd/src/manage.h::SCANNER_TYPE_OPENVAS = 2"]
 dependencies = ["manager-coded-semantics"]
-notes = "Move registry, verification, capability, connection, and retained scanner configuration away from gvmd CLI/control paths."
+notes = "Rust owns scanner registry lifecycle mutations and the browser/GMP create, clone, modify, and delete surfaces are retired. Verification, remote TLS/relay configuration, capability discovery, and the remaining manager CLI/internal callers still need migration before this responsibility is native-owned."
 
 [[responsibilities]]
 id = "feed-sync-generation"

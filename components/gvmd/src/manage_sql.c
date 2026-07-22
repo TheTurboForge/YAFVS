@@ -19476,31 +19476,6 @@ create_scanner (const char* name, const char *comment, const char *host,
 }
 
 /**
- * @brief Create a scanner from an existing scanner.
- *
- * @param[in]  name         Name of new scanner. NULL to copy from existing.
- * @param[in]  comment      Comment on new scanner. NULL to copy from
- *                          existing.
- * @param[in]  scanner_id   UUID of existing scanner.
- * @param[out] new_scanner  New scanner.
- *
- * @return 0 success, 1 scanner exists already, 2 failed to find existing
- *         scanner, -1 error, 98 not allowed to copy cve scanner,
- *         99 permission denied.
- */
-int
-copy_scanner (const char* name, const char* comment, const char *scanner_id,
-              scanner_t* new_scanner)
-{
-  if (strcmp (scanner_id, SCANNER_UUID_CVE) == 0)
-    return 98;
-
-  return copy_resource ("scanner", name, comment, scanner_id,
-                        "host, port, type, ca_pub, credential", 1,
-                        new_scanner, NULL);
-}
-
-/**
  * @brief Modify a scanner.
  *
  * @param[in]   scanner_id  UUID of scanner.

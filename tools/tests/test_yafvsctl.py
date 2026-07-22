@@ -1497,7 +1497,6 @@ class YAFVSCtlTests(unittest.TestCase):
         retired_sources = {
             "gvm-libs GMP client": root / "components" / "gvm-libs" / "gmp" / "gmp.c",
             "gvm-libs GMP declarations": root / "components" / "gvm-libs" / "gmp" / "gmp.h",
-            "gsa capabilities": root / "components" / "gsa" / "src" / "gmp" / "capabilities" / "capabilities.ts",
             "gsad dispatch": root / "components" / "gsad" / "src" / "gsad_gmp.c",
             "gsad declarations": root / "components" / "gsad" / "src" / "gsad_gmp.h",
             "gsad validation": root / "components" / "gsad" / "src" / "gsad_validator.c",
@@ -1754,6 +1753,77 @@ class YAFVSCtlTests(unittest.TestCase):
             "pub(crate) async fn delete_override",
             "pub(crate) async fn restore_override",
             "pub(crate) async fn hard_delete_override",
+        ):
+            self.assertIn(marker, native_write_source)
+
+    def test_legacy_scanner_mutation_commands_are_removed_full_stack(self):
+        root = Path(__file__).resolve().parents[2]
+        retired_sources = {
+            "gsa capabilities": root / "components" / "gsa" / "src" / "gmp" / "capabilities" / "capabilities.ts",
+            "gsad dispatch": root / "components" / "gsad" / "src" / "gsad_gmp.c",
+            "gsad declarations": root / "components" / "gsad" / "src" / "gsad_gmp.h",
+            "gsad validation": root / "components" / "gsad" / "src" / "gsad_validator.c",
+            "gvmd parser": root / "components" / "gvmd" / "src" / "gmp.c",
+            "GMP schema": root / "components" / "gvmd" / "src" / "schema_formats" / "XML" / "GMP.xml.in",
+        }
+        retired_markers = (
+            "create_scanner_gmp",
+            "save_scanner_gmp",
+            "delete_scanner_gmp",
+            "ELSE (create_scanner)",
+            "ELSE (save_scanner)",
+            "ELSE (delete_scanner)",
+            "CLIENT_CREATE_SCANNER",
+            "CLIENT_MODIFY_SCANNER",
+            "CLIENT_DELETE_SCANNER",
+            "<name>create_scanner</name>",
+            "<name>modify_scanner</name>",
+            "<name>delete_scanner</name>",
+        )
+
+        for label, path in retired_sources.items():
+            source = path.read_text(encoding="utf-8")
+            for marker in retired_markers:
+                self.assertNotIn(marker, source, f"{label} still exposes {marker}")
+
+        gsa_scanner = (root / "components" / "gsa" / "src" / "gmp" / "commands" / "scanner.ts").read_text(encoding="utf-8")
+        manage_sql = (root / "components" / "gvmd" / "src" / "manage_sql.c").read_text(encoding="utf-8")
+        manage_h = (root / "components" / "gvmd" / "src" / "manage.h").read_text(encoding="utf-8")
+        native_write_source = (root / "services" / "yafvs-api" / "src" / "scanner_writes.rs").read_text(encoding="utf-8")
+
+        self.assertNotIn("super.clone({id})", gsa_scanner)
+        self.assertNotIn("super.delete({id})", gsa_scanner)
+        capabilities = (root / "components" / "gsa" / "src" / "gmp" / "capabilities" / "capabilities.ts").read_text(encoding="utf-8")
+        for retained in ("'create_scanner'", "'modify_scanner'", "'delete_scanner'"):
+            self.assertIn(retained, capabilities)
+        self.assertNotIn("copy_scanner (", manage_sql)
+        self.assertNotIn("copy_scanner (", manage_h)
+        for retained in (
+            "create_scanner (",
+            "modify_scanner (",
+            "delete_scanner (",
+            "verify_scanner (",
+            "manage_create_scanner (",
+            "manage_modify_scanner (",
+            "manage_delete_scanner (",
+        ):
+            self.assertIn(retained, manage_sql)
+        gsad_source = retired_sources["gsad dispatch"].read_text(encoding="utf-8")
+        gvmd_source = retired_sources["gvmd parser"].read_text(encoding="utf-8")
+        self.assertIn("get_scanner_gmp", gsad_source)
+        self.assertIn("export_scanner_gmp", gsad_source)
+        self.assertIn("get_trash_scanners_gmp", gsad_source)
+        self.assertIn("verify_scanner_gmp", gsad_source)
+        self.assertIn("CLIENT_GET_SCANNERS", gvmd_source)
+        self.assertIn("CLIENT_VERIFY_SCANNER", gvmd_source)
+        for marker in (
+            "pub(crate) async fn create_scanner",
+            "pub(crate) async fn clone_scanner",
+            "pub(crate) async fn patch_scanner",
+            "pub(crate) async fn replace_scanner_configuration",
+            "pub(crate) async fn delete_scanner",
+            "pub(crate) async fn restore_scanner",
+            "pub(crate) async fn hard_delete_scanner",
         ):
             self.assertIn(marker, native_write_source)
 

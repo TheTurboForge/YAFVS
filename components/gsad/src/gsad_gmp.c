@@ -7025,232 +7025,6 @@ verify_scanner_gmp (gvm_connection_t *connection,
   return html;
 }
 
-/**
- * @brief Create a scanner, get all scanners, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-create_scanner_gmp (gvm_connection_t *connection,
-                    gsad_credentials_t *credentials, params_t *params,
-                    gsad_command_response_data_t *response_data)
-{
-  int ret;
-  char *html;
-  const char *name, *comment, *host, *port, *type, *ca_pub, *credential_id;
-  entity_t entity = NULL;
-
-  name = params_value (params, "name");
-  comment = params_value (params, "comment");
-  host = params_value (params, "scanner_host");
-  port = params_value (params, "port");
-  type = params_value (params, "scanner_type");
-  ca_pub = params_value (params, "ca_pub");
-  credential_id = params_value (params, "credential_id");
-
-  CHECK_VARIABLE_INVALID (name, "Create Scanner");
-  CHECK_VARIABLE_INVALID (comment, "Create Scanner");
-  CHECK_VARIABLE_INVALID (host, "Create Scanner");
-  CHECK_VARIABLE_INVALID (port, "Create Scanner");
-  CHECK_VARIABLE_INVALID (type, "Create Scanner");
-
-  if (params_given (params, "credential_id"))
-    CHECK_VARIABLE_INVALID (credential_id, "Create Scanner");
-
-  if (params_given (params, "ca_pub"))
-    CHECK_VARIABLE_INVALID (ca_pub, "Create Scanner");
-
-  if (ca_pub)
-    ret = gmpf (connection, credentials, NULL, &entity, response_data,
-                "<create_scanner>"
-                "<name>%s</name><comment>%s</comment>"
-                "<host>%s</host><port>%s</port><type>%s</type>"
-                "<ca_pub>%s</ca_pub>"
-                "<credential id=\"%s\"/>"
-                "</create_scanner>",
-                name, comment, host, port, type, ca_pub,
-                credential_id ? credential_id : "");
-  else
-    ret = gmpf (connection, credentials, NULL, &entity, response_data,
-                "<create_scanner>"
-                "<name>%s</name><comment>%s</comment>"
-                "<host>%s</host><port>%s</port><type>%s</type>"
-                "<credential id=\"%s\"/>"
-                "</create_scanner>",
-                name, comment, host, port, type,
-                credential_id ? credential_id : "");
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new scanner. "
-        "No new scanner was created. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new scanner. "
-        "It is unclear whether the scanner has been created or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new scanner. "
-        "It is unclear whether the scanner has been created or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  if (entity_attribute (entity, "id"))
-    params_add (params, "scanner_id", entity_attribute (entity, "id"));
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Create Scanner", response_data);
-  free_entity (entity);
-  return html;
-}
-
-/**
- * @brief Delete a scanner, get all scanners, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-delete_scanner_gmp (gvm_connection_t *connection,
-                    gsad_credentials_t *credentials, params_t *params,
-                    gsad_command_response_data_t *response_data)
-{
-  return move_resource_to_trash (connection, "scanner", credentials, params,
-                                 response_data);
-}
-
-/**
- * @brief Save scanner, get next page, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials     Username and password for authentication.
- * @param[in]  params          Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-save_scanner_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                  params_t *params, gsad_command_response_data_t *response_data)
-{
-  GString *xml = NULL;
-  entity_t entity = NULL;
-  const char *scanner_id, *name, *comment, *port, *host, *type, *ca_pub;
-  const char *credential_id;
-  char *html;
-  int ret, is_unix_socket;
-
-  scanner_id = params_value (params, "scanner_id");
-  name = params_value (params, "name");
-  comment = params_value (params, "comment");
-  host = params_value (params, "scanner_host");
-  is_unix_socket = (host && *host == '/') ? 1 : 0;
-  port = params_value (params, "port");
-  type = params_value (params, "scanner_type");
-  ca_pub = params_value (params, "ca_pub");
-  credential_id = params_value (params, "credential_id");
-
-  CHECK_VARIABLE_INVALID (scanner_id, "Edit Scanner");
-  CHECK_VARIABLE_INVALID (name, "Edit Scanner");
-
-  if (params_given (params, "scanner_host"))
-    CHECK_VARIABLE_INVALID (host, "Edit Scanner");
-  if (!is_unix_socket && params_given (params, "port"))
-    CHECK_VARIABLE_INVALID (port, "Edit Scanner");
-  if (params_given (params, "scanner_type"))
-    CHECK_VARIABLE_INVALID (type, "Edit Scanner");
-  if (!is_unix_socket && params_given (params, "ca_pub"))
-    CHECK_VARIABLE_INVALID (ca_pub, "Edit Scanner");
-  if (!is_unix_socket && params_given (params, "credential_id"))
-    CHECK_VARIABLE_INVALID (credential_id, "Edit Scanner");
-
-  xml = g_string_new ("");
-  xml_string_append (xml, "<modify_scanner scanner_id=\"%s\">", scanner_id);
-  xml_string_append (xml, "<name>%s</name>", name);
-  xml_string_append (xml, "<comment>%s</comment>", comment ?: "");
-
-  if (!is_unix_socket && host != NULL)
-    xml_string_append (xml, "<host>%s</host>", host);
-  if (!is_unix_socket && port != NULL)
-    xml_string_append (xml, "<port>%s</port>", port);
-  if (!is_unix_socket && type != NULL)
-    xml_string_append (xml, "<type>%s</type>", type);
-  if (!is_unix_socket && ca_pub != NULL)
-    xml_string_append (xml, "<ca_pub>%s</ca_pub>", ca_pub);
-  if (!is_unix_socket && credential_id != NULL)
-    xml_string_append (xml, "<credential id=\"%s\"/>", credential_id);
-
-  g_string_append (xml, "</modify_scanner>");
-
-  ret = gmp (connection, credentials, NULL, &entity, response_data, xml->str);
-
-  g_string_free (xml, TRUE);
-
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a scanner. "
-        "The scanner remains the same. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a scanner. "
-        "It is unclear whether the scanner has been saved or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a scanner. "
-        "It is unclear whether the scanner has been saved or not. "
-        "Diagnostics: Unknown Error.",
-        response_data);
-    }
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Save Scanner", response_data);
-
-  free_entity (entity);
-  return html;
-}
-
 /* Schedules. */
 
 /**
@@ -10834,7 +10608,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (create_asset)
   ELSE (create_credential)
   ELSE (create_host)
-  ELSE (create_scanner)
   ELSE (create_task)
   ELSE (create_tag)
   ELSE (create_target)
@@ -10846,7 +10619,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_credential)
   ELSE (delete_from_trash)
   ELSE (delete_report)
-  ELSE (delete_scanner)
   ELSE (delete_schedule)
   ELSE (delete_tag)
   ELSE (delete_target)
@@ -10863,7 +10635,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (save_config_nvt)
   ELSE (save_credential)
   ELSE (save_license)
-  ELSE (save_scanner)
   ELSE (save_tag)
   ELSE (save_target)
   ELSE (save_task)

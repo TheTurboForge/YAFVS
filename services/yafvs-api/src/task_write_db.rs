@@ -328,6 +328,48 @@ pub(crate) fn ensure_task_not_in_use_for_native_trash(
     }
 }
 
+pub(crate) async fn ensure_task_reports_are_deletable(
+    tx: &Transaction<'_>,
+    task_internal_id: i32,
+) -> Result<(), ApiError> {
+    let rows = tx
+        .query(task_report_delete_guards_sql(), &[&task_internal_id])
+        .await
+        .map_err(|error| map_task_write_db_error(error, "load task report delete guards"))?;
+    for row in rows {
+        let run_status = task_report_delete_status(row.get(0))?;
+        if run_status.blocks_native_trash() {
+            return Err(ApiError::Conflict(
+                "task trash deletion is unavailable while a report is active".to_string(),
+            ));
+        }
+        if row.get::<_, bool>(1) {
+            return Err(ApiError::Conflict(
+                "task trash deletion is unavailable while a report is used by a scope snapshot"
+                    .to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn task_report_delete_status(value: Option<i32>) -> Result<TaskStatus, ApiError> {
+    let Some(value) = value else {
+        return Err(ApiError::Conflict(
+            "task trash deletion is unavailable while a report state is missing".to_string(),
+        ));
+    };
+    TaskStatus::try_from(value).map_err(|unknown| {
+        tracing::warn!(
+            task_status = unknown,
+            "database contains an unknown report status during task trash deletion"
+        );
+        ApiError::Conflict(
+            "task trash deletion is unavailable while a report state is unrecognized".to_string(),
+        )
+    })
+}
+
 pub(crate) async fn ensure_unique_task_name(
     tx: &Transaction<'_>,
     name: &str,

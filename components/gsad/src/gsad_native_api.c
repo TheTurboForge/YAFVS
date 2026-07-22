@@ -998,7 +998,8 @@ native_api_delete_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, task_prefix))
     {
       const gchar *id = path + strlen (task_prefix);
-      return is_uuid_segment (id, strlen (id));
+      return is_uuid_segment (id, strlen (id))
+             || is_uuid_segment_with_suffix (id, trash_suffix);
     }
 
   return FALSE;

@@ -25,6 +25,16 @@ pub(crate) fn task_trash_state_sql() -> &'static str {
         AND coalesce(usage_type, 'scan') = 'scan';"
 }
 
+pub(crate) fn task_report_delete_guards_sql() -> &'static str {
+    "SELECT reports.scan_run_status::integer,
+            EXISTS (
+                SELECT 1
+                  FROM scope_report_sources
+                 WHERE source_report = reports.id)
+       FROM reports
+      WHERE reports.task = $1;"
+}
+
 pub(crate) fn task_assignable_schedule_state_sql() -> &'static str {
     "SELECT id::integer,
             owner::integer,
@@ -303,6 +313,99 @@ pub(crate) fn task_mark_hidden_trash_sql() -> &'static str {
             modification_time = m_now()
       WHERE id = $1
         AND coalesce(hidden, 0) = 0
+        AND coalesce(usage_type, 'scan') = 'scan'
+      RETURNING uuid::text;"
+}
+
+pub(crate) fn task_hard_delete_report_host_details_sql() -> &'static str {
+    "DELETE FROM report_host_details
+      WHERE report_host IN (
+            SELECT report_hosts.id
+              FROM report_hosts
+              JOIN reports ON reports.id = report_hosts.report
+             WHERE reports.task = $1);"
+}
+
+pub(crate) fn task_hard_delete_report_hosts_sql() -> &'static str {
+    "DELETE FROM report_hosts
+      WHERE report IN (SELECT id FROM reports WHERE task = $1);"
+}
+
+pub(crate) fn task_hard_delete_result_tag_links_sql() -> &'static str {
+    "DELETE FROM tag_resources
+      WHERE resource_type = 'result'
+        AND resource_uuid IN (
+            SELECT uuid FROM results WHERE task = $1
+            UNION
+            SELECT uuid FROM results_trash WHERE task = $1);"
+}
+
+pub(crate) fn task_hard_delete_trash_result_tag_links_sql() -> &'static str {
+    "DELETE FROM tag_resources_trash
+      WHERE resource_type = 'result'
+        AND resource_uuid IN (
+            SELECT uuid FROM results WHERE task = $1
+            UNION
+            SELECT uuid FROM results_trash WHERE task = $1);"
+}
+
+pub(crate) fn task_hard_delete_live_results_sql() -> &'static str {
+    "DELETE FROM results WHERE task = $1;"
+}
+
+pub(crate) fn task_hard_delete_trash_results_sql() -> &'static str {
+    "DELETE FROM results_trash WHERE task = $1;"
+}
+
+pub(crate) fn task_hard_delete_report_tag_links_sql() -> &'static str {
+    "DELETE FROM tag_resources
+      WHERE resource_type = 'report'
+        AND resource IN (SELECT id FROM reports WHERE task = $1);"
+}
+
+pub(crate) fn task_hard_delete_trash_report_tag_links_sql() -> &'static str {
+    "DELETE FROM tag_resources_trash
+      WHERE resource_type = 'report'
+        AND resource IN (SELECT id FROM reports WHERE task = $1);"
+}
+
+pub(crate) fn task_hard_delete_result_nvt_reports_sql() -> &'static str {
+    "DELETE FROM result_nvt_reports
+      WHERE report IN (SELECT id FROM reports WHERE task = $1);"
+}
+
+pub(crate) fn task_hard_delete_reports_sql() -> &'static str {
+    "DELETE FROM reports WHERE task = $1;"
+}
+
+pub(crate) fn task_hard_delete_task_tag_links_sql() -> &'static str {
+    "DELETE FROM tag_resources
+      WHERE resource_type = 'task'
+        AND resource = $1;"
+}
+
+pub(crate) fn task_hard_delete_trash_task_tag_links_sql() -> &'static str {
+    "DELETE FROM tag_resources_trash
+      WHERE resource_type = 'task'
+        AND resource = $1;"
+}
+
+pub(crate) fn task_hard_delete_alerts_sql() -> &'static str {
+    "DELETE FROM task_alerts WHERE task = $1;"
+}
+
+pub(crate) fn task_hard_delete_files_sql() -> &'static str {
+    "DELETE FROM task_files WHERE task = $1;"
+}
+
+pub(crate) fn task_hard_delete_preferences_sql() -> &'static str {
+    "DELETE FROM task_preferences WHERE task = $1;"
+}
+
+pub(crate) fn task_hard_delete_metadata_sql() -> &'static str {
+    "DELETE FROM tasks
+      WHERE id = $1
+        AND coalesce(hidden, 0) = 2
         AND coalesce(usage_type, 'scan') = 'scan'
       RETURNING uuid::text;"
 }

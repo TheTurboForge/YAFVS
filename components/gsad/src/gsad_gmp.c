@@ -1533,50 +1533,6 @@ move_resource_to_trash (gvm_connection_t *connection, const char *type,
                           response_data);
 }
 
-static gboolean
-trashcan_delete_resource_type_is_supported (const gchar *resource_type)
-{
-  return g_strcmp0 (resource_type, "task") == 0;
-}
-
-/**
- * @brief Delete a resource from the trashcan
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-delete_from_trash_gmp (gvm_connection_t *connection,
-                       gsad_credentials_t *credentials, params_t *params,
-                       gsad_command_response_data_t *response_data)
-{
-  const gchar *resource_type;
-
-  resource_type = params_value (params, "resource_type");
-
-  CHECK_VARIABLE_INVALID (resource_type, "Delete from Trashcan");
-
-  if (!trashcan_delete_resource_type_is_supported (resource_type))
-    {
-      gsad_command_response_data_set_status_code (response_data,
-                                                  MHD_HTTP_BAD_REQUEST);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while permanently deleting a resource. "
-        "The resource was not deleted. "
-        "Diagnostics: Unsupported resource_type for the trash delete "
-        "compatibility bridge.",
-        response_data);
-    }
-
-  return delete_resource (connection, resource_type, credentials, params, TRUE,
-                          response_data);
-}
-
 /**
  * @brief Perform action on resource, get next page, envelope result.
  *
@@ -10162,7 +10118,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_alert)
   ELSE (delete_config)
   ELSE (delete_credential)
-  ELSE (delete_from_trash)
   ELSE (delete_report)
   ELSE (delete_schedule)
   ELSE (delete_target)

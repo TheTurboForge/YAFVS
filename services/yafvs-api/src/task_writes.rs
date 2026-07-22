@@ -18,9 +18,9 @@ use crate::{
     task_target_payloads::TaskItem,
     task_write_db::*,
     task_write_transactions::{
-        execute_task_create_transaction, execute_task_patch_transaction,
-        execute_task_replace_transaction, execute_task_restore_transaction,
-        execute_task_trash_transaction,
+        execute_task_create_transaction, execute_task_hard_delete_transaction,
+        execute_task_patch_transaction, execute_task_replace_transaction,
+        execute_task_restore_transaction, execute_task_trash_transaction,
     },
     task_write_validation::{
         TaskCreateRequest, TaskPatchRequest, TaskReplaceRequest, validate_task_create_request,
@@ -291,6 +291,35 @@ pub(crate) async fn restore_task(
                 mutation_committed_response_unavailable(error, "restore task response reload")
             })?,
     ))
+}
+
+pub(crate) async fn hard_delete_task(
+    State(state): State<AppState>,
+    Path(task_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<StatusCode, ApiError> {
+    let operator = require_task_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|error| map_task_write_db_error(error, "begin hard delete task transaction"))?;
+    resolve_task_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE tasks, task_alerts, task_files, task_preferences, reports, report_hosts, report_host_details, scope_report_sources, report_counts, result_nvt_reports, results, results_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_task_write_db_error(error, "lock task hard delete tables"))?;
+    let trash = load_task_trash_state(&tx, &task_id).await?;
+    ensure_task_is_human_owned(trash.owner_id)?;
+    ensure_task_not_in_use_for_native_trash(trash.run_status)?;
+    ensure_task_reports_are_deletable(&tx, trash.internal_id).await?;
+    execute_task_hard_delete_transaction(&tx, trash.internal_id).await?;
+    tx.commit()
+        .await
+        .map_err(|error| map_task_write_db_error(error, "commit hard delete task transaction"))?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 fn task_write_location_headers(task_id: &str) -> Result<HeaderMap, ApiError> {

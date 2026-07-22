@@ -400,6 +400,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
+        method: "delete",
+        path: "/api/v1/tasks/:task_id/trash",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
         method: "post",
         path: "/api/v1/filters",
         safety_contract: "write-control-v1",
@@ -880,6 +885,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("delete(browser_proxy_delete_schedule)"));
     assert!(browser_routes.contains("delete(browser_proxy_hard_delete_schedule)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_task)"));
+    assert!(browser_routes.contains("delete(browser_proxy_hard_delete_task)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_target)"));
     assert!(browser_routes.contains("delete(browser_proxy_hard_delete_target)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_scanner)"));

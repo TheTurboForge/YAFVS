@@ -302,3 +302,73 @@ pub(crate) async fn execute_task_trash_transaction(
     )
     .await
 }
+
+pub(crate) async fn execute_task_hard_delete_transaction(
+    tx: &Transaction<'_>,
+    task_internal_id: i32,
+) -> Result<TaskWriteRecord, ApiError> {
+    for (sql, action) in [
+        (
+            task_hard_delete_report_host_details_sql(),
+            "delete task report host details",
+        ),
+        (
+            task_hard_delete_report_hosts_sql(),
+            "delete task report hosts",
+        ),
+        (
+            task_hard_delete_result_tag_links_sql(),
+            "delete task result tag links",
+        ),
+        (
+            task_hard_delete_trash_result_tag_links_sql(),
+            "delete trashed task result tag links",
+        ),
+        (
+            task_hard_delete_live_results_sql(),
+            "delete task live results",
+        ),
+        (
+            task_hard_delete_trash_results_sql(),
+            "delete task trash results",
+        ),
+        (
+            task_hard_delete_report_tag_links_sql(),
+            "delete task report tag links",
+        ),
+        (
+            task_hard_delete_trash_report_tag_links_sql(),
+            "delete trashed task report tag links",
+        ),
+        (task_delete_report_counts_sql(), "delete task report counts"),
+        (
+            task_hard_delete_result_nvt_reports_sql(),
+            "delete task result NVT report links",
+        ),
+        (task_hard_delete_reports_sql(), "delete task reports"),
+        (
+            task_hard_delete_task_tag_links_sql(),
+            "delete task tag links",
+        ),
+        (
+            task_hard_delete_trash_task_tag_links_sql(),
+            "delete trashed task tag links",
+        ),
+        (task_hard_delete_alerts_sql(), "delete task alert links"),
+        (task_hard_delete_files_sql(), "delete task files"),
+        (
+            task_hard_delete_preferences_sql(),
+            "delete task preferences",
+        ),
+    ] {
+        execute_task_write_sql(tx, sql, &[&task_internal_id], action).await?;
+    }
+
+    query_task_write_record(
+        tx,
+        task_hard_delete_metadata_sql(),
+        &[&task_internal_id],
+        "delete trashed task metadata",
+    )
+    .await
+}

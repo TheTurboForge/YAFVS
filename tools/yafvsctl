@@ -507,6 +507,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "task-list-read",
         "task-retained-editor-configuration-modify",
         "task-target-clone-rebind-delete",
+        "task-trash-hard-delete",
         "task-trash-restore",
         "task-trash-move",
         "task-start",
@@ -558,7 +559,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "target-credential-secrets-writes-and-deletes",
         "task-scan-control-writes-and-deletes",
         "task-resume-and-other-scanner-control",
-        "task-resume-file-hard-delete-and-other-scanner-control",
+        "task-resume-file-and-other-scanner-control",
         "trashcan-deep-row-data-and-mutations",
         "trashcan-row-detail-restore-and-individual-hard-delete",
         "trashcan-row-data-and-mutations",
@@ -1734,7 +1735,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-yafvs-replaces": "task-list-read",
     },
     ("post", "/tasks"): {
-        "x-yafvs-inherited-still-owns": "task-resume-file-hard-delete-and-other-scanner-control",
+        "x-yafvs-inherited-still-owns": "task-resume-file-and-other-scanner-control",
         "x-yafvs-maturity": "live-write",
         "x-yafvs-operator-identity": "direct-token-operator",
         "x-yafvs-owner-semantics": "request-operator-owner",
@@ -7128,6 +7129,14 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             and "g_str_has_prefix (path, credential_prefix)" in delete_function_body
         ):
             templates.add(f"{credential_prefix.rstrip('/')}/{{}}{trash_suffix}")
+        task_prefix = delete_constants.get("task_prefix")
+        if (
+            task_prefix
+            and trash_suffix
+            and "g_str_has_prefix (path, task_prefix)" in delete_function_body
+            and "is_uuid_segment_with_suffix (id, trash_suffix)" in delete_function_body
+        ):
+            templates.add(f"{task_prefix.rstrip('/')}/{{}}{trash_suffix}")
         port_list_prefix = delete_constants.get("port_list_prefix")
         if (
             port_list_prefix
@@ -7362,6 +7371,14 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             and "g_str_has_prefix (path, credential_prefix)" in delete_function_body
         ):
             operations.add(f"DELETE {credential_prefix.rstrip('/')}/{{}}{trash_suffix}")
+        task_prefix = delete_constants.get("task_prefix")
+        if (
+            task_prefix
+            and trash_suffix
+            and "g_str_has_prefix (path, task_prefix)" in delete_function_body
+            and "is_uuid_segment_with_suffix (id, trash_suffix)" in delete_function_body
+        ):
+            operations.add(f"DELETE {task_prefix.rstrip('/')}/{{}}{trash_suffix}")
         if user_management_prefix and "is_user_management_user_path (path)" in delete_function_body:
             operations.add(f"DELETE {user_management_prefix.rstrip('/')}/{{}}")
         port_list_prefix = delete_constants.get("port_list_prefix")
@@ -8971,7 +8988,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser task create with retained editor configuration", "direct native task create with optional schedule, alerts, host ordering, scanner preferences, and task tag without immediate scanner lifecycle start"],
                 "residual_inherited": [
-                    "Task resume, hard-delete, non-queue scanner side effects, and inherited file export remain inherited until separately migrated."
+                    "Task resume, non-queue scanner side effects, and inherited file export remain inherited until separately migrated."
                 ],
             },
             {
@@ -8981,7 +8998,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser task clone through authoritative gvmd control", "guarded direct native task clone that does not directly start a scan"],
                 "residual_inherited": [
-                    "Task resume, hard-delete, non-queue scanner side effects, and inherited file export remain inherited until separately migrated."
+                    "Task resume, non-queue scanner side effects, and inherited file export remain inherited until separately migrated."
                 ],
             },
             {
@@ -9009,7 +9026,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin task editor full save", "direct native retained task configuration replacement"],
                 "residual_inherited": [
-                    "Task resume, hard-delete, and inherited file export remain inherited until separately migrated."
+                    "Task resume and inherited file export remain inherited until separately migrated."
                 ],
             },
             {
@@ -9029,7 +9046,18 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser task restore", "direct native task restore"],
                 "residual_inherited": [
-                    "Task hard-delete, resume, inherited file export, and other scanner-control workflows remain inherited until separately migrated."
+                    "Task resume, inherited file export, and other scanner-control workflows remain inherited until separately migrated."
+                ],
+            },
+            {
+                "method": "delete",
+                "endpoint": "/api/v1/tasks/{task_id}/trash",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser task permanent trash delete", "direct native task permanent trash delete"],
+                "residual_inherited": [
+                    "The route accepts only a human-owned trashed scan task and cannot delete a live task.",
+                    "Active task/report states and scope-snapshot report references block deletion; retained report evidence and task metadata are removed in one locked transaction."
                 ],
             },
             {

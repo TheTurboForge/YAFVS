@@ -58,10 +58,6 @@ export interface TrashCanEmptyParams {
   expectedSnapshotDigest: string;
 }
 
-const LEGACY_DELETE_RESOURCE_TYPES = {
-  task: 'task',
-} as const satisfies Partial<Record<EntityType, string>>;
-
 interface UsageTypeElement extends ModelElement {
   usage_type?: string;
 }
@@ -233,18 +229,9 @@ class TrashCanCommand extends HttpCommand {
       return;
     }
 
-    const resourceType = LEGACY_DELETE_RESOURCE_TYPES[entityType];
-    if (resourceType === undefined) {
-      throw new Error(
-        `Trashcan permanent delete is unavailable for ${entityType}`,
-      );
-    }
-
-    await this.httpPostWithTransform({
-      cmd: 'delete_from_trash',
-      [`${resourceType}_id`]: id,
-      resource_type: resourceType,
-    });
+    throw new Error(
+      `Trashcan permanent delete is unavailable for ${entityType}`,
+    );
   }
 
   async emptyPreview(): Promise<NativeTrashcanEmptyPreview> {

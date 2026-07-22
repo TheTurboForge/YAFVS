@@ -85,8 +85,8 @@ fn trashcan_permanent_delete_allowlists_remain_narrow_and_fail_closed() {
     assert!(gsa_delete.contains("if (!canUseNativeApi(this.http))"));
     assert!(gsa_delete.contains("Native Trashcan permanent delete is unavailable"));
     assert!(gsa_delete.contains("Trashcan permanent delete is unavailable"));
-    assert!(gsa_delete.contains("resource_type: resourceType"));
-    assert!(gsa_delete.contains("[`${resourceType}_id`]: id"));
+    assert!(!gsa_delete.contains("resource_type"));
+    assert!(!gsa_delete.contains("delete_from_trash"));
     assert!(!gsa_delete.contains("apiType("));
     assert!(!gsa_delete.contains("cmdApiType"));
     assert!(!GSA_TRASHCAN.contains("reportformat: 'report_format'"));
@@ -100,22 +100,12 @@ fn trashcan_permanent_delete_allowlists_remain_narrow_and_fail_closed() {
         .0;
     assert!(native_delete_paths.contains("...NATIVE_TRASH_PATHS"));
     assert!(native_delete_paths.contains("credential: 'credentials'"));
-    assert!(!native_delete_paths.contains("task:"));
-
-    let delete_from_trash = inherited_function(GSAD_GMP, "delete_from_trash_gmp");
-    assert!(
-        delete_from_trash.contains("trashcan_delete_resource_type_is_supported (resource_type)")
-    );
-    let delete_allowlist =
-        inherited_function(GSAD_GMP, "trashcan_delete_resource_type_is_supported");
-    assert!(delete_allowlist.contains("g_strcmp0 (resource_type, \"task\")"));
-    assert!(!delete_allowlist.contains("g_strcmp0 (resource_type, \"credential\")"));
-    assert!(!delete_allowlist.contains("g_strcmp0 (resource_type, \"report_format\")"));
-    assert!(delete_from_trash.contains("Unsupported resource_type for the trash delete"));
-    assert!(
-        delete_from_trash
-            .contains("delete_resource (connection, resource_type, credentials, params, TRUE")
-    );
+    assert!(native_delete_paths.contains("task: 'tasks'"));
+    assert!(!GSAD_GMP.contains("delete_from_trash_gmp"));
+    assert!(!GSAD_GMP.contains("trashcan_delete_resource_type_is_supported"));
+    assert!(!GSAD_GMP.contains("ELSE (delete_from_trash)"));
+    assert!(!GSAD_GMP_HEADER.contains("delete_from_trash_gmp"));
+    assert!(!GSAD_VALIDATOR.contains("|(delete_from_trash)"));
 }
 
 #[test]
@@ -136,10 +126,8 @@ fn retired_executable_report_formats_have_no_individual_trash_lifecycle_actions(
     assert!(report_format_actions.contains("restorable: false"));
     assert!(report_format_actions.contains("deletable: false"));
 
-    let owner_scoped_cleanup = inherited_function(
-        GVMD_REPORT_FORMATS,
-        "empty_trashcan_report_formats",
-    );
+    let owner_scoped_cleanup =
+        inherited_function(GVMD_REPORT_FORMATS, "empty_trashcan_report_formats");
     for required in [
         "DELETE FROM report_format_param_options_trash",
         "DELETE FROM report_format_params_trash",

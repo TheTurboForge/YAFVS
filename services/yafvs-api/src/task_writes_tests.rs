@@ -8,6 +8,7 @@ use crate::{
     task_write_db::{
         ensure_task_configuration_mutable, ensure_task_is_human_owned,
         ensure_task_not_in_use_for_native_trash, ensure_task_restore_references_are_live,
+        task_report_delete_status,
     },
     task_write_sql::*,
     task_write_validation::{
@@ -69,7 +70,10 @@ fn task_restore_rejects_active_state_and_any_nonlive_reference() {
         "coalesce(scanner_location, -1) = 0",
         "coalesce(alert_location, -1) <> 0",
     ] {
-        assert!(state.contains(required), "task trash state missing {required}");
+        assert!(
+            state.contains(required),
+            "task trash state missing {required}"
+        );
     }
 }
 
@@ -92,10 +96,15 @@ fn task_restore_handler_is_operator_guarded_and_transactional() {
         "tx.commit()",
         "load_task_detail",
     ] {
-        assert!(handler.contains(required), "task restore handler missing {required}");
+        assert!(
+            handler.contains(required),
+            "task restore handler missing {required}"
+        );
     }
     assert!(
-        handler.find("ensure_task_restore_references_are_live").unwrap()
+        handler
+            .find("ensure_task_restore_references_are_live")
+            .unwrap()
             < handler.find("execute_task_restore_transaction").unwrap()
     );
 }
@@ -123,7 +132,10 @@ fn task_restore_sql_matches_imported_manager_authority_and_fails_closed() {
         "DELETE FROM report_counts",
         "UPDATE tasks SET hidden = 0",
     ] {
-        assert!(inherited.contains(required), "imported restore authority missing {required}");
+        assert!(
+            inherited.contains(required),
+            "imported restore authority missing {required}"
+        );
     }
 
     for sql in [
@@ -170,10 +182,14 @@ fn task_restore_sql_matches_imported_manager_authority_and_fails_closed() {
         .1;
     assert!(
         transaction.find("task_restore_results_insert_sql").unwrap()
-            < transaction.find("task_restore_result_tag_locations_sql").unwrap()
+            < transaction
+                .find("task_restore_result_tag_locations_sql")
+                .unwrap()
     );
     assert!(
-        transaction.find("task_restore_result_tag_locations_sql").unwrap()
+        transaction
+            .find("task_restore_result_tag_locations_sql")
+            .unwrap()
             < transaction.find("task_delete_trash_results_sql").unwrap()
     );
     assert!(
@@ -1011,4 +1027,164 @@ fn task_delete_sql_matches_inherited_safe_trash_subset() {
     assert!(mark_hidden.contains("coalesce(hidden, 0) = 0"));
     assert!(mark_hidden.contains("coalesce(usage_type, 'scan') = 'scan'"));
     assert!(mark_hidden.contains("RETURNING uuid::text"));
+}
+
+#[test]
+fn task_hard_delete_characterization_is_anchored_to_imported_manager() {
+    for required in [
+        "if (find_trash_task (task_id, &task))",
+        "if (delete_reports (task))",
+        "DELETE FROM results WHERE task = %llu",
+        "DELETE FROM task_alerts WHERE task = %llu",
+        "DELETE FROM task_files WHERE task = %llu",
+        "DELETE FROM task_preferences WHERE task = %llu",
+        "DELETE FROM tasks WHERE id = %llu",
+        "SELECT count(*) FROM scope_report_sources",
+        "WHERE source_report = %llu",
+    ] {
+        assert!(
+            GVMD_MANAGE_SQL.contains(required),
+            "imported task hard-delete authority missing {required}"
+        );
+    }
+}
+
+#[test]
+fn task_hard_delete_handler_is_trash_only_guarded_and_transactional() {
+    let source = include_str!("task_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn hard_delete_task")
+        .expect("task hard-delete handler must exist")
+        .1
+        .split_once("fn task_write_location_headers")
+        .expect("task hard-delete handler end")
+        .0;
+    for required in [
+        "require_task_write_operator(operator)?",
+        "resolve_task_write_operator_owner(&tx, &operator).await?",
+        "LOCK TABLE tasks, task_alerts, task_files, task_preferences, reports, report_hosts, report_host_details, scope_report_sources, report_counts, result_nvt_reports, results, results_trash, tag_resources, tag_resources_trash",
+        "load_task_trash_state",
+        "ensure_task_is_human_owned",
+        "ensure_task_not_in_use_for_native_trash",
+        "ensure_task_reports_are_deletable",
+        "execute_task_hard_delete_transaction",
+        "tx.commit()",
+        "StatusCode::NO_CONTENT",
+    ] {
+        assert!(
+            handler.contains(required),
+            "task hard-delete handler missing {required}"
+        );
+    }
+    for guard in [
+        "ensure_task_is_human_owned",
+        "ensure_task_not_in_use_for_native_trash",
+        "ensure_task_reports_are_deletable",
+    ] {
+        assert!(
+            handler.find(guard).unwrap()
+                < handler
+                    .find("execute_task_hard_delete_transaction")
+                    .unwrap(),
+            "{guard} must run before task hard-delete mutation"
+        );
+    }
+}
+
+#[test]
+fn task_hard_delete_sql_removes_descendants_before_trash_metadata() {
+    let state = task_trash_state_sql();
+    assert!(state.contains("coalesce(hidden, 0) = 2"));
+    assert!(state.contains("coalesce(usage_type, 'scan') = 'scan'"));
+
+    let guards = task_report_delete_guards_sql();
+    assert!(guards.contains("reports.scan_run_status::integer"));
+    assert!(guards.contains("FROM scope_report_sources"));
+    assert!(guards.contains("source_report = reports.id"));
+
+    for sql in [
+        task_hard_delete_report_host_details_sql(),
+        task_hard_delete_report_hosts_sql(),
+        task_hard_delete_live_results_sql(),
+        task_hard_delete_trash_results_sql(),
+        task_delete_report_counts_sql(),
+        task_hard_delete_result_nvt_reports_sql(),
+        task_hard_delete_reports_sql(),
+        task_hard_delete_alerts_sql(),
+        task_hard_delete_files_sql(),
+        task_hard_delete_preferences_sql(),
+    ] {
+        assert!(sql.starts_with("DELETE FROM"));
+        assert!(sql.contains("$1"));
+    }
+    for sql in [
+        task_hard_delete_result_tag_links_sql(),
+        task_hard_delete_trash_result_tag_links_sql(),
+    ] {
+        assert!(sql.contains("resource_type = 'result'"));
+        assert!(sql.contains("resource_uuid IN"));
+        assert!(sql.contains("SELECT uuid FROM results WHERE task = $1"));
+        assert!(sql.contains("SELECT uuid FROM results_trash WHERE task = $1"));
+    }
+    let metadata = task_hard_delete_metadata_sql();
+    assert!(metadata.contains("DELETE FROM tasks"));
+    assert!(metadata.contains("coalesce(hidden, 0) = 2"));
+    assert!(metadata.contains("RETURNING uuid::text"));
+
+    let transaction = include_str!("task_write_transactions.rs")
+        .split_once("pub(crate) async fn execute_task_hard_delete_transaction")
+        .expect("task hard-delete transaction must exist")
+        .1;
+    assert!(
+        transaction.find("task_hard_delete_reports_sql").unwrap()
+            < transaction.find("task_hard_delete_metadata_sql").unwrap()
+    );
+    assert!(
+        transaction
+            .find("task_hard_delete_preferences_sql")
+            .unwrap()
+            < transaction.find("task_hard_delete_metadata_sql").unwrap()
+    );
+}
+
+#[test]
+fn task_hard_delete_report_status_guard_fails_closed_as_conflict() {
+    assert!(matches!(
+        task_report_delete_status(None),
+        Err(ApiError::Conflict(_))
+    ));
+    assert!(matches!(
+        task_report_delete_status(Some(99)),
+        Err(ApiError::Conflict(_))
+    ));
+    assert_eq!(
+        task_report_delete_status(Some(TaskStatus::Done.as_i32())).unwrap(),
+        TaskStatus::Done
+    );
+}
+
+#[test]
+fn task_hard_delete_openapi_contract_is_native_trash_only() {
+    let block = OPENAPI
+        .split_once("/tasks/{task_id}/trash:")
+        .expect("task hard-delete OpenAPI path")
+        .1
+        .split_once("/tasks/{task_id}/clone:")
+        .expect("task hard-delete OpenAPI block end")
+        .0;
+    for required in [
+        "operationId: deleteTasksByTaskIdTrash",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-replaces: task-trash-hard-delete",
+        "x-yafvs-team-authority: authenticated-stack-operator",
+        "x-yafvs-safety-contract: write-control-v1",
+        "x-yafvs-side-effect: metadata-delete",
+        "'204':",
+        "'409':",
+    ] {
+        assert!(
+            block.contains(required),
+            "task hard-delete contract missing {required}"
+        );
+    }
 }

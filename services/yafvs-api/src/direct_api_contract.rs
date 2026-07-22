@@ -344,6 +344,9 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         (&Method::POST, ["", "api", "v1", "tasks", task_id, "restore"]) => {
             direct_api_write_id_segment_is_allowed(task_id)
         }
+        (&Method::DELETE, ["", "api", "v1", "tasks", task_id, "trash"]) => {
+            direct_api_write_id_segment_is_allowed(task_id)
+        }
         (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "tasks", task_id]) => {
             direct_api_write_id_segment_is_allowed(task_id)
         }

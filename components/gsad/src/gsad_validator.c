@@ -35,7 +35,6 @@ gsad_init_validator ()
                      "|(delete_config)"
                      "|(delete_credential)"
                      "|(delete_alert)"
-                     "|(delete_from_trash)"
                      "|(delete_report)"
                      "|(delete_schedule)"
                      "|(delete_target)"

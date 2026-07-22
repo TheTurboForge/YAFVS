@@ -355,6 +355,7 @@ describe('TrashCanCommand tests', () => {
     ['schedule', 'schedules'],
     ['tag', 'tags'],
     ['target', 'targets'],
+    ['task', 'tasks'],
   ] as const)(
     'should permanently delete supported %s trash entities through native API',
     async (entityType, path) => {
@@ -395,36 +396,6 @@ describe('TrashCanCommand tests', () => {
           },
         },
       );
-    },
-  );
-
-  test.each([['task', 'task']] as const)(
-    'should permanently delete retained %s trash entities through the typed GMP bridge',
-    async (entityType, resourceType) => {
-      const response = createResponse({});
-      const fetchMock = testing.fn();
-      testing.stubGlobal('fetch', fetchMock);
-      const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-        buildUrl: ReturnType<typeof testing.fn>;
-        session: ReturnType<typeof createSession>;
-      };
-      fakeHttp.buildUrl = testing.fn(
-        (path: string) => `https://yafvs.example/${path}`,
-      );
-      fakeHttp.session = createSession();
-      fakeHttp.session.token = 'test-token';
-      const cmd = new TrashCanCommand(fakeHttp);
-
-      await cmd.delete({id: '1234', entityType});
-
-      expect(fetchMock).not.toHaveBeenCalled();
-      expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-        data: {
-          cmd: 'delete_from_trash',
-          [`${resourceType}_id`]: '1234',
-          resource_type: resourceType,
-        },
-      });
     },
   );
 

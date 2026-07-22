@@ -149,6 +149,24 @@ Ensure (gsad_native_api, should_only_allow_canonical_task_restore_posts)
                  is_false);
 }
 
+Ensure (gsad_native_api, should_only_allow_canonical_task_trash_delete)
+{
+  const gchar *valid =
+    "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/trash";
+  const gchar *rejected[] = {
+    "/api/v1/tasks/not-a-uuid/trash",
+    "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/trash/extra",
+    "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/trash?force=true",
+    "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/trash/",
+  };
+
+  assert_that (gsad_native_api_test_delete_path_is_allowed (valid), is_true);
+  for (gsize index = 0; index < G_N_ELEMENTS (rejected); index++)
+    assert_that (
+      gsad_native_api_test_delete_path_is_allowed (rejected[index]),
+      is_false);
+}
+
 Ensure (gsad_native_api, should_only_allow_canonical_alert_trash_lifecycle)
 {
   const gchar *restore =
@@ -1110,6 +1128,8 @@ main (int argc, char **argv)
                          should_only_allow_canonical_task_clone_posts);
   add_test_with_context (suite, gsad_native_api,
                          should_only_allow_canonical_task_restore_posts);
+  add_test_with_context (suite, gsad_native_api,
+                         should_only_allow_canonical_task_trash_delete);
   add_test_with_context (
     suite, gsad_native_api,
     should_only_allow_canonical_credential_restore_posts);

@@ -410,10 +410,6 @@ char *
 get_trash_tasks_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *params,
                      gsad_command_response_data_t *);
 char *
-delete_from_trash_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                       gsad_command_response_data_t *);
-
-char *
 get_settings_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                   gsad_command_response_data_t *);
 char *

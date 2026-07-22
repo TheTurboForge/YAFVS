@@ -185,30 +185,6 @@ describe('TagCommand', () => {
     );
   });
 
-  test('creates a tag with an authoritative server-side resource filter', async () => {
-    const fetchMock = testing
-      .fn()
-      .mockResolvedValue(jsonResponse({id: 'tag-1'}));
-    testing.stubGlobal('fetch', fetchMock);
-
-    await new TagCommand(createNativeHttp()).create({
-      active: true,
-      filter: 'rows=-1 name~production',
-      name: 'Production',
-      resourceType: 'task',
-    });
-
-    const options = fetchMock.mock.calls[0][1];
-    expect(JSON.parse(options.body)).toEqual({
-      active: true,
-      comment: '',
-      name: 'Production',
-      resource_filter: 'rows=-1 name~production',
-      resource_type: 'task',
-      value: '',
-    });
-  });
-
   test('saves metadata and replacement assignments atomically', async () => {
     const fetchMock = testing
       .fn()

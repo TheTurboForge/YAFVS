@@ -117,9 +117,6 @@
   (sizeof (YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND) - 1)
 #define YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_MAX_REQUEST_BYTES 512
 #define YAFVS_CONTROL_NVT_OID_MAX_BYTES 128
-#define YAFVS_CONTROL_TAG_CREATE_COMMAND "tag-create "
-#define YAFVS_CONTROL_TAG_CREATE_COMMAND_LENGTH \
-  (sizeof (YAFVS_CONTROL_TAG_CREATE_COMMAND) - 1)
 #define YAFVS_CONTROL_TAG_MODIFY_COMMAND "tag-modify "
 #define YAFVS_CONTROL_TAG_MODIFY_COMMAND_LENGTH \
   (sizeof (YAFVS_CONTROL_TAG_MODIFY_COMMAND) - 1)
@@ -273,17 +270,6 @@ typedef struct
   gchar *message;
   gboolean active;
 } yafvs_control_alert_snmp_create_request_t;
-
-typedef struct
-{
-  gchar *name;
-  gchar *comment;
-  gchar *value;
-  gchar *resource_type;
-  array_t *resource_ids;
-  gchar *resource_filter;
-  gboolean active;
-} yafvs_control_tag_create_request_t;
 
 typedef struct
 {
@@ -1185,18 +1171,6 @@ yafvs_control_parse_auth_settings_radius_write_request (
 }
 
 static gboolean
-yafvs_control_decode_tag_text_field (const char *value, size_t value_len,
-                                         size_t max_decoded_len,
-                                         gboolean required,
-                                         gchar **decoded_out)
-{
-  return yafvs_control_decode_base64_field (
-           value, value_len, max_decoded_len, required, decoded_out)
-         && yafvs_control_text_has_allowed_controls (
-              *decoded_out, strlen (*decoded_out), FALSE);
-}
-
-static gboolean
 yafvs_control_tag_resource_ids_from_field (const char *value,
                                                size_t value_len,
                                                array_t **resource_ids_out)
@@ -1243,19 +1217,6 @@ cleanup:
   g_strfreev (parts);
   g_free (decoded);
   return valid;
-}
-
-static void
-yafvs_control_tag_create_request_clear (
-  yafvs_control_tag_create_request_t *request)
-{
-  g_free (request->name);
-  g_free (request->comment);
-  g_free (request->value);
-  g_free (request->resource_type);
-  array_free (request->resource_ids);
-  g_free (request->resource_filter);
-  memset (request, 0, sizeof (*request));
 }
 
 static void
@@ -1673,49 +1634,6 @@ yafvs_control_trash_empty_response
         break;
     }
 
-  g_strlcpy (response, status, YAFVS_CONTROL_MAX_RESPONSE_BYTES);
-  return response;
-}
-
-static const char *
-yafvs_control_tag_create_response (
-  int result, const char *created_uuid,
-  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
-{
-  const char *status;
-
-  if (result == 0 && created_uuid
-      && yafvs_control_uuid_is_valid (created_uuid))
-    {
-      g_snprintf (response, YAFVS_CONTROL_MAX_RESPONSE_BYTES,
-                  "0 created %s\n", created_uuid);
-      return response;
-    }
-
-  switch (result)
-    {
-      case 1:
-        status = "1 resource_not_found\n";
-        break;
-      case 2:
-        status = "2 no_resources\n";
-        break;
-      case 3:
-        status = "3 too_many_resources\n";
-        break;
-      case 99:
-        status = "99 forbidden\n";
-        break;
-      case -2:
-        status = "-2 malformed\n";
-        break;
-      case -3:
-        status = "-3 committed_indeterminate\n";
-        break;
-      default:
-        status = "-1 internal\n";
-        break;
-    }
   g_strlcpy (response, status, YAFVS_CONTROL_MAX_RESPONSE_BYTES);
   return response;
 }
@@ -2691,65 +2609,6 @@ yafvs_control_parse_task_clone_request (
   memcpy (task_uuid, cursor, 36);
   task_uuid[36] = '\0';
   return yafvs_control_uuid_is_valid (task_uuid);
-}
-
-static gboolean
-yafvs_control_parse_tag_create_request (
-  const char *request, size_t request_len, const char *expected_secret,
-  size_t expected_secret_len, char operator_uuid[37],
-  yafvs_control_tag_create_request_t *tag)
-{
-  const char *cursor;
-  const char *end;
-  const char *field;
-  size_t field_len;
-  gboolean valid;
-
-  memset (tag, 0, sizeof (*tag));
-  if (!yafvs_control_parse_authenticated_prefix (
-        request, request_len, YAFVS_CONTROL_TAG_CREATE_COMMAND,
-        YAFVS_CONTROL_TAG_CREATE_COMMAND_LENGTH, expected_secret,
-        expected_secret_len, operator_uuid, &cursor, &end))
-    return FALSE;
-
-  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
-          && field_len == 1 && (field[0] == '0' || field[0] == '1');
-  if (!valid)
-    return FALSE;
-  tag->active = field[0] == '1';
-
-  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
-          && yafvs_control_decode_tag_text_field (
-               field, field_len, YAFVS_CONTROL_TAG_RESOURCE_TYPE_MAX_BYTES,
-               TRUE, &tag->resource_type)
-          && yafvs_control_next_field (&cursor, end, &field, &field_len)
-          && yafvs_control_decode_tag_text_field (
-               field, field_len, YAFVS_CONTROL_TAG_TEXT_MAX_BYTES, TRUE,
-               &tag->name)
-          && yafvs_control_next_field (&cursor, end, &field, &field_len)
-          && yafvs_control_decode_tag_text_field (
-               field, field_len, YAFVS_CONTROL_TAG_TEXT_MAX_BYTES, FALSE,
-               &tag->comment)
-          && yafvs_control_next_field (&cursor, end, &field, &field_len)
-          && yafvs_control_decode_tag_text_field (
-               field, field_len, YAFVS_CONTROL_TAG_TEXT_MAX_BYTES, FALSE,
-               &tag->value)
-          && yafvs_control_next_field (&cursor, end, &field, &field_len)
-          && yafvs_control_tag_resource_ids_from_field (
-               field, field_len, &tag->resource_ids)
-          && yafvs_control_next_field (&cursor, end, &field, &field_len)
-          && yafvs_control_decode_tag_text_field (
-               field, field_len, YAFVS_CONTROL_TAG_FILTER_MAX_BYTES, FALSE,
-               &tag->resource_filter)
-          && cursor == end
-          && strcasecmp (tag->resource_type, "tag") != 0
-          && (valid_db_resource_type (tag->resource_type)
-              || valid_subtype (tag->resource_type))
-          && !(g_ptr_array_index (tag->resource_ids, 0) != NULL
-               && tag->resource_filter[0] != '\0');
-  if (!valid)
-    yafvs_control_tag_create_request_clear (tag);
-  return valid;
 }
 
 static gboolean
@@ -4593,50 +4452,6 @@ yafvs_control_modify_schedule
 }
 
 static int
-yafvs_control_create_tag (
-  const char *operator_uuid,
-  const yafvs_control_tag_create_request_t *request,
-  char created_uuid[37])
-{
-  gchar *error_extra = NULL;
-  char *uuid = NULL;
-  tag_t tag = 0;
-  int result;
-
-  if (!yafvs_control_start_operator_session (operator_uuid))
-    return 99;
-
-  result = create_tag (
-    request->name, request->comment, request->value, request->resource_type,
-    request->resource_ids, request->resource_filter,
-    request->active ? "1" : "0", &tag, &error_extra);
-  if (result == 0)
-    {
-      uuid = tag_uuid (tag);
-      if (uuid == NULL || !yafvs_control_uuid_is_valid (uuid))
-        {
-          g_warning ("%s: tag creation committed but UUID lookup failed",
-                     __func__);
-          log_event ("tag", "Tag", NULL, "created");
-          result = -3;
-        }
-      else
-        {
-          memcpy (created_uuid, uuid, 36);
-          created_uuid[36] = '\0';
-          log_event ("tag", "Tag", created_uuid, "created");
-        }
-    }
-  else
-    log_event_fail ("tag", "Tag", NULL, "created");
-
-  free (uuid);
-  g_free (error_extra);
-  yafvs_control_finish_operator_session ();
-  return result;
-}
-
-static int
 yafvs_control_modify_tag (
   const char *operator_uuid, const char *tag_uuid,
   const yafvs_control_tag_modify_request_t *request)
@@ -4718,7 +4533,6 @@ yafvs_control_serve_client (int client_socket)
   yafvs_control_alert_scp_create_request_t scp_alert_request = {0};
   yafvs_control_alert_syslog_create_request_t syslog_alert_request = {0};
   yafvs_control_alert_snmp_create_request_t snmp_alert_request = {0};
-  yafvs_control_tag_create_request_t tag_create_request = {0};
   yafvs_control_tag_modify_request_t tag_modify_request = {0};
   yafvs_control_user_password_change_request_t password_change_request = {0};
   yafvs_control_user_create_request_t user_create_request = {0};
@@ -4895,20 +4709,6 @@ yafvs_control_serve_client (int client_socket)
                           YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH) == 0)
         result_response = yafvs_control_trash_empty_response (-1, 0,
                                                                   response);
-      else if (yafvs_control_parse_tag_create_request (
-                 request, request_len, expected_secret, expected_secret_len,
-                 operator_uuid, &tag_create_request))
-        {
-          result = yafvs_control_create_tag (
-            operator_uuid, &tag_create_request, created_uuid);
-          result_response = yafvs_control_tag_create_response (
-            result, created_uuid, response);
-        }
-      else if (request_len >= YAFVS_CONTROL_TAG_CREATE_COMMAND_LENGTH
-               && memcmp (request, YAFVS_CONTROL_TAG_CREATE_COMMAND,
-                          YAFVS_CONTROL_TAG_CREATE_COMMAND_LENGTH) == 0)
-        result_response =
-          yafvs_control_tag_create_response (-2, NULL, response);
       else if (yafvs_control_parse_tag_modify_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, tag_uuid, &tag_modify_request))
@@ -5159,11 +4959,6 @@ yafvs_control_serve_client (int client_socket)
            && memcmp (request, YAFVS_CONTROL_TRASH_EMPTY_COMMAND,
                       YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH) == 0)
     result_response = yafvs_control_trash_empty_response (-1, 0, response);
-  else if (request_len >= YAFVS_CONTROL_TAG_CREATE_COMMAND_LENGTH
-           && memcmp (request, YAFVS_CONTROL_TAG_CREATE_COMMAND,
-                      YAFVS_CONTROL_TAG_CREATE_COMMAND_LENGTH) == 0)
-    result_response =
-      yafvs_control_tag_create_response (-2, NULL, response);
   else if (request_len >= YAFVS_CONTROL_TAG_MODIFY_COMMAND_LENGTH
            && memcmp (request, YAFVS_CONTROL_TAG_MODIFY_COMMAND,
                       YAFVS_CONTROL_TAG_MODIFY_COMMAND_LENGTH) == 0)
@@ -5238,7 +5033,6 @@ yafvs_control_serve_client (int client_socket)
   yafvs_control_secure_clear (alert_uuid, sizeof (alert_uuid));
   yafvs_control_alert_syslog_create_request_clear (&syslog_alert_request);
   yafvs_control_alert_snmp_create_request_clear (&snmp_alert_request);
-  yafvs_control_tag_create_request_clear (&tag_create_request);
   yafvs_control_tag_modify_request_clear (&tag_modify_request);
   yafvs_control_user_password_change_request_clear (
     &password_change_request);

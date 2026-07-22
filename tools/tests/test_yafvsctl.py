@@ -4758,7 +4758,7 @@ class YAFVSCtlTests(unittest.TestCase):
          'tag-active-resource-assignment-write',
          'tag-clone',
          'tag-hard-delete',
-         'tag-metadata-explicit-and-filter-resource-assignment-write',
+         'tag-metadata-and-explicit-resource-assignment-write',
          'tag-metadata-export-read',
          'tag-metadata-read',
          'tag-metadata-resource-type-and-atomic-assignment-write',
@@ -5295,7 +5295,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(create_tag["direct_access"], "direct_write_control")
         self.assertEqual(create_tag["x_yafvs_maturity"], "live-write")
         self.assertEqual(create_tag["x_yafvs_exposure"], "direct-write")
-        self.assertEqual(create_tag["x_yafvs_replaces"], "tag-metadata-explicit-and-filter-resource-assignment-write")
+        self.assertEqual(create_tag["x_yafvs_replaces"], "tag-metadata-and-explicit-resource-assignment-write")
         self.assertIsNone(create_tag["x_yafvs_inherited_still_owns"])
 
         update_tag = rows[("patch", "/api/v1/tags/{tag_id}")]
@@ -9839,9 +9839,9 @@ class YAFVSCtlTests(unittest.TestCase):
                     if payload["resource_type"] == "alert":
                         return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": alert_tag_uuid, "name": payload["name"], "resource_type": "alert", "value": "initial", "active": True}) + "\n201", "")
                     self.assertEqual(payload["resource_type"], "cpe")
-                    self.assertEqual(payload["resource_filter"], "sort=name rows=1")
-                    tag_resource_count["value"] = 1
-                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "name": payload["name"], "resource_type": "cpe", "resource_count": 1, "value": "initial", "active": True}) + "\n201", "")
+                    self.assertNotIn("resource_filter", payload)
+                    tag_resource_count["value"] = 0
+                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "name": payload["name"], "resource_type": "cpe", "resource_count": 0, "value": "initial", "active": True}) + "\n201", "")
                 if method == "POST" and path == "/api/v1/filters":
                     request_env = _kwargs.get("env") if isinstance(_kwargs.get("env"), dict) else {}
                     if request_env.get(yafvsctl.YAFVS_API_DIRECT_WRITE_CONTROL_ENV) != "1":

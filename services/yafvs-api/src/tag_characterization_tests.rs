@@ -9,6 +9,10 @@ use crate::direct_api::direct_api_v1_method_is_allowed;
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const MANAGE_SQL_TAGS: &str = include_str!("../../../components/gvmd/src/manage_sql_tags.c");
 const MANAGE_TAGS: &str = include_str!("../../../components/gvmd/src/manage_tags.c");
+const YAFVS_CONTROL: &str = include_str!("../../../components/gvmd/src/yafvs_control.c");
+const TAG_CONTROL: &str = include_str!("tag_control.rs");
+const TAG_WRITES: &str = include_str!("tag_writes.rs");
+const GSA_TAGS: &str = include_str!("../../../components/gsa/src/gmp/native-api/tags.ts");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -19,6 +23,23 @@ fn inherited_function(source: &str, name: &str) -> String {
     let tail = &source[start..];
     let end = tail.find("\n/**").unwrap_or(tail.len());
     tail[..end].to_string()
+}
+
+#[test]
+fn tag_creation_has_no_transitional_filter_control_path() {
+    assert!(!YAFVS_CONTROL.contains("\"tag-create "));
+    assert!(!TAG_CONTROL.contains("request_tag_create"));
+    assert!(!TAG_CONTROL.contains("tag_create_command"));
+    assert!(!TAG_WRITES.contains("request_tag_create"));
+
+    let gsa_create = GSA_TAGS
+        .split_once("export const createNativeTag")
+        .expect("native GSA tag create adapter must exist")
+        .1
+        .split_once("export const patchNativeTag")
+        .expect("native GSA tag patch adapter must follow create")
+        .0;
+    assert!(!gsa_create.contains("resource_filter"));
 }
 
 fn openapi_path_block(path: &str) -> String {
@@ -278,11 +299,12 @@ fn native_direct_api_exposes_bounded_tag_reads_and_writes() {
 
 #[test]
 fn openapi_tag_contract_replaces_filter_and_resource_type_tail() {
-    for path in ["/tags", "/tags/{tag_id}/resources"] {
-        let block = openapi_path_block(path);
-        assert!(!block.contains("x-yafvs-inherited-still-owns"));
-        assert!(block.contains("resource_filter"));
-    }
+    let create_block = openapi_path_block("/tags");
+    assert!(!create_block.contains("x-yafvs-inherited-still-owns"));
+    assert!(!create_block.contains("resource_filter"));
+    let resource_block = openapi_path_block("/tags/{tag_id}/resources");
+    assert!(!resource_block.contains("x-yafvs-inherited-still-owns"));
+    assert!(resource_block.contains("resource_filter"));
     let patch_block = openapi_path_block("/tags/{tag_id}");
     assert!(
         patch_block

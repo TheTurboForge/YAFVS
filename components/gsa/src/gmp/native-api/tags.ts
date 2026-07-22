@@ -130,7 +130,6 @@ export interface NativeTagResourceUpdateInput {
 export interface TagCommandCreateParams {
   active: boolean;
   comment?: string;
-  filter?: Filter | string;
   name: string;
   resourceIds?: string[];
   resourceType: EntityType;
@@ -138,6 +137,7 @@ export interface TagCommandCreateParams {
 }
 
 export interface TagCommandSaveParams extends TagCommandCreateParams {
+  filter?: Filter | string;
   id: string;
   resourcesAction?: 'add' | 'remove' | 'set';
 }
@@ -452,25 +452,18 @@ export const createNativeTag = async (
     name,
     resourceIds,
     resourceType,
-    filter,
     value,
   }: TagCommandCreateParams,
 ): Promise<Response<{id: string}>> => {
-  const resourceFilter = filterString(filter);
   const resourceIdsPayload =
     resourceIds !== undefined && resourceIds.length > 0
       ? {resource_ids: resourceIds}
-      : {};
-  const resourceFilterPayload =
-    resourceFilter !== undefined && resourceFilter !== ''
-      ? {resource_filter: resourceFilter}
       : {};
   const payload = await writeNativeJson<NativeTagPayload>(gmp, 'api/v1/tags', {
     active,
     comment: comment ?? '',
     name,
     ...resourceIdsPayload,
-    ...resourceFilterPayload,
     resource_type: nativeResourceType(resourceType),
     value: value ?? '',
   });

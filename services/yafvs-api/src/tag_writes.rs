@@ -13,7 +13,7 @@ use crate::{
     auth::DirectApiOperator,
     errors::ApiError,
     gvmd_control::{gvmd_control_secret, gvmd_control_socket_path},
-    tag_control::{request_tag_create, request_tag_modify, request_tag_resource_update},
+    tag_control::{request_tag_modify, request_tag_resource_update},
     tag_payloads::TagAssetItem,
     tag_write_db::*,
     tag_write_transactions::*,
@@ -31,22 +31,6 @@ pub(crate) async fn create_tag(
 ) -> Result<(StatusCode, HeaderMap, Json<TagAssetItem>), ApiError> {
     let operator = require_tag_write_operator(operator)?;
     let request = validate_tag_create_request(request)?;
-    if request.resource_filter.is_some() {
-        let control_secret = gvmd_control_secret()?;
-        let tag_id = request_tag_create(
-            &gvmd_control_socket_path(),
-            &control_secret,
-            operator.user_uuid(),
-            &request,
-        )
-        .await?;
-        let tag = load_committed_tag_detail(&state, &tag_id).await?;
-        return Ok((
-            StatusCode::CREATED,
-            tag_write_location_headers(&tag_id)?,
-            Json(tag),
-        ));
-    }
     let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let tx = client
         .transaction()

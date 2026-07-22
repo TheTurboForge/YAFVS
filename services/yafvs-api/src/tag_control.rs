@@ -12,23 +12,9 @@ use crate::{
     },
     path_ids::parse_uuid,
     tag_write_validation::{
-        TagResourceUpdateAction, ValidatedTagCreate, ValidatedTagPatch, ValidatedTagResourceUpdate,
+        TagResourceUpdateAction, ValidatedTagPatch, ValidatedTagResourceUpdate,
     },
 };
-
-pub(crate) async fn request_tag_create(
-    socket_path: &str,
-    control_secret: &str,
-    operator_uuid: &str,
-    request: &ValidatedTagCreate,
-) -> Result<String, ApiError> {
-    let command = tag_create_command(control_secret, operator_uuid, request)?;
-    let response =
-        request_gvmd_control_response_bytes(socket_path, control_secret, command.as_bytes())
-            .await
-            .map_err(map_control_socket_error)?;
-    parse_tag_create_response(&response)
-}
 
 pub(crate) async fn request_tag_modify(
     socket_path: &str,
@@ -65,33 +51,6 @@ pub(crate) async fn request_tag_resource_update(
         }),
     };
     request_tag_modify(socket_path, control_secret, operator_uuid, tag_uuid, &patch).await
-}
-
-pub(crate) fn tag_create_command(
-    control_secret: &str,
-    operator_uuid: &str,
-    request: &ValidatedTagCreate,
-) -> Result<ScrubbedControlFrame, ApiError> {
-    let mut command = Vec::with_capacity(1024);
-    command.extend_from_slice(b"tag-create ");
-    command.extend_from_slice(control_secret.as_bytes());
-    command.push(b' ');
-    command.extend_from_slice(operator_uuid.as_bytes());
-    command.push(b' ');
-    command.push(if request.active { b'1' } else { b'0' });
-    for field in [
-        request.resource_type.as_bytes(),
-        request.name.as_bytes(),
-        request.comment.as_deref().unwrap_or("").as_bytes(),
-        request.value.as_deref().unwrap_or("").as_bytes(),
-        joined_resource_ids(&request.resource_ids).as_bytes(),
-        request.resource_filter.as_deref().unwrap_or("").as_bytes(),
-    ] {
-        command.push(b' ');
-        command.extend_from_slice(STANDARD.encode(field).as_bytes());
-    }
-    command.push(b'\n');
-    bounded_tag_control_frame(command)
 }
 
 pub(crate) fn tag_modify_command(
@@ -175,29 +134,6 @@ fn bounded_tag_control_frame(command: Vec<u8>) -> Result<ScrubbedControlFrame, A
         Err(ApiError::RequestTooLarge)
     } else {
         Ok(ScrubbedControlFrame::new(command))
-    }
-}
-
-pub(crate) fn parse_tag_create_response(response: &[u8]) -> Result<String, ApiError> {
-    if let Some(raw_uuid) = response.strip_prefix(b"0 created ") {
-        let uuid =
-            std::str::from_utf8(raw_uuid).map_err(|_| ApiError::MutationOutcomeIndeterminate)?;
-        return Ok(parse_uuid(uuid)
-            .map_err(|_| ApiError::MutationOutcomeIndeterminate)?
-            .to_string());
-    }
-    match response {
-        b"1 resource_not_found" | b"2 no_resources" => Err(ApiError::NotFound),
-        b"3 too_many_resources" => Err(ApiError::BadRequest(
-            "The tag resource selection is too large.".to_string(),
-        )),
-        b"99 forbidden" => Err(ApiError::Forbidden),
-        b"-2 malformed" => Err(ApiError::BadRequest(
-            "The tag control request was rejected.".to_string(),
-        )),
-        b"-3 committed_indeterminate" => Err(ApiError::MutationCommittedResponseUnavailable),
-        b"-1 internal" => Err(ApiError::ControlFailure),
-        _ => Err(ApiError::MutationOutcomeIndeterminate),
     }
 }
 

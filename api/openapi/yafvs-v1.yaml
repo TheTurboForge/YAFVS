@@ -2886,14 +2886,14 @@ paths:
       x-yafvs-exposure: direct-write
       x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
-      x-yafvs-replaces: tag-metadata-explicit-and-filter-resource-assignment-write
+      x-yafvs-replaces: tag-metadata-and-explicit-resource-assignment-write
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
       x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-resource-assignment-write
       summary: Create tag metadata and optional resource assignments
-      description: Creates an operator-owned tag with either a bounded explicit resource-id set or one bounded gvmd filter. Explicit ids use the native database transaction; filter selection uses gvmd's authoritative filter, ACL, transaction, and audit path behind the private control socket. resource_ids and resource_filter are mutually exclusive.
+      description: Creates an operator-owned tag and an optional bounded explicit resource-id set in one native database transaction. Filter-expression selection is intentionally not part of the create contract; the browser creates tags from explicit selected resources.
       requestBody:
         required: true
         content:
@@ -10027,14 +10027,9 @@ components:
         resource_ids:
           type: array
           maxItems: 200
-          description: Optional explicit resource ids to assign to the new tag. Mutually exclusive with resource_filter.
+          description: Optional explicit resource ids to assign to the new tag.
           items:
             type: string
-        resource_filter:
-          type: string
-          minLength: 1
-          maxLength: 16384
-          description: Optional gvmd resource filter selecting assignments atomically. Mutually exclusive with resource_ids.
         comment:
           type: string
           maxLength: 4096

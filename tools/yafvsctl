@@ -478,7 +478,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "tag-active-resource-assignment-write",
         "tag-clone",
         "tag-hard-delete",
-        "tag-metadata-explicit-and-filter-resource-assignment-write",
+        "tag-metadata-and-explicit-resource-assignment-write",
         "tag-metadata-export-read",
         "tag-metadata-read",
         "tag-metadata-resource-type-and-atomic-assignment-write",
@@ -1431,7 +1431,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     },
     ("post", "/tags"): {
         "x-yafvs-maturity": "live-write",
-        "x-yafvs-replaces": "tag-metadata-explicit-and-filter-resource-assignment-write",
+        "x-yafvs-replaces": "tag-metadata-and-explicit-resource-assignment-write",
         "x-yafvs-side-effect": "metadata-and-resource-assignment-write",
     },
     ("patch", "/tags/{tag_id}"): {
@@ -5896,9 +5896,6 @@ OPENAPI_TAG_CREATE_SCHEMA_EXPECTED_VALUES = {
     "properties.resource_ids.type": "array",
     "properties.resource_ids.maxItems": "200",
     "properties.resource_ids.items.type": "string",
-    "properties.resource_filter.type": "string",
-    "properties.resource_filter.minLength": "1",
-    "properties.resource_filter.maxLength": "16384",
     "properties.comment.type": "string",
     "properties.comment.maxLength": "4096",
     "properties.value.type": "string",
@@ -5931,7 +5928,7 @@ def openapi_tag_write_schema_contract_drift(repo_root: Path | None) -> dict[str,
         "TagCreateRequest": (
             OPENAPI_TAG_CREATE_SCHEMA_EXPECTED_VALUES,
             "[name, resource_type]",
-            {"name", "resource_type", "resource_ids", "resource_filter", "comment", "value", "active"},
+            {"name", "resource_type", "resource_ids", "comment", "value", "active"},
         ),
         "TagPatchRequest": (
             OPENAPI_TAG_PATCH_SCHEMA_EXPECTED_VALUES,
@@ -12740,7 +12737,6 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             {
                 "name": tag_name,
                 "resource_type": "cpe",
-                "resource_filter": "sort=name rows=1",
                 "comment": "YAFVS direct write smoke temporary tag",
                 "value": "initial",
                 "active": True,
@@ -12750,8 +12746,8 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         create = direct_native_api_curl(repo_root, "/api/v1/tags", token=token, env=env, method="POST", body=create_body, extra_headers=content_type)
         create_json, create_status = parse_json_output_with_http_status(create)
         tag_id = create_json.get("id") if isinstance(create_json, dict) and isinstance(create_json.get("id"), str) else None
-        create_ok = create.returncode == 0 and create_status == 201 and bool(tag_id) and create_json.get("name") == tag_name and create_json.get("resource_count") == 1
-        findings.append(native_api_probe_finding("pass" if create_ok else "fail", "native-api-direct.tag-write-create", "Direct write-control created a temporary tag from a bounded gvmd resource filter." if create_ok else "Direct write-control failed to create a temporary tag from a bounded gvmd resource filter.", create, direct_native_api_display_command("/api/v1/tags", token=token, env=env, method="POST", body=create_body, extra_headers=content_type), create_json, {"http_status": create_status, "tag_id": tag_id, **summarize_native_api_response(create_json)}))
+        create_ok = create.returncode == 0 and create_status == 201 and bool(tag_id) and create_json.get("name") == tag_name and create_json.get("resource_count") == 0
+        findings.append(native_api_probe_finding("pass" if create_ok else "fail", "native-api-direct.tag-write-create", "Direct write-control created a temporary unassigned tag through the native Rust transaction." if create_ok else "Direct write-control failed to create a temporary unassigned tag through the native Rust transaction.", create, direct_native_api_display_command("/api/v1/tags", token=token, env=env, method="POST", body=create_body, extra_headers=content_type), create_json, {"http_status": create_status, "tag_id": tag_id, **summarize_native_api_response(create_json)}))
 
         predefined_scan_config_patch_body = json.dumps(
             {"comment": "predefined patch denied"},

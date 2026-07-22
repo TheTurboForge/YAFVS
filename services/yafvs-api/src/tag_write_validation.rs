@@ -20,8 +20,6 @@ pub(crate) struct TagCreateRequest {
     #[serde(default)]
     pub(crate) resource_ids: Vec<String>,
     #[serde(default)]
-    pub(crate) resource_filter: Option<String>,
-    #[serde(default)]
     pub(crate) comment: Option<String>,
     #[serde(default)]
     pub(crate) value: Option<String>,
@@ -84,7 +82,6 @@ pub(crate) struct ValidatedTagCreate {
     pub(crate) name: String,
     pub(crate) resource_type: String,
     pub(crate) resource_ids: Vec<String>,
-    pub(crate) resource_filter: Option<String>,
     pub(crate) comment: Option<String>,
     pub(crate) value: Option<String>,
     pub(crate) active: bool,
@@ -188,17 +185,10 @@ pub(crate) fn validate_tag_create_request(
     request: TagCreateRequest,
 ) -> Result<ValidatedTagCreate, ApiError> {
     let resource_ids = validate_tag_resource_ids(request.resource_ids, true)?;
-    let resource_filter = normalize_tag_resource_filter(request.resource_filter)?;
-    if !resource_ids.is_empty() && resource_filter.is_some() {
-        return Err(ApiError::BadRequest(
-            "resource_ids and resource_filter are mutually exclusive".to_string(),
-        ));
-    }
     Ok(ValidatedTagCreate {
         name: normalize_required_tag_text(request.name, "name")?,
         resource_type: normalize_tag_write_resource_type(request.resource_type)?,
         resource_ids,
-        resource_filter,
         comment: normalize_optional_tag_text(request.comment, "comment")?,
         value: normalize_optional_tag_text(request.value, "value")?,
         active: request.active,

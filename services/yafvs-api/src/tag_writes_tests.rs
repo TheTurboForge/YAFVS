@@ -29,7 +29,6 @@ fn tag_create_request_normalizes_metadata_only_contract() {
         name: "owner:default".to_string(),
         resource_type: "target".to_string(),
         resource_ids: Vec::new(),
-        resource_filter: None,
         comment: None,
         value: None,
         active: default_tag_active(),
@@ -64,14 +63,13 @@ fn tag_create_request_accepts_explicit_resource_ids_only() {
         }
     );
 
-    let mixed: TagCreateRequest = serde_json::from_str(
-        r#"{"name":"x","resource_type":"task","resource_ids":["id"],"resource_filter":"name~x"}"#,
-    )
-    .expect("mixed selection shape deserializes before validation");
-    assert!(matches!(
-        validate_tag_create_request(mixed),
-        Err(ApiError::BadRequest(_))
-    ));
+    assert!(
+        serde_json::from_str::<TagCreateRequest>(
+            r#"{"name":"x","resource_type":"task","resource_filter":"name~x"}"#,
+        )
+        .is_err(),
+        "filter-based creation is not part of the native tag contract"
+    );
 }
 
 #[test]
@@ -295,7 +293,6 @@ fn tag_create_request_rejects_unknown_fields_bad_text_and_unsupported_types() {
         name: " ".to_string(),
         resource_type: "task".to_string(),
         resource_ids: Vec::new(),
-        resource_filter: None,
         comment: None,
         value: None,
         active: true,
@@ -309,7 +306,6 @@ fn tag_create_request_rejects_unknown_fields_bad_text_and_unsupported_types() {
         name: "owner:x".to_string(),
         resource_type: "tag".to_string(),
         resource_ids: Vec::new(),
-        resource_filter: None,
         comment: None,
         value: None,
         active: true,
@@ -549,7 +545,6 @@ fn tag_write_plans_keep_mutation_steps_explicit() {
         name: "owner:x".to_string(),
         resource_type: "task".to_string(),
         resource_ids: Vec::new(),
-        resource_filter: None,
         comment: None,
         value: None,
         active: true,

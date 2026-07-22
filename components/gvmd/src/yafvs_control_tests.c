@@ -75,11 +75,8 @@ static int modify_user_calls;
 static int modify_user_result;
 static int modify_setting_calls;
 static modify_setting_result_t modify_setting_result;
-static int create_tag_calls;
-static int create_tag_result;
 static int modify_tag_calls;
 static int modify_tag_result;
-static gboolean tag_uuid_lookup_fails;
 static int tag_audit_fail_calls;
 static int tag_audit_success_calls;
 static int reinit_calls;
@@ -764,9 +761,7 @@ __wrap_log_event (const char *resource, const char *resource_name,
   else if (strcmp (resource, "tag") == 0)
     {
       assert_that (resource_name, is_equal_to_string ("Tag"));
-      assert_that (strcmp (action, "created") == 0
-                     || strcmp (action, "modified") == 0,
-                   is_true);
+      assert_that (action, is_equal_to_string ("modified"));
       tag_audit_success_calls++;
       g_free (received_audit_uuid);
       received_audit_uuid = g_strdup (uuid);
@@ -935,32 +930,22 @@ __wrap_create_tag (const char *name, const char *comment, const char *value,
                    const char *resources_filter, const char *active,
                    tag_t *tag, gchar **error_extra)
 {
-  create_tag_calls++;
-  g_free (received_name);
-  g_free (received_comment);
-  g_free (received_tag_resource_type);
-  g_free (received_tag_resource_filter);
-  g_free (received_tag_active);
-  g_free (received_tag_first_resource_id);
-  received_name = g_strdup (name);
-  received_comment = g_strdup (comment);
-  received_tag_resource_type = g_strdup (resource_type);
-  received_tag_resource_filter = g_strdup (resources_filter);
-  received_tag_active = g_strdup (active);
-  received_tag_first_resource_id =
-    resource_ids && g_ptr_array_index (resource_ids, 0)
-      ? g_strdup (g_ptr_array_index (resource_ids, 0)) : NULL;
-  g_free (received_secret);
-  received_secret = g_strdup (value);
+  (void) name;
+  (void) comment;
+  (void) value;
+  (void) resource_type;
+  (void) resource_ids;
+  (void) resources_filter;
+  (void) active;
   *tag = 10;
   *error_extra = NULL;
-  return create_tag_result;
+  return 0;
 }
 
 char *
 __wrap_tag_uuid (tag_t tag)
 {
-  return tag == 10 && !tag_uuid_lookup_fails
+  return tag == 10
            ? g_strdup ("123e4567-e89b-12d3-a456-426614174005") : NULL;
 }
 
@@ -5388,99 +5373,6 @@ test_tag_base64 (const char *value)
   return g_base64_encode ((const guchar *) value, strlen (value));
 }
 
-Ensure (yafvs_control, parses_canonical_tag_create_requests)
-{
-  gchar *resource_type = test_tag_base64 ("task");
-  gchar *name = test_tag_base64 ("Critical systems");
-  gchar *comment = test_tag_base64 ("Owned by operations");
-  gchar *value = test_tag_base64 ("priority");
-  gchar *resource_ids = test_tag_base64 (
-    "123e4567-e89b-12d3-a456-426614174002");
-  gchar *filter = test_tag_base64 ("rows=-1 name~production");
-  gchar *explicit_request = g_strdup_printf (
-    "tag-create " TEST_CONTROL_SECRET " "
-    "123e4567-e89b-12d3-a456-426614174000 1 %s %s %s %s %s \n",
-    resource_type, name, comment, value, resource_ids);
-  gchar *filter_request = g_strdup_printf (
-    "tag-create " TEST_CONTROL_SECRET " "
-    "123e4567-e89b-12d3-a456-426614174000 1 %s %s %s %s  %s\n",
-    resource_type, name, comment, value, filter);
-  char operator_uuid[37];
-  yafvs_control_tag_create_request_t tag = {0};
-
-  assert_that (yafvs_control_parse_tag_create_request (
-                 explicit_request, strlen (explicit_request),
-                 TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
-                 operator_uuid, &tag),
-               is_true);
-  assert_that (operator_uuid,
-               is_equal_to_string (
-                 "123e4567-e89b-12d3-a456-426614174000"));
-  assert_that (tag.resource_type, is_equal_to_string ("task"));
-  assert_that (tag.name, is_equal_to_string ("Critical systems"));
-  assert_that (tag.comment, is_equal_to_string ("Owned by operations"));
-  assert_that (tag.value, is_equal_to_string ("priority"));
-  assert_that (g_ptr_array_index (tag.resource_ids, 0),
-               is_equal_to_string (
-                 "123e4567-e89b-12d3-a456-426614174002"));
-  assert_that (tag.resource_filter, is_equal_to_string (""));
-  yafvs_control_tag_create_request_clear (&tag);
-
-  assert_that (yafvs_control_parse_tag_create_request (
-                 filter_request, strlen (filter_request),
-                 TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
-                 operator_uuid, &tag),
-               is_true);
-  assert_that (g_ptr_array_index (tag.resource_ids, 0), is_null);
-  assert_that (tag.resource_filter,
-               is_equal_to_string ("rows=-1 name~production"));
-  yafvs_control_tag_create_request_clear (&tag);
-
-  g_free (filter_request);
-  g_free (explicit_request);
-  g_free (filter);
-  g_free (resource_ids);
-  g_free (value);
-  g_free (comment);
-  g_free (name);
-  g_free (resource_type);
-}
-
-Ensure (yafvs_control, rejects_ambiguous_or_malformed_tag_create_requests)
-{
-  gchar *resource_type = test_tag_base64 ("task");
-  gchar *name = test_tag_base64 ("Critical systems");
-  gchar *resource_ids = test_tag_base64 (
-    "123e4567-e89b-12d3-a456-426614174002");
-  gchar *filter = test_tag_base64 ("rows=-1");
-  gchar *ambiguous = g_strdup_printf (
-    "tag-create " TEST_CONTROL_SECRET " "
-    "123e4567-e89b-12d3-a456-426614174000 1 %s %s   %s %s\n",
-    resource_type, name, resource_ids, filter);
-  gchar *bad_secret = g_strdup_printf (
-    "tag-create wrong-secret "
-    "123e4567-e89b-12d3-a456-426614174000 1 %s %s    \n",
-    resource_type, name);
-  char operator_uuid[37];
-  yafvs_control_tag_create_request_t tag = {0};
-
-  assert_that (yafvs_control_parse_tag_create_request (
-                 ambiguous, strlen (ambiguous), TEST_CONTROL_SECRET,
-                 strlen (TEST_CONTROL_SECRET), operator_uuid, &tag),
-               is_false);
-  assert_that (yafvs_control_parse_tag_create_request (
-                 bad_secret, strlen (bad_secret), TEST_CONTROL_SECRET,
-                 strlen (TEST_CONTROL_SECRET), operator_uuid, &tag),
-               is_false);
-
-  g_free (bad_secret);
-  g_free (ambiguous);
-  g_free (filter);
-  g_free (resource_ids);
-  g_free (name);
-  g_free (resource_type);
-}
-
 Ensure (yafvs_control, parses_atomic_tag_modify_and_empty_set)
 {
   gchar *name = test_tag_base64 ("Renamed");
@@ -5557,19 +5449,9 @@ Ensure (yafvs_control, rejects_unsafe_tag_resource_type_mutation)
   g_free (resource_type);
 }
 
-Ensure (yafvs_control, runs_tag_mutations_in_operator_session_and_audits)
+Ensure (yafvs_control, runs_tag_modify_in_operator_session_and_audits)
 {
   array_t *resource_ids = make_array ();
-  char created_uuid[37];
-  const yafvs_control_tag_create_request_t create_request = {
-    .name = "Critical systems",
-    .comment = "Owned by operations",
-    .value = "priority",
-    .resource_type = "task",
-    .resource_ids = resource_ids,
-    .resource_filter = "rows=-1 name~production",
-    .active = TRUE,
-  };
   const yafvs_control_tag_modify_request_t modify_request = {
     .name = "Renamed",
     .resources_action = "set",
@@ -5578,8 +5460,6 @@ Ensure (yafvs_control, runs_tag_mutations_in_operator_session_and_audits)
   };
   array_terminate (resource_ids);
   cleanup_calls = 0;
-  create_tag_calls = 0;
-  create_tag_result = 0;
   modify_tag_calls = 0;
   modify_tag_result = 0;
   reinit_calls = 0;
@@ -5587,42 +5467,24 @@ Ensure (yafvs_control, runs_tag_mutations_in_operator_session_and_audits)
   tag_audit_success_calls = 0;
   mock_operator_name = "operator";
 
-  assert_that (yafvs_control_create_tag (
-                 "123e4567-e89b-12d3-a456-426614174000", &create_request,
-                 created_uuid),
-               is_equal_to (0));
-  assert_that (created_uuid,
-               is_equal_to_string (
-                 "123e4567-e89b-12d3-a456-426614174005"));
-  assert_that (create_tag_calls, is_equal_to (1));
-  assert_that (tag_audit_success_calls, is_equal_to (1));
-  assert_that (received_tag_resource_filter,
-               is_equal_to_string (create_request.resource_filter));
-
   assert_that (yafvs_control_modify_tag (
                  "123e4567-e89b-12d3-a456-426614174000",
                  "123e4567-e89b-12d3-a456-426614174001", &modify_request),
                is_equal_to (0));
   assert_that (modify_tag_calls, is_equal_to (1));
-  assert_that (tag_audit_success_calls, is_equal_to (2));
-  assert_that (cleanup_calls, is_equal_to (2));
+  assert_that (tag_audit_success_calls, is_equal_to (1));
+  assert_that (received_tag_resource_filter,
+               is_equal_to_string (modify_request.resource_filter));
+  assert_that (cleanup_calls, is_equal_to (1));
   assert_that (current_credentials.uuid, is_null);
   assert_that (current_credentials.username, is_null);
   array_free (resource_ids);
 }
 
-Ensure (yafvs_control, maps_tag_control_responses)
+Ensure (yafvs_control, maps_tag_modify_control_responses)
 {
   char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES];
 
-  assert_that (yafvs_control_tag_create_response (
-                 0, "123e4567-e89b-12d3-a456-426614174005", response),
-               is_equal_to_string (
-                 "0 created 123e4567-e89b-12d3-a456-426614174005\n"));
-  assert_that (yafvs_control_tag_create_response (2, NULL, response),
-               is_equal_to_string ("2 no_resources\n"));
-  assert_that (yafvs_control_tag_create_response (-3, NULL, response),
-               is_equal_to_string ("-3 committed_indeterminate\n"));
   assert_that (yafvs_control_tag_modify_response (0, response),
                is_equal_to_string ("0 modified\n"));
   assert_that (yafvs_control_tag_modify_response (4, response),
@@ -6842,18 +6704,14 @@ main (int argc, char **argv)
   add_test_with_context (suite, yafvs_control,
                          reports_indeterminate_after_diagnostic_commit);
   add_test_with_context (suite, yafvs_control,
-                         parses_canonical_tag_create_requests);
-  add_test_with_context (suite, yafvs_control,
-                         rejects_ambiguous_or_malformed_tag_create_requests);
-  add_test_with_context (suite, yafvs_control,
                          parses_atomic_tag_modify_and_empty_set);
   add_test_with_context (suite, yafvs_control,
                          rejects_unsafe_tag_resource_type_mutation);
   add_test_with_context (
     suite, yafvs_control,
-    runs_tag_mutations_in_operator_session_and_audits);
+    runs_tag_modify_in_operator_session_and_audits);
   add_test_with_context (suite, yafvs_control,
-                         maps_tag_control_responses);
+                         maps_tag_modify_control_responses);
   add_test_with_context (suite, yafvs_control,
                          parses_canonical_bounded_alert_email_request);
   add_test_with_context (suite, yafvs_control,

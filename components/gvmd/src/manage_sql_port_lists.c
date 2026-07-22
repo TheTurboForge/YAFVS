@@ -32,13 +32,15 @@
  */
 #define G_LOG_DOMAIN "md manage"
 
-
+
+
 /* Static headers for internal non-SQL functions. */
 
 int
 sync_port_lists_with_feed (gboolean);
 
-
+
+
 /* Port list functions. */
 
 /**
@@ -849,33 +851,6 @@ port_list_predefined (port_list_t port_list)
                   " WHERE id = %llu;",
                   port_list);
 }
-
-/**
- * @brief Return the UUID of the port list of a port_range.
- *
- * @param[in]  port_range  Port Range UUID.
- *
- * @return Newly allocated UUID if available, else NULL.
- */
-static char*
-port_range_port_list_uuid (const char *port_range)
-{
-  gchar *quoted_port_range;
-  char *ret;
-
-  quoted_port_range = sql_quote (port_range);
-  if (sql_int ("SELECT count (*) FROM port_ranges WHERE uuid = '%s';",
-               quoted_port_range))
-    ret = sql_string ("SELECT uuid FROM port_lists"
-                      " WHERE id = (SELECT port_list FROM port_ranges"
-                      "             WHERE uuid = '%s');",
-                      quoted_port_range);
-  else
-    ret = NULL;
-  g_free (quoted_port_range);
-  return ret;
-}
-
 
 /**
  * @brief Compare two ranges by type then start.
@@ -1985,7 +1960,8 @@ migrate_predefined_port_lists ()
        SETTING_UUID_FEED_IMPORT_OWNER);
 }
 
-
+
+
 /* Startup. */
 
 /**

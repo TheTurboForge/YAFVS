@@ -1378,35 +1378,6 @@ gmp_get_report_ext (gnutls_session_t *session, gmp_get_report_opts_t opts,
 }
 
 /**
- * @brief Delete a port list.
- *
- * @param[in]   session     Pointer to GNUTLS session.
- * @param[in]   id          UUID of port list.
- * @param[in]   opts        Struct containing the options to apply.
- *
- * @return 0 on success, -1 or GMP response code on error.
- */
-int
-gmp_delete_port_list_ext (gnutls_session_t *session, const char *id,
-                          gmp_delete_opts_t opts)
-{
-  entity_t entity;
-  int ret;
-
-  if (gvm_server_sendf (
-        session, "<delete_port_list port_list_id=\"%s\" ultimate=\"%d\"/>", id,
-        opts.ultimate)
-      == -1)
-    return -1;
-
-  entity = NULL;
-  ret = gmp_check_response (session, &entity);
-  if (ret == 0)
-    free_entity (entity);
-  return ret;
-}
-
-/**
  * @brief Remove a report.
  *
  * @param[in]  session   Pointer to GNUTLS session.

@@ -32,26 +32,6 @@ int
 port_list_predefined (port_list_t);
 
 int
-create_port_list (const char *, const char *, const char *, const char *,
-                  array_t *, port_list_t *);
-
-int
-copy_port_list (const char *, const char *, const char *, port_list_t *);
-
-int
-modify_port_list (const char *, const char *, const char *);
-
-int
-create_port_range (const char *, const char *, const char *, const char *,
-                   const char *, port_range_t *);
-
-int
-delete_port_list (const char *, int);
-
-int
-delete_port_range (const char *, int);
-
-int
 port_list_count (const get_data_t *);
 
 int

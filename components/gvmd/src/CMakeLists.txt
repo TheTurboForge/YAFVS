@@ -240,7 +240,6 @@ set(
   gmp_integration_configs.c
   gmp_license.c
   gmp_logout.c
-  gmp_port_lists.c
   gmp_report_formats.c
   gmp_tls_certificates.c
 )

@@ -1495,6 +1495,8 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_legacy_scope_mutation_commands_are_removed_full_stack(self):
         root = Path(__file__).resolve().parents[2]
         retired_sources = {
+            "gvm-libs GMP client": root / "components" / "gvm-libs" / "gmp" / "gmp.c",
+            "gvm-libs GMP declarations": root / "components" / "gvm-libs" / "gmp" / "gmp.h",
             "gsa capabilities": root / "components" / "gsa" / "src" / "gmp" / "capabilities" / "capabilities.ts",
             "gsad dispatch": root / "components" / "gsad" / "src" / "gsad_gmp.c",
             "gsad declarations": root / "components" / "gsad" / "src" / "gsad_gmp.h",
@@ -1544,6 +1546,8 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_legacy_filter_mutation_commands_are_removed_full_stack(self):
         root = Path(__file__).resolve().parents[2]
         retired_sources = {
+            "gvm-libs GMP client": root / "components" / "gvm-libs" / "gmp" / "gmp.c",
+            "gvm-libs GMP declarations": root / "components" / "gvm-libs" / "gmp" / "gmp.h",
             "gsa capabilities": root / "components" / "gsa" / "src" / "gmp" / "capabilities" / "capabilities.ts",
             "gsad dispatch": root / "components" / "gsad" / "src" / "gsad_gmp.c",
             "gsad declarations": root / "components" / "gsad" / "src" / "gsad_gmp.h",
@@ -1595,6 +1599,95 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("pub(crate) async fn clone_filter", native_write_source)
         self.assertIn("pub(crate) async fn restore_filter", native_write_source)
         self.assertIn("pub(crate) async fn hard_delete_filter", native_write_source)
+
+    def test_legacy_port_list_mutation_commands_are_removed_full_stack(self):
+        root = Path(__file__).resolve().parents[2]
+        retired_sources = {
+            "gsa capabilities": root / "components" / "gsa" / "src" / "gmp" / "capabilities" / "capabilities.ts",
+            "gsad dispatch": root / "components" / "gsad" / "src" / "gsad_gmp.c",
+            "gsad declarations": root / "components" / "gsad" / "src" / "gsad_gmp.h",
+            "gsad validation": root / "components" / "gsad" / "src" / "gsad_validator.c",
+            "gvmd parser": root / "components" / "gvmd" / "src" / "gmp.c",
+            "gvmd build": root / "components" / "gvmd" / "src" / "CMakeLists.txt",
+            "gvmd port-list SQL": root / "components" / "gvmd" / "src" / "manage_sql_port_lists.c",
+            "gvmd port-list declarations": root / "components" / "gvmd" / "src" / "manage_port_lists.h",
+            "GMP schema": root / "components" / "gvmd" / "src" / "schema_formats" / "XML" / "GMP.xml.in",
+        }
+        retired_markers = (
+            "gmp_delete_port_list_ext",
+            "<delete_port_list",
+            "create_port_list_gmp",
+            "create_port_range_gmp",
+            "save_port_list_gmp",
+            "delete_port_list_gmp",
+            "delete_port_range_gmp",
+            "import_port_list_gmp",
+            "ELSE (create_port_list)",
+            "ELSE (create_port_range)",
+            "ELSE (save_port_list)",
+            "ELSE (delete_port_list)",
+            "ELSE (delete_port_range)",
+            "ELSE (import_port_list)",
+            "CLIENT_CREATE_PORT_LIST",
+            "CLIENT_CREATE_PORT_RANGE",
+            "CLIENT_DELETE_PORT_LIST",
+            "CLIENT_DELETE_PORT_RANGE",
+            "CLIENT_MODIFY_PORT_LIST",
+            "gmp_port_lists.c",
+            "create_port_list (",
+            "copy_port_list (",
+            "modify_port_list (",
+            "create_port_range (",
+            "delete_port_list (",
+            "delete_port_range (",
+            "'create_port_list'",
+            "'create_port_range'",
+            "'modify_port_list'",
+            "'delete_port_list'",
+            "'delete_port_range'",
+            "<name>create_port_list</name>",
+            "<name>create_port_range</name>",
+            "<name>modify_port_list</name>",
+            "<name>delete_port_list</name>",
+            "<name>delete_port_range</name>",
+        )
+
+        for label, path in retired_sources.items():
+            source = path.read_text(encoding="utf-8")
+            for marker in retired_markers:
+                self.assertNotIn(marker, source, f"{label} still exposes {marker}")
+
+        self.assertFalse((root / "components" / "gvmd" / "src" / "gmp_port_lists.c").exists())
+        self.assertFalse((root / "components" / "gvmd" / "src" / "gmp_port_lists.h").exists())
+
+        gsad_source = retired_sources["gsad dispatch"].read_text(encoding="utf-8")
+        gvmd_source = retired_sources["gvmd parser"].read_text(encoding="utf-8")
+        port_list_sql = retired_sources["gvmd port-list SQL"].read_text(encoding="utf-8")
+        feed_source = (root / "components" / "gvmd" / "src" / "manage_port_lists.c").read_text(encoding="utf-8")
+        native_write_source = (root / "services" / "yafvs-api" / "src" / "port_list_writes.rs").read_text(encoding="utf-8")
+        self.assertIn("get_port_list_gmp", gsad_source)
+        self.assertIn("get_port_lists_gmp", gsad_source)
+        self.assertIn("CLIENT_GET_PORT_LISTS", gvmd_source)
+        self.assertIn("CLIENT_CREATE_TARGET_PORT_RANGE", gvmd_source)
+        self.assertIn("create_port_list_no_acl", port_list_sql)
+        self.assertIn("create_port_list_unique", port_list_sql)
+        self.assertIn("insert_port_range", port_list_sql)
+        self.assertIn("restore_port_list", port_list_sql)
+        self.assertIn("empty_trashcan_port_lists", port_list_sql)
+        self.assertIn("parse_port_list_entity", feed_source)
+        self.assertIn("manage_sync_port_lists", feed_source)
+        for marker in (
+            "pub(crate) async fn create_port_list",
+            "pub(crate) async fn import_port_list",
+            "pub(crate) async fn clone_port_list",
+            "pub(crate) async fn patch_port_list",
+            "pub(crate) async fn create_port_list_range",
+            "pub(crate) async fn delete_port_list_range",
+            "pub(crate) async fn delete_port_list",
+            "pub(crate) async fn hard_delete_port_list",
+            "pub(crate) async fn restore_port_list",
+        ):
+            self.assertIn(marker, native_write_source)
 
     def test_full_test_scan_load_state_uses_native_api_when_repo_root_is_available(self):
         root = Path("/tmp/yafvs-test")

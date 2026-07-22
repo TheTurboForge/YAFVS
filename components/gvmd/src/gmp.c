@@ -79,7 +79,6 @@
 #include "gmp_integration_configs.h"
 #include "gmp_license.h"
 #include "gmp_logout.h"
-#include "gmp_port_lists.h"
 #include "gmp_tls_certificates.h"
 #include "manage.h"
 #include "manage_acl.h"
@@ -553,35 +552,6 @@ create_override_data_reset (create_override_data_t *data)
 }
 
 /**
- * @brief Command data for the create_port_range command.
- */
-typedef struct
-{
-  char *comment;                 ///< Comment.
-  char *end;                     ///< Last port.
-  char *port_list_id;            ///< Port list for new port range.
-  char *start;                   ///< First port.
-  char *type;                    ///< Type of new port range.
-} create_port_range_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-create_port_range_data_reset (create_port_range_data_t *data)
-{
-  free (data->comment);
-  free (data->end);
-  free (data->port_list_id);
-  free (data->start);
-  free (data->type);
-
-  memset (data, 0, sizeof (create_port_range_data_t));
-}
-
-/**
  * @brief Command data for the create_scanner command.
  */
 typedef struct
@@ -916,50 +886,6 @@ typedef struct
   char *override_id;   ///< ID of override to delete.
   int ultimate;        ///< Boolean.  Whether to remove entirely or to trashcan.
 } delete_override_data_t;
-
-/**
- * @brief Command data for the delete_port_list command.
- */
-typedef struct
-{
-  char *port_list_id;  ///< ID of port list to delete.
-  int ultimate;        ///< Boolean.  Whether to remove entirely or to trashcan.
-} delete_port_list_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_port_list_data_reset (delete_port_list_data_t *data)
-{
-  free (data->port_list_id);
-
-  memset (data, 0, sizeof (delete_port_list_data_t));
-}
-
-/**
- * @brief Command data for the delete_port_range command.
- */
-typedef struct
-{
-  char *port_range_id;  ///< ID of port range to delete.
-  int ultimate;         ///< Dummy field for generic macros.
-} delete_port_range_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_port_range_data_reset (delete_port_range_data_t *data)
-{
-  free (data->port_range_id);
-
-  memset (data, 0, sizeof (delete_port_range_data_t));
-}
 
 /**
  * @brief Reset command data.
@@ -1921,32 +1847,6 @@ modify_user_data_reset (modify_user_data_t * data)
 }
 
 /**
- * @brief Command data for the modify_port_list command.
- */
-typedef struct
-{
-  char *comment;                 ///< Comment.
-  char *name;                    ///< Name of Port List.
-  char *port_list_id;            ///< UUID of Port List.
-} modify_port_list_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-modify_port_list_data_reset (modify_port_list_data_t *data)
-{
-  free (data->comment);
-  free (data->name);
-  free (data->port_list_id);
-
-  memset (data, 0, sizeof (modify_port_list_data_t));
-}
-
-
-/**
  * @brief Command data for the modify_scanner command.
  */
 typedef struct
@@ -2393,7 +2293,6 @@ typedef union
   create_asset_data_t create_asset;                   ///< create_asset
   create_credential_data_t create_credential;         ///< create_credential
   create_override_data_t create_override;             ///< create_override
-  create_port_range_data_t create_port_range;         ///< create_port_range
   create_scanner_data_t create_scanner;               ///< create_scanner
   create_tag_data_t create_tag;                       ///< create_tag
   create_target_data_t create_target;                 ///< create_target
@@ -2404,8 +2303,6 @@ typedef union
   delete_config_data_t delete_config;                 ///< delete_config
   delete_alert_data_t delete_alert;                   ///< delete_alert
   delete_override_data_t delete_override;             ///< delete_override
-  delete_port_list_data_t delete_port_list;           ///< delete_port_list
-  delete_port_range_data_t delete_port_range;         ///< delete_port_range
   delete_report_data_t delete_report;                 ///< delete_report
   delete_scanner_data_t delete_scanner;               ///< delete_scanner
   delete_schedule_data_t delete_schedule;             ///< delete_schedule
@@ -2443,7 +2340,6 @@ typedef union
   modify_asset_data_t modify_asset;                   ///< modify_asset
   modify_config_data_t modify_config;                 ///< modify_config
   modify_credential_data_t modify_credential;         ///< modify_credential
-  modify_port_list_data_t modify_port_list;           ///< modify_port_list
   modify_scanner_data_t modify_scanner;               ///< modify_scanner
   modify_setting_data_t modify_setting;               ///< modify_setting
   modify_tag_data_t modify_tag;                       ///< modify_tag
@@ -2495,12 +2391,6 @@ static create_credential_data_t *create_credential_data
  */
 static create_override_data_t *create_override_data
  = (create_override_data_t*) &(command_data.create_override);
-
-/**
- * @brief Parser callback data for CREATE_PORT_RANGE.
- */
-static create_port_range_data_t *create_port_range_data
- = (create_port_range_data_t*) &(command_data.create_port_range);
 
 /**
  * @brief Parser callback data for CREATE_SCANNER.
@@ -2561,18 +2451,6 @@ static delete_credential_data_t *delete_credential_data
  */
 static delete_override_data_t *delete_override_data
  = (delete_override_data_t*) &(command_data.delete_override);
-
-/**
- * @brief Parser callback data for DELETE_PORT_LIST.
- */
-static delete_port_list_data_t *delete_port_list_data
- = (delete_port_list_data_t*) &(command_data.delete_port_list);
-
-/**
- * @brief Parser callback data for DELETE_PORT_RANGE.
- */
-static delete_port_range_data_t *delete_port_range_data
- = (delete_port_range_data_t*) &(command_data.delete_port_range);
 
 /**
  * @brief Parser callback data for DELETE_REPORT.
@@ -2798,13 +2676,6 @@ static modify_override_data_t *modify_override_data
  = (modify_override_data_t*) &(command_data.create_override);
 
 /**
- * @brief Parser callback data for MODIFY_PORT_LIST.
- */
-static modify_port_list_data_t *modify_port_list_data
- = &(command_data.modify_port_list);
-
-
-/**
  * @brief Parser callback data for MODIFY_SCANNER.
  */
 static modify_scanner_data_t *modify_scanner_data
@@ -2961,13 +2832,6 @@ typedef enum
   CLIENT_CREATE_OVERRIDE_TASK,
   CLIENT_CREATE_OVERRIDE_TEXT,
   CLIENT_CREATE_OVERRIDE_THREAT,
-  CLIENT_CREATE_PORT_LIST,
-  CLIENT_CREATE_PORT_RANGE,
-  CLIENT_CREATE_PORT_RANGE_COMMENT,
-  CLIENT_CREATE_PORT_RANGE_END,
-  CLIENT_CREATE_PORT_RANGE_PORT_LIST,
-  CLIENT_CREATE_PORT_RANGE_START,
-  CLIENT_CREATE_PORT_RANGE_TYPE,
   CLIENT_CREATE_SCANNER,
   CLIENT_CREATE_SCANNER_COMMENT,
   CLIENT_CREATE_SCANNER_COPY,
@@ -3042,8 +2906,6 @@ typedef enum
   CLIENT_DELETE_CONFIG,
   CLIENT_DELETE_CREDENTIAL,
   CLIENT_DELETE_OVERRIDE,
-  CLIENT_DELETE_PORT_LIST,
-  CLIENT_DELETE_PORT_RANGE,
   CLIENT_DELETE_REPORT,
   CLIENT_DELETE_SCANNER,
   CLIENT_DELETE_SCHEDULE,
@@ -3127,9 +2989,6 @@ typedef enum
   CLIENT_MODIFY_OVERRIDE_TEXT,
   CLIENT_MODIFY_OVERRIDE_THREAT,
   CLIENT_MODIFY_OVERRIDE_NVT,
-  CLIENT_MODIFY_PORT_LIST,
-  CLIENT_MODIFY_PORT_LIST_COMMENT,
-  CLIENT_MODIFY_PORT_LIST_NAME,
   CLIENT_MODIFY_SCANNER,
   CLIENT_MODIFY_SCANNER_COMMENT,
   CLIENT_MODIFY_SCANNER_NAME,
@@ -3391,14 +3250,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         else if (strcasecmp ("CREATE_OVERRIDE", element_name) == 0)
           set_client_state (CLIENT_CREATE_OVERRIDE);
-        else if (strcasecmp ("CREATE_PORT_LIST", element_name) == 0)
-          {
-            create_port_list_start (gmp_parser, attribute_names,
-                                    attribute_values);
-            set_client_state (CLIENT_CREATE_PORT_LIST);
-          }
-        else if (strcasecmp ("CREATE_PORT_RANGE", element_name) == 0)
-          set_client_state (CLIENT_CREATE_PORT_RANGE);
         else if (strcasecmp ("CREATE_SCANNER", element_name) == 0)
           set_client_state (CLIENT_CREATE_SCANNER);
         else if (strcasecmp ("CREATE_TAG", element_name) == 0)
@@ -3485,24 +3336,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             else
               delete_override_data->ultimate = 0;
             set_client_state (CLIENT_DELETE_OVERRIDE);
-          }
-        else if (strcasecmp ("DELETE_PORT_LIST", element_name) == 0)
-          {
-            const gchar* attribute;
-            append_attribute (attribute_names, attribute_values, "port_list_id",
-                              &delete_port_list_data->port_list_id);
-            if (find_attribute (attribute_names, attribute_values,
-                                "ultimate", &attribute))
-              delete_port_list_data->ultimate = strcmp (attribute, "0");
-            else
-              delete_port_list_data->ultimate = 0;
-            set_client_state (CLIENT_DELETE_PORT_LIST);
-          }
-        else if (strcasecmp ("DELETE_PORT_RANGE", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "port_range_id",
-                              &delete_port_range_data->port_range_id);
-            set_client_state (CLIENT_DELETE_PORT_RANGE);
           }
         else if (strcasecmp ("DELETE_REPORT", element_name) == 0)
           {
@@ -4211,13 +4044,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               "credential_id",
                               &modify_credential_data->credential_id);
             set_client_state (CLIENT_MODIFY_CREDENTIAL);
-          }
-        else if (strcasecmp ("MODIFY_PORT_LIST", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values,
-                              "port_list_id",
-                              &modify_port_list_data->port_list_id);
-            set_client_state (CLIENT_MODIFY_PORT_LIST);
           }
         else if (strcasecmp ("MODIFY_INTEGRATION_CONFIG", element_name)
                  == 0)
@@ -15287,8 +15113,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CASE_DELETE (CONFIG, config, "Config");
       CASE_DELETE (CREDENTIAL, credential, "Credential");
       CASE_DELETE (OVERRIDE, override, "Override");
-      CASE_DELETE (PORT_LIST, port_list, "Port list");
-      CASE_DELETE (PORT_RANGE, port_range, "Port range");
 
       case CLIENT_DELETE_REPORT:
         if (delete_report_data->report_id)
@@ -16421,105 +16245,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_CREATE_OVERRIDE, TASK);
       CLOSE (CLIENT_CREATE_OVERRIDE, TEXT);
       CLOSE (CLIENT_CREATE_OVERRIDE, THREAT);
-
-
-      case CLIENT_CREATE_PORT_LIST:
-        if (create_port_list_element_end (gmp_parser, error, element_name))
-          set_client_state (CLIENT_AUTHENTIC);
-        break;
-
-      case CLIENT_CREATE_PORT_RANGE:
-        {
-          port_range_t new_port_range;
-
-          if (create_port_range_data->start == NULL
-              || create_port_range_data->end == NULL
-              || create_port_range_data->port_list_id == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_port_range",
-                                "A START, END and"
-                                " PORT_LIST ID are required"));
-          else switch (create_port_range
-                        (create_port_range_data->port_list_id,
-                         create_port_range_data->type,
-                         create_port_range_data->start,
-                         create_port_range_data->end,
-                         create_port_range_data->comment,
-                         &new_port_range))
-            {
-              case 1:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_port_range",
-                                    "Port range START must be a number"
-                                    " 1-65535"));
-                log_event_fail ("port_range", "Port Range", NULL, "created");
-                break;
-              case 2:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_port_range",
-                                    "Port range END must be a number"
-                                    " 1-65535"));
-                log_event_fail ("port_range", "Port Range", NULL, "created");
-                break;
-              case 3:
-                if (send_find_error_to_client
-                     ("create_port_range", "port_range",
-                      create_port_range_data->port_list_id, gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                log_event_fail ("port_range", "Port Range", NULL, "created");
-                break;
-              case 4:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_port_range",
-                                    "Port range TYPE must be TCP or UDP"));
-                log_event_fail ("port_range", "Port Range", NULL, "created");
-                break;
-              case 5:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_port_range",
-                                    "Port list is in use"));
-                break;
-              case 6:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_port_range",
-                                    "New range overlaps an existing"
-                                    " range"));
-                break;
-              case 99:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_port_range",
-                                    "Permission denied"));
-                break;
-              case -1:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_INTERNAL_ERROR ("create_port_range"));
-                log_event_fail ("port_range", "Port Range", NULL, "created");
-                break;
-              default:
-                {
-                  char *uuid;
-                  uuid = port_range_uuid (new_port_range);
-                  SENDF_TO_CLIENT_OR_FAIL
-                   (XML_OK_CREATED_ID ("create_port_range"), uuid);
-                  log_event ("port_range", "Port range", uuid, "created");
-                  free (uuid);
-                  break;
-                }
-            }
-
-          create_port_range_data_reset (create_port_range_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-      CLOSE (CLIENT_CREATE_PORT_RANGE, COMMENT);
-      CLOSE (CLIENT_CREATE_PORT_RANGE, END);
-      CLOSE (CLIENT_CREATE_PORT_RANGE, START);
-      CLOSE (CLIENT_CREATE_PORT_RANGE, TYPE);
-      CLOSE (CLIENT_CREATE_PORT_RANGE, PORT_LIST);
-
 
 
       case CLIENT_CREATE_SCANNER:
@@ -18021,72 +17746,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_MODIFY_OVERRIDE, TEXT);
       CLOSE (CLIENT_MODIFY_OVERRIDE, THREAT);
       CLOSE (CLIENT_MODIFY_OVERRIDE, NVT);
-
-      case CLIENT_MODIFY_PORT_LIST:
-        {
-          switch (modify_port_list
-                   (modify_port_list_data->port_list_id,
-                    modify_port_list_data->name,
-                    modify_port_list_data->comment))
-            {
-              case 0:
-                SENDF_TO_CLIENT_OR_FAIL (XML_OK ("modify_port_list"));
-                log_event ("port_list", "Port List",
-                           modify_port_list_data->port_list_id, "modified");
-                break;
-              case 1:
-                if (send_find_error_to_client ("modify_port_list", "port_list",
-                                               modify_port_list_data->port_list_id,
-                                               gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                log_event_fail ("port_list", "Port List",
-                                modify_port_list_data->port_list_id,
-                                "modified");
-                break;
-              case 2:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_port_list",
-                                    "Port List with new name exists already"));
-                log_event_fail ("port_list", "Port List",
-                                modify_port_list_data->port_list_id,
-                                "modified");
-                break;
-              case 3:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_port_list",
-                                    "A port_list_id is required"));
-                log_event_fail ("port_list", "Port List",
-                                modify_port_list_data->port_list_id,
-                                "modified");
-                break;
-              case 99:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_port_list",
-                                    "Permission denied"));
-                log_event_fail ("port_list", "Port List",
-                                modify_port_list_data->port_list_id,
-                                "modified");
-                break;
-              default:
-              case -1:
-                SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("modify_port_list"));
-                log_event_fail ("port_list", "Port List",
-                                modify_port_list_data->port_list_id,
-                                "modified");
-                break;
-            }
-
-          modify_port_list_data_reset (modify_port_list_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-      CLOSE (CLIENT_MODIFY_PORT_LIST, COMMENT);
-      CLOSE (CLIENT_MODIFY_PORT_LIST, NAME);
-
-
 
       case CLIENT_MODIFY_SCANNER:
         handle_modify_scanner (gmp_parser, error);
@@ -19801,25 +19460,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
 
 
-      case CLIENT_CREATE_PORT_LIST:
-        create_port_list_element_text (text, text_len);
-        break;
-
-
-      APPEND (CLIENT_CREATE_PORT_RANGE_COMMENT,
-              &create_port_range_data->comment);
-
-      APPEND (CLIENT_CREATE_PORT_RANGE_END,
-              &create_port_range_data->end);
-
-      APPEND (CLIENT_CREATE_PORT_RANGE_START,
-              &create_port_range_data->start);
-
-      APPEND (CLIENT_CREATE_PORT_RANGE_TYPE,
-              &create_port_range_data->type);
-
-
-
       APPEND (CLIENT_CREATE_SCANNER_NAME,
               &create_scanner_data->name);
 
@@ -20021,16 +19661,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
               &modify_override_data->threat);
 
 
-
-
-
-
-
-      APPEND (CLIENT_MODIFY_PORT_LIST_COMMENT,
-              &modify_port_list_data->comment);
-
-      APPEND (CLIENT_MODIFY_PORT_LIST_NAME,
-              &modify_port_list_data->name);
 
 
 

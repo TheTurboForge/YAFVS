@@ -7,12 +7,10 @@ use axum::http::Method;
 use crate::direct_api::direct_api_v1_method_is_allowed;
 
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
-const MANAGE_PORT_LISTS: &str =
-    include_str!("../../../components/gvmd/src/manage_port_lists.c");
+const MANAGE_PORT_LISTS: &str = include_str!("../../../components/gvmd/src/manage_port_lists.c");
 const MANAGE_SQL_PORT_LISTS: &str =
     include_str!("../../../components/gvmd/src/manage_sql_port_lists.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
-const GMP_PORT_LISTS: &str = include_str!("../../../components/gvmd/src/gmp_port_lists.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -40,51 +38,16 @@ fn feed_port_list_xml_parser_is_owned_outside_the_gmp_command_module() {
         "PORT_PROTOCOL_OTHER",
         "range->exclude = 0",
     ] {
-        assert!(parse.contains(required), "feed XML parser missing {required}");
+        assert!(
+            parse.contains(required),
+            "feed XML parser missing {required}"
+        );
     }
     for caller in ["create_port_list_from_file", "update_port_list_from_file"] {
         let function = inherited_function(MANAGE_PORT_LISTS, caller);
         assert!(
             function.contains("parse_port_list_entity"),
             "{caller} must retain the shared feed XML parser"
-        );
-    }
-    assert!(!GMP_PORT_LISTS.contains("\nparse_port_list_entity ("));
-}
-
-#[test]
-fn inherited_copy_port_list_copies_metadata_ranges_and_tags_as_non_predefined() {
-    let copy_port_list = inherited_function(MANAGE_SQL_PORT_LISTS, "copy_port_list");
-    for required in [
-        "copy_resource_lock (\"port_list\", name, comment, port_list_id, NULL, 1",
-        "UPDATE port_lists SET predefined = 0",
-        "INSERT INTO port_ranges",
-        "SELECT make_uuid(), %llu, type, start",
-        "FROM port_ranges WHERE port_list = %llu",
-        "sql_commit ()",
-    ] {
-        assert!(
-            copy_port_list.contains(required),
-            "copy_port_list missing {required}"
-        );
-    }
-
-    let copy_resource = inherited_function(
-        include_str!("../../../components/gvmd/src/manage_sql_resources.c"),
-        "copy_resource_lock",
-    );
-    for required in [
-        "acl_user_may (command)",
-        "find_resource_with_permission",
-        "resource_with_name_exists (name, type, 0)",
-        "uniquify ('%s', name, %llu, ' Clone')",
-        "INSERT INTO tag_resources",
-        "resource_location = ",
-        "LOCATION_TABLE",
-    ] {
-        assert!(
-            copy_resource.contains(required),
-            "copy_resource_lock missing {required}"
         );
     }
 }
@@ -179,69 +142,6 @@ fn inherited_port_list_schema_has_live_trash_and_range_children() {
 }
 
 #[test]
-fn inherited_create_port_list_validates_ranges_owner_acl_name_and_feed_predefined_state() {
-    let create_internal = inherited_function(MANAGE_SQL_PORT_LISTS, "create_port_list_internal");
-    for required in [
-        "assert (current_credentials.uuid)",
-        "acl_user_may (\"create_port_list\")",
-        "validate_port_range (port_ranges)",
-        "resource_with_name_exists (name, \"port_list\", 0)",
-        "SELECT COUNT(*) FROM port_lists",
-        "SELECT COUNT(*) FROM port_lists_trash",
-        "create_port_list_lock",
-        "INSERT INTO port_lists",
-        "SELECT id FROM users WHERE uuid",
-        "make_port_ranges_openvas_default",
-        "port_range_ranges (port_ranges)",
-        "sql_commit ()",
-    ] {
-        assert!(
-            create_internal.contains(required),
-            "create_port_list_internal missing {required}"
-        );
-    }
-
-    let create_no_acl = inherited_function(MANAGE_SQL_PORT_LISTS, "create_port_list_no_acl");
-    assert!(create_no_acl.contains("create_port_list_internal (0"));
-    assert!(create_no_acl.contains("1, /* Predefined. */"));
-}
-
-#[test]
-fn inherited_port_list_import_wraps_uploaded_xml_and_parser_keeps_three_create_branches() {
-    let import = inherited_function(GSAD_GMP_C, "import_port_list_gmp");
-    for required in [
-        "<create_port_list>",
-        "params_value (params, \"xml_file\")",
-        "gmp (connection, credentials, NULL, &entity, response_data, command)",
-        "response_from_entity (connection, credentials, params, entity",
-    ] {
-        assert!(
-            import.contains(required),
-            "import_port_list_gmp missing {required}"
-        );
-    }
-
-    let create_run = inherited_function(GMP_PORT_LISTS, "create_port_list_run");
-    for required in [
-        "get_port_lists_response = entity_child (entity, \"get_port_lists_response\")",
-        "parse_port_list_entity (port_list, &port_list_id, &import_name",
-        "GET_PORT_LISTS_RESPONSE requires a",
-        "GET_PORT_LISTS_RESPONSE ID must be",
-        "!is_uuid (port_list_id)",
-        "create_port_list (port_list_id",
-        "copy = entity_child (entity, \"copy\")",
-        "copy_port_list (name ? entity_text (name) : NULL",
-        "entity_child (entity, \"port_range\")",
-        "create_port_list (NULL",
-    ] {
-        assert!(
-            create_run.contains(required),
-            "create_port_list_run missing {required}"
-        );
-    }
-}
-
-#[test]
 fn port_list_native_metadata_export_no_longer_uses_singular_gsad_xml_export() {
     assert!(
         !GSAD_GMP_C.contains("export_port_list_gmp"),
@@ -268,57 +168,6 @@ fn port_list_native_metadata_export_no_longer_uses_singular_gsad_xml_export() {
         assert!(
             !bulk_export.contains(forbidden),
             "bulk port-list export must not include mutation boundary {forbidden}"
-        );
-    }
-}
-
-#[test]
-fn inherited_modify_port_list_is_metadata_only_and_blocks_predefined_lists() {
-    let modify_port_list = inherited_function(MANAGE_SQL_PORT_LISTS, "modify_port_list");
-    for required in [
-        "if (port_list_id == NULL)",
-        "acl_user_may (\"modify_port_list\")",
-        "port_list_predefined_uuid (port_list_id)",
-        "find_port_list_with_permission (port_list_id, &port_list,",
-        "resource_with_name_exists (name, \"port_list\", port_list)",
-        "UPDATE port_lists SET",
-        "name = '%s'",
-        "comment = '%s'",
-        "modification_time = m_now ()",
-    ] {
-        assert!(
-            modify_port_list.contains(required),
-            "modify_port_list missing {required}"
-        );
-    }
-    assert!(!modify_port_list.contains("port_ranges"));
-    assert!(!modify_port_list.contains("port_lists_trash"));
-}
-
-#[test]
-fn inherited_delete_port_list_is_target_guarded_and_moves_ranges_permissions_and_tags() {
-    let delete_port_list = inherited_function(MANAGE_SQL_PORT_LISTS, "delete_port_list");
-    for required in [
-        "acl_user_may (\"delete_port_list\")",
-        "find_port_list_with_permission (port_list_id, &port_list,",
-        "find_trash (\"port_list\", port_list_id, &port_list)",
-        "SELECT count(*) FROM targets_trash",
-        "SELECT count(*) FROM targets",
-        "INSERT INTO port_lists_trash",
-        "INSERT INTO port_ranges_trash",
-        "UPDATE targets_trash",
-        "permissions_set_locations (\"port_list\"",
-        "tags_set_locations (\"port_list\"",
-        "permissions_set_orphans (\"port_list\"",
-        "tags_remove_resource (\"port_list\"",
-        "DELETE FROM port_ranges WHERE port_list",
-        "DELETE FROM port_lists WHERE id",
-        "DELETE FROM port_ranges_trash WHERE port_list",
-        "DELETE FROM port_lists_trash WHERE id",
-    ] {
-        assert!(
-            delete_port_list.contains(required),
-            "delete_port_list missing {required}"
         );
     }
 }

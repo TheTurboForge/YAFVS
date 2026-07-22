@@ -760,7 +760,6 @@ mod tests {
         let alerts = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
         let configs = include_str!("../../../components/gvmd/src/manage_sql_configs.c");
         let overrides = include_str!("../../../components/gvmd/src/manage_sql_overrides.c");
-        let port_lists = include_str!("../../../components/gvmd/src/manage_sql_port_lists.c");
         let schedules = include_str!("../../../components/gvmd/src/manage_sql_schedules.c");
         let tags = include_str!("../../../components/gvmd/src/manage_sql_tags.c");
         let targets = include_str!("../../../components/gvmd/src/manage_sql_targets.c");
@@ -822,12 +821,6 @@ mod tests {
                 first_resource_access: "find_override_with_permission",
             },
             LegacyTrashCountWriter {
-                file: "components/gvmd/src/manage_sql_port_lists.c",
-                source: port_lists,
-                definition: "delete_port_list (const char *port_list_id, int ultimate)",
-                first_resource_access: "find_port_list_with_permission",
-            },
-            LegacyTrashCountWriter {
                 file: "components/gvmd/src/manage_sql_schedules.c",
                 source: schedules,
                 definition: "delete_schedule (const char *schedule_id, int ultimate)",
@@ -849,7 +842,7 @@ mod tests {
 
         assert_eq!(
             writers.len(),
-            13,
+            12,
             "the remaining legacy trash writer inventory is explicit"
         );
         assert_eq!(

@@ -325,9 +325,6 @@ int
 gmp_get_report_ext (gnutls_session_t *, gmp_get_report_opts_t, entity_t *);
 
 int
-gmp_delete_port_list_ext (gnutls_session_t *, const char *, gmp_delete_opts_t);
-
-int
 gmp_delete_task (gnutls_session_t *, const char *);
 
 int

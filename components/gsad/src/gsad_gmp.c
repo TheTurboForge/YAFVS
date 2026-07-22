@@ -8041,167 +8041,6 @@ get_trash_tasks_gmp (gvm_connection_t *connection,
 /* Port lists. */
 
 /**
- * @brief Create a port list, get all port lists, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-create_port_list_gmp (gvm_connection_t *connection,
-                      gsad_credentials_t *credentials, params_t *params,
-                      gsad_command_response_data_t *response_data)
-{
-  gchar *html;
-  const char *name, *comment, *port_range, *from_file;
-  entity_t entity;
-
-  name = params_value (params, "name");
-  comment = params_value (params, "comment");
-  port_range = params_value (params, "port_range");
-  from_file = params_value (params, "from_file");
-
-  CHECK_VARIABLE_INVALID (name, "Create Port List");
-  CHECK_VARIABLE_INVALID (comment, "Create Port List");
-  CHECK_VARIABLE_INVALID (port_range, "Create Port List");
-  CHECK_VARIABLE_INVALID (from_file, "Create Port List");
-
-  /* Create the port_list. */
-
-  switch (gmpf (
-    connection, credentials, NULL, &entity, response_data,
-    "<create_port_list>"
-    "<name>%s</name>"
-    "<port_range>%s</port_range>"
-    "<comment>%s</comment>"
-    "</create_port_list>",
-    name, strcmp (from_file, "0") ? params_value (params, "file") : port_range,
-    comment ? comment : ""))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new port list. "
-        "No new port list was created. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new port list. "
-        "It is unclear whether the port list has been created or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new port list. "
-        "It is unclear whether the port list has been created or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  if (entity_attribute (entity, "id"))
-    params_add (params, "port_list_id", entity_attribute (entity, "id"));
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Create Port List", response_data);
-  free_entity (entity);
-  return html;
-}
-
-/**
- * @brief Add a range to a port list, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-create_port_range_gmp (gvm_connection_t *connection,
-                       gsad_credentials_t *credentials, params_t *params,
-                       gsad_command_response_data_t *response_data)
-{
-  int ret;
-  gchar *html;
-  const char *port_list_id, *start, *end, *type;
-  entity_t entity;
-
-  port_list_id = params_value (params, "port_list_id");
-  start = params_value (params, "port_range_start");
-  end = params_value (params, "port_range_end");
-  type = params_value (params, "port_type");
-
-  CHECK_VARIABLE_INVALID (port_list_id, "Create Port Range");
-  CHECK_VARIABLE_INVALID (start, "Create Port Range");
-  CHECK_VARIABLE_INVALID (end, "Create Port Range");
-  CHECK_VARIABLE_INVALID (type, "Create Port Range");
-
-  /* Create the port range. */
-
-  entity = NULL;
-  ret = gmpf (connection, credentials, NULL, &entity, response_data,
-              "<create_port_range>"
-              "<port_list id=\"%s\"/>"
-              "<start>%s</start>"
-              "<end>%s</end>"
-              "<type>%s</type>"
-              "</create_port_range>",
-              port_list_id, start, end, type);
-
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a Port Range. "
-        "The Port Range was not created. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a Port Range. "
-        "It is unclear whether the Port Range has been created or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a Port Range. "
-        "It is unclear whether the Port Range has been created or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Create Port Range", response_data);
-  free_entity (entity);
-  return html;
-}
-
-/**
  * @brief Get one port_list, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -8274,180 +8113,6 @@ get_port_lists_gmp (gvm_connection_t *connection,
  *
  * @return Enveloped XML object.
  */
-char *
-save_port_list_gmp (gvm_connection_t *connection,
-                    gsad_credentials_t *credentials, params_t *params,
-                    gsad_command_response_data_t *response_data)
-{
-  int ret;
-  gchar *html;
-  const char *port_list_id, *name, *comment;
-  entity_t entity;
-
-  port_list_id = params_value (params, "port_list_id");
-  name = params_value (params, "name");
-  comment = params_value (params, "comment");
-
-  CHECK_VARIABLE_INVALID (port_list_id, "Save Port List");
-  CHECK_VARIABLE_INVALID (name, "Save Port List");
-  CHECK_VARIABLE_INVALID (comment, "Save Port List");
-
-  /* Modify the Port List. */
-
-  entity = NULL;
-  ret = gmpf (connection, credentials, NULL, &entity, response_data,
-              "<modify_port_list port_list_id=\"%s\">"
-              "<name>%s</name>"
-              "<comment>%s</comment>"
-              "</modify_port_list>",
-              port_list_id, name, comment);
-
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a Port List. "
-        "The Port List was not saved. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a Port List. "
-        "It is unclear whether the Port List has been saved or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a Port List. "
-        "It is unclear whether the Port List has been saved or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Save Port List", response_data);
-  free_entity (entity);
-  return html;
-}
-
-/**
- * @brief Delete a port list, get all port lists, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-delete_port_list_gmp (gvm_connection_t *connection,
-                      gsad_credentials_t *credentials, params_t *params,
-                      gsad_command_response_data_t *response_data)
-{
-  return move_resource_to_trash (connection, "port_list", credentials, params,
-                                 response_data);
-}
-
-/**
- * @brief Delete a port range, get the port list, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-delete_port_range_gmp (gvm_connection_t *connection,
-                       gsad_credentials_t *credentials, params_t *params,
-                       gsad_command_response_data_t *response_data)
-{
-  return delete_resource (connection, "port_range", credentials, params, TRUE,
-                          response_data);
-}
-
-/**
- * @brief Import port list, get all port_lists, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-import_port_list_gmp (gvm_connection_t *connection,
-                      gsad_credentials_t *credentials, params_t *params,
-                      gsad_command_response_data_t *response_data)
-{
-  gchar *command, *html;
-  entity_t entity;
-  int ret;
-
-  /* Create the port list. */
-
-  entity = NULL;
-  command = g_strdup_printf ("<create_port_list>"
-                             "%s"
-                             "</create_port_list>",
-                             params_value (params, "xml_file"));
-  ret = gmp (connection, credentials, NULL, &entity, response_data, command);
-  g_free (command);
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while importing a port_list. "
-        "The schedule remains the same. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while importing a port_list. "
-        "It is unclear whether the schedule has been saved or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while importing a port_list. "
-        "It is unclear whether the schedule has been saved or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  /* Cleanup, and return transformed XML. */
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Import Port List", response_data);
-  free_entity (entity);
-  return html;
-}
-
 /* Feeds. */
 
 /**
@@ -11412,8 +11077,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (create_credential)
   ELSE (create_host)
   ELSE (create_override)
-  ELSE (create_port_list)
-  ELSE (create_port_range)
   ELSE (create_scanner)
   ELSE (create_task)
   ELSE (create_tag)
@@ -11426,8 +11089,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_credential)
   ELSE (delete_from_trash)
   ELSE (delete_override)
-  ELSE (delete_port_list)
-  ELSE (delete_port_range)
   ELSE (delete_report)
   ELSE (delete_scanner)
   ELSE (delete_schedule)
@@ -11436,7 +11097,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_task)
   ELSE (delete_tls_certificate)
   ELSE (delete_user)
-  ELSE (import_port_list)
   ELSE (move_task)
   ELSE (renew_session)
   ELSE (restore)
@@ -11448,7 +11108,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (save_credential)
   ELSE (save_license)
   ELSE (save_override)
-  ELSE (save_port_list)
   ELSE (save_scanner)
   ELSE (save_tag)
   ELSE (save_target)

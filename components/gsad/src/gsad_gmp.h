@@ -285,29 +285,11 @@ get_nvt_families_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                       gsad_command_response_data_t *);
 
 char *
-create_port_list_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                      gsad_command_response_data_t *);
-char *
-create_port_range_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                       gsad_command_response_data_t *);
-char *
 get_port_list_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 char *
-save_port_list_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                    gsad_command_response_data_t *);
-char *
 get_port_lists_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                     gsad_command_response_data_t *);
-char *
-delete_port_list_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                      gsad_command_response_data_t *);
-char *
-delete_port_range_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                       gsad_command_response_data_t *);
-char *
-import_port_list_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                      gsad_command_response_data_t *);
 
 char *
 get_overrides_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,

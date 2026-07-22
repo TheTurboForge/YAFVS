@@ -9,6 +9,7 @@ use axum::{
 };
 use serde::Serialize;
 use tokio_postgres::Transaction;
+use yafvs_domain::ScannerType;
 
 use crate::{
     app_state::AppState,
@@ -119,7 +120,9 @@ pub(crate) fn ensure_task_is_startable(task: &TaskStartState) -> Result<(), ApiE
             "task must have an available scanner before it can start".to_string(),
         ));
     }
-    if !matches!(task.scanner_type, Some(2 | 5 | 6 | 8)) {
+    if !task.scanner_type.is_some_and(|scanner_type| {
+        ScannerType::try_from(scanner_type).is_ok_and(ScannerType::is_scan_task_capable)
+    }) {
         return Err(ApiError::BadRequest(
             "task scanner type cannot run scan tasks".to_string(),
         ));

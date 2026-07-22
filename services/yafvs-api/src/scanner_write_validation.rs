@@ -5,13 +5,13 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::Deserialize;
 use std::{net::IpAddr, path::Component};
+use yafvs_domain::ScannerType;
 
 use crate::errors::ApiError;
 
 pub(crate) const MAX_SCANNER_TEXT_BYTES: usize = 4096;
 pub(crate) const MAX_SCANNER_CA_PUB_BYTES: usize = 65_536;
 const MAX_NETWORK_HOST_BYTES: usize = 253;
-const SUPPORTED_SCANNER_TYPES: [i64; 4] = [2, 5, 6, 8];
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -75,11 +75,12 @@ pub(crate) fn validate_scanner_configuration_request(
     let name = normalize_required_scanner_text(request.name, "name")?;
     let comment = normalize_scanner_text_value(request.comment, "comment")?;
     let host = normalize_required_scanner_text(request.host, "host")?;
-    if !SUPPORTED_SCANNER_TYPES.contains(&request.scanner_type) {
-        return Err(ApiError::BadRequest(
-            "scanner_type must be one of 2, 5, 6, or 8".to_string(),
-        ));
-    }
+    let scanner_type = ScannerType::try_from(request.scanner_type)
+        .ok()
+        .filter(|scanner_type| scanner_type.is_operator_configurable())
+        .ok_or_else(|| {
+            ApiError::BadRequest("scanner_type must be one of 2, 5, 6, or 8".to_string())
+        })?;
 
     let unix_socket = host.starts_with('/');
     let port = if unix_socket {
@@ -118,7 +119,7 @@ pub(crate) fn validate_scanner_configuration_request(
         comment,
         host,
         port,
-        scanner_type: request.scanner_type as i32,
+        scanner_type: scanner_type.database_value(),
         ca_pub,
         credential_id,
         unix_socket,

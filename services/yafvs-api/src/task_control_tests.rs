@@ -8,6 +8,7 @@ use crate::{
     task_control_sql::*,
     task_status::TaskStatus,
 };
+use yafvs_domain::ScannerType;
 
 fn startable_task(run_status: TaskStatus) -> TaskStartState {
     TaskStartState {
@@ -18,7 +19,7 @@ fn startable_task(run_status: TaskStatus) -> TaskStartState {
         target_has_hosts: true,
         config_id: Some(21),
         scanner_id: Some(23),
-        scanner_type: Some(2),
+        scanner_type: Some(ScannerType::Openvas.database_value()),
     }
 }
 
@@ -80,7 +81,14 @@ fn task_start_state_validation_rejects_missing_or_unsupported_resources() {
         Err(ApiError::BadRequest(message)) if message.contains("scanner")
     ));
 
-    for scanner_type in [0, 1, 3, 4, 7, 9] {
+    for scanner_type in [
+        ScannerType::None.database_value(),
+        1,
+        ScannerType::Cve.database_value(),
+        4,
+        7,
+        9,
+    ] {
         let mut task = startable_task(TaskStatus::Done);
         task.scanner_type = Some(scanner_type);
         assert!(matches!(
@@ -88,9 +96,14 @@ fn task_start_state_validation_rejects_missing_or_unsupported_resources() {
             Err(ApiError::BadRequest(message)) if message.contains("scanner type")
         ));
     }
-    for scanner_type in [2, 5, 6, 8] {
+    for scanner_type in [
+        ScannerType::Openvas,
+        ScannerType::OspSensor,
+        ScannerType::Openvasd,
+        ScannerType::OpenvasdSensor,
+    ] {
         let mut task = startable_task(TaskStatus::Done);
-        task.scanner_type = Some(scanner_type);
+        task.scanner_type = Some(scanner_type.database_value());
         assert!(ensure_task_is_startable(&task).is_ok());
     }
 }

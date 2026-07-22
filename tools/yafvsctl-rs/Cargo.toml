@@ -22,3 +22,4 @@ shlex = "1"
 time = { version = "0.3", features = ["formatting", "parsing"] }
 toml = "0.9"
 zip = { version = "8", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+yafvs-domain = { path = "../../crates/yafvs-domain" }

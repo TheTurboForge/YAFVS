@@ -16,6 +16,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+use yafvs_domain::ScannerType;
 
 pub(crate) const IANA_TCP_UDP_PORT_LIST_ID: &str = "4a4717fe-57d2-11e1-9a26-406186ea4fc5";
 pub(crate) const FULL_AND_FAST_SCAN_CONFIG_ID: &str = "daba56c8-73ec-11df-a475-002264764cea";
@@ -25,7 +26,6 @@ const DIAGNOSTIC_PREREQUISITE_IDS: [&str; 2] = [
     "1.3.6.1.4.1.25623.1.0.14259",
     "1.3.6.1.4.1.25623.1.0.100315",
 ];
-const TASK_SCANNER_TYPES: [i64; 4] = [2, 5, 6, 8];
 const DEFAULT_ALIVE_TEST: &str = "Scan Config Default";
 static OPERATION_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -1707,7 +1707,9 @@ fn diagnostic_preflight(
             typed &= object
                 .and_then(|value| value.get("scanner_type"))
                 .and_then(Value::as_i64)
-                .is_some_and(|scanner_type| TASK_SCANNER_TYPES.contains(&scanner_type));
+                .is_some_and(|scanner_type| {
+                    ScannerType::try_from(scanner_type).is_ok_and(ScannerType::is_scan_task_capable)
+                });
         }
         let accepted = reply_ok(&reply, 200) && typed;
         let message = if accepted {
@@ -2043,7 +2045,9 @@ fn preflight(
             typed &= object
                 .and_then(|value| value.get("scanner_type"))
                 .and_then(Value::as_i64)
-                .is_some_and(|scanner_type| TASK_SCANNER_TYPES.contains(&scanner_type));
+                .is_some_and(|scanner_type| {
+                    ScannerType::try_from(scanner_type).is_ok_and(ScannerType::is_scan_task_capable)
+                });
         }
         if resource == "alert" {
             typed &= alert_eligible(reply.parsed.as_ref(), expected_id, operator_uuid, None);

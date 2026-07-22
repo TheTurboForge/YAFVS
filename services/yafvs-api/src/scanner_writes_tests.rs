@@ -19,6 +19,7 @@ use crate::{
         validate_scanner_patch_request,
     },
 };
+use yafvs_domain::ScannerType;
 
 const CREDENTIAL_ID: &str = "12345678-1234-1234-1234-123456789abc";
 const CERTIFICATE_SHAPED_PEM: &str =
@@ -37,7 +38,7 @@ fn configuration_request(host: &str, port: i64) -> ScannerConfigurationRequest {
         comment: " comment ".to_string(),
         host: host.to_string(),
         port,
-        scanner_type: 2,
+        scanner_type: i64::from(ScannerType::Openvas.database_value()),
         ca_pub: Some(CERTIFICATE_SHAPED_PEM.to_string()),
         credential_id: Some(CREDENTIAL_ID.to_string()),
     }
@@ -51,7 +52,10 @@ fn scanner_configuration_validates_network_and_unix_socket_shapes() {
         assert_eq!(validated.name, "scanner");
         assert_eq!(validated.comment, "comment");
         assert_eq!(validated.port, 9390);
-        assert_eq!(validated.scanner_type, 2);
+        assert_eq!(
+            validated.scanner_type,
+            ScannerType::Openvas.database_value()
+        );
         assert_eq!(validated.ca_pub.as_deref(), Some(CERTIFICATE_SHAPED_PEM));
         assert_eq!(validated.credential_id.as_deref(), Some(CREDENTIAL_ID));
         assert!(!validated.unix_socket);
@@ -87,7 +91,7 @@ fn scanner_configuration_rejects_bad_hosts_ports_types_and_unknown_fields() {
             Err(ApiError::BadRequest(_))
         ));
     }
-    for scanner_type in [0, 1, 3, 4, 7, 9] {
+    for scanner_type in [0, 1, i64::from(ScannerType::Cve.database_value()), 4, 7, 9] {
         assert!(matches!(
             validate_scanner_configuration_request(ScannerConfigurationRequest {
                 scanner_type,

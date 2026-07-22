@@ -57,23 +57,15 @@ const createNativeTrashcanCommand = () => {
 };
 
 describe('TrashCanCommand tests', () => {
-  test('should allow to restore an entity', async () => {
-    const response = createResponse({});
-    const fakeHttp = createHttp(response);
-    const cmd = new TrashCanCommand(fakeHttp);
-    await cmd.restore({id: '1234'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'restore',
-        target_id: '1234',
-      },
-    });
-  });
-
   test.each([
     ['filter', 'filters'],
     ['override', 'overrides'],
+    ['portlist', 'port-lists'],
+    ['scanconfig', 'scan-configs'],
     ['scanner', 'scanners'],
+    ['schedule', 'schedules'],
+    ['tag', 'tags'],
+    ['target', 'targets'],
   ] as const)(
     'should restore supported %s trash entities through native API',
     async (entityType, path) => {
@@ -120,33 +112,72 @@ describe('TrashCanCommand tests', () => {
     },
   );
 
-  test('should fall back to GMP restore for unsupported native trash entities', async () => {
-    const response = createResponse({});
-    const fetchMock = testing.fn();
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://yafvs.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
+  test.each([
+    ['alert', 'alert'],
+    ['credential', 'credential'],
+    ['reportformat', 'report_format'],
+    ['task', 'task'],
+  ] as const)(
+    'should restore retained %s trash entities through the typed GMP bridge',
+    async (entityType, resourceType) => {
+      const response = createResponse({});
+      const fetchMock = testing.fn();
+      testing.stubGlobal('fetch', fetchMock);
+      const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+        buildUrl: ReturnType<typeof testing.fn>;
+        session: ReturnType<typeof createSession>;
+      };
+      fakeHttp.buildUrl = testing.fn(
+        (path: string) => `https://yafvs.example/${path}`,
+      );
+      fakeHttp.session = createSession();
+      fakeHttp.session.token = 'test-token';
+      const cmd = new TrashCanCommand(fakeHttp);
+
+      await cmd.restore({id: '1234', entityType});
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+        data: {
+          cmd: 'restore',
+          target_id: '1234',
+          resource_type: resourceType,
+        },
+      });
+    },
+  );
+
+  test('should reject an untyped restore without a network request', async () => {
+    const fakeHttp = createHttp(createResponse({}));
     const cmd = new TrashCanCommand(fakeHttp);
 
-    await cmd.restore({id: '1234', entityType: 'credential'});
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'restore',
-        target_id: '1234',
-      },
-    });
+    await expect(cmd.restore({id: '1234'} as never)).rejects.toThrow(
+      'Trashcan restore is unavailable for undefined',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
-  test('should not fall back to GMP when supported native restore fails', async () => {
+  test('should reject unsupported restore types without a network request', async () => {
+    const fakeHttp = createHttp(createResponse({}));
+    const cmd = new TrashCanCommand(fakeHttp);
+
+    await expect(cmd.restore({id: '1234', entityType: 'user'})).rejects.toThrow(
+      'Trashcan restore is unavailable for user',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should not fall back to GMP when native restore is unavailable', async () => {
+    const fakeHttp = createHttp(createResponse({}));
+    const cmd = new TrashCanCommand(fakeHttp);
+
+    await expect(
+      cmd.restore({id: '1234', entityType: 'filter'}),
+    ).rejects.toThrow('Native Trashcan restore is unavailable for filter');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should not fall back to GMP when native restore fails', async () => {
     const response = createResponse({});
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({error: {message: 'conflict'}}),

@@ -58,6 +58,13 @@ export interface TrashCanEmptyParams {
   expectedSnapshotDigest: string;
 }
 
+const LEGACY_RESTORE_RESOURCE_TYPES = {
+  alert: 'alert',
+  credential: 'credential',
+  reportformat: 'report_format',
+  task: 'task',
+} as const satisfies Partial<Record<EntityType, string>>;
+
 interface UsageTypeElement extends ModelElement {
   usage_type?: string;
 }
@@ -204,16 +211,27 @@ const nativeTrashcanItemsToData = (
 };
 
 class TrashCanCommand extends HttpCommand {
-  async restore({id, entityType}: {id: string; entityType?: EntityType}) {
-    if (
-      supportsNativeTrashcanRestore(entityType) &&
-      canUseNativeApi(this.http)
-    ) {
+  async restore({id, entityType}: {id: string; entityType: EntityType}) {
+    if (supportsNativeTrashcanRestore(entityType)) {
+      if (!canUseNativeApi(this.http)) {
+        throw new Error(
+          `Native Trashcan restore is unavailable for ${entityType}`,
+        );
+      }
       await restoreNativeTrashcanEntity(this.http, {id, entityType});
       return;
     }
-    const data = {cmd: 'restore', target_id: id};
-    await this.httpPostWithTransform(data);
+
+    const resourceType = LEGACY_RESTORE_RESOURCE_TYPES[entityType];
+    if (resourceType === undefined) {
+      throw new Error(`Trashcan restore is unavailable for ${entityType}`);
+    }
+
+    await this.httpPostWithTransform({
+      cmd: 'restore',
+      target_id: id,
+      resource_type: resourceType,
+    });
   }
 
   async delete({id, entityType}: {id: string; entityType: EntityType}) {

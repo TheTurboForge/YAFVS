@@ -4088,12 +4088,32 @@ restore_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   gchar *ret;
   entity_t entity;
   const char *target_id;
+  const char *resource_type;
 
   target_id = params_value (params, "target_id");
+  resource_type = params_value (params, "resource_type");
 
   CHECK_VARIABLE_INVALID (target_id, "Restore")
+  CHECK_VARIABLE_INVALID (resource_type, "Restore")
 
-  /* Restore the resource. */
+  if (g_strcmp0 (resource_type, "alert") != 0
+      && g_strcmp0 (resource_type, "credential") != 0
+      && g_strcmp0 (resource_type, "report_format") != 0
+      && g_strcmp0 (resource_type, "task") != 0)
+    {
+      gsad_command_response_data_set_status_code (response_data,
+                                                  MHD_HTTP_BAD_REQUEST);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "An internal error occurred while restoring a resource. "
+        "The resource was not restored. "
+        "Diagnostics: Unsupported resource_type for the restore "
+        "compatibility bridge.",
+        response_data);
+    }
+
+  /* The declared type authorizes this compatibility bridge only.  gvmd still
+   * performs its existing generic UUID lookup for the fixed restore XML. */
 
   if (gvm_connection_sendf (connection,
                             "<restore"

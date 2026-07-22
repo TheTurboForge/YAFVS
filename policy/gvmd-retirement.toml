@@ -298,7 +298,7 @@ kind = "product"
 status = "inventoried"
 evidence = ["components/gsa/src/gmp/gmp.ts::class Gmp"]
 replacement = ["crud-query-api-surface", "login-session-account-auth"]
-notes = "Separate harmless internal module names from command methods that still issue legacy requests. Alert browser restore and permanent delete are native-only; credential and task Trashcan restore plus credential, report-format, and task permanent delete remain declared compatibility tails."
+notes = "Separate harmless internal module names from command methods that still issue legacy requests. Trashcan inventory and every retained per-resource lifecycle are native-only; the superseded gsad get_trash aliases are retired."
 
 [[callers]]
 id = "gsad-gmp-route"

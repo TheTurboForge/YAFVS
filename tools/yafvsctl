@@ -9205,7 +9205,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
         ],
         "next_replacement_candidates": [
-            {"workflow": "deep Trashcan row reads and per-row mutations", "current_dependency": "GSA/GMP get_trash_* plus restore/delete variants", "native_target": "deferred; redacted row metadata and guarded global emptying are native, while full row payloads and per-row mutations are secret-adjacent and require separate design"},
+            {"workflow": "deep Trashcan row reads and per-row mutations", "current_dependency": "retained raw-manager GET_* compatibility boundary with trash=1", "native_target": "redacted row metadata and every retained per-row lifecycle are native; raw manager trash reads remain separately classified compatibility behavior"},
         ],
     }
 

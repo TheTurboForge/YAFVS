@@ -1812,7 +1812,7 @@ class YAFVSCtlTests(unittest.TestCase):
         gvmd_source = retired_sources["gvmd parser"].read_text(encoding="utf-8")
         self.assertIn("get_scanner_gmp", gsad_source)
         self.assertIn("export_scanner_gmp", gsad_source)
-        self.assertIn("get_trash_scanners_gmp", gsad_source)
+        self.assertNotIn("get_trash_scanners_gmp", gsad_source)
         self.assertIn("verify_scanner_gmp", gsad_source)
         self.assertIn("CLIENT_GET_SCANNERS", gvmd_source)
         self.assertIn("CLIENT_VERIFY_SCANNER", gvmd_source)

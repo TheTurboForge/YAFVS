@@ -348,46 +348,6 @@ bulk_export_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                  gsad_command_response_data_t *);
 
 char *
-get_trash_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *params,
-               gsad_command_response_data_t *);
-char *
-get_trash_alerts_gmp (gvm_connection_t *, gsad_credentials_t *,
-                      params_t *params, gsad_command_response_data_t *);
-char *
-get_trash_configs_gmp (gvm_connection_t *, gsad_credentials_t *,
-                       params_t *params, gsad_command_response_data_t *);
-char *
-get_trash_credentials_gmp (gvm_connection_t *, gsad_credentials_t *,
-                           params_t *params, gsad_command_response_data_t *);
-char *
-get_trash_filters_gmp (gvm_connection_t *, gsad_credentials_t *,
-                       params_t *params, gsad_command_response_data_t *);
-char *
-get_trash_overrides_gmp (gvm_connection_t *, gsad_credentials_t *,
-                         params_t *params, gsad_command_response_data_t *);
-char *
-get_trash_port_lists_gmp (gvm_connection_t *, gsad_credentials_t *,
-                          params_t *params, gsad_command_response_data_t *);
-char *
-get_trash_report_formats_gmp (gvm_connection_t *, gsad_credentials_t *,
-                              params_t *params, gsad_command_response_data_t *);
-char *
-get_trash_scanners_gmp (gvm_connection_t *, gsad_credentials_t *,
-                        params_t *params, gsad_command_response_data_t *);
-char *
-get_trash_schedules_gmp (gvm_connection_t *, gsad_credentials_t *,
-                         params_t *params, gsad_command_response_data_t *);
-char *
-get_trash_tags_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *params,
-                    gsad_command_response_data_t *);
-char *
-get_trash_targets_gmp (gvm_connection_t *, gsad_credentials_t *,
-                       params_t *params, gsad_command_response_data_t *);
-
-char *
-get_trash_tasks_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *params,
-                     gsad_command_response_data_t *);
-char *
 get_settings_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                   gsad_command_response_data_t *);
 char *

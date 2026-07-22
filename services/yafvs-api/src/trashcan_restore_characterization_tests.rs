@@ -13,6 +13,7 @@ const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GVMD_GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
+const GVMD_GMP_GET: &str = include_str!("../../../components/gvmd/src/gmp_get.c");
 const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
 const GVMD_REPORT_FORMATS: &str =
     include_str!("../../../components/gvmd/src/manage_sql_report_formats.c");
@@ -48,6 +49,72 @@ fn trashcan_inventory_is_native_only_and_has_no_gmp_fallback() {
     assert!(!GSA_TRASHCAN.contains("failedRequests"));
     assert!(!GSA_TRASHCAN_PAGE.contains("failedRequests"));
     assert!(!GSA_TRASHCAN_PAGE.contains("showErrorNotification"));
+
+    assert!(!GSAD_GMP.contains("GET_TRASH_RESOURCE"));
+    for resource in [
+        "alerts",
+        "configs",
+        "credentials",
+        "filters",
+        "overrides",
+        "port_lists",
+        "report_formats",
+        "scanners",
+        "schedules",
+        "tags",
+        "targets",
+        "tasks",
+    ] {
+        let handler = format!("get_trash_{resource}_gmp");
+        let dispatch = format!("ELSE (get_trash_{resource})");
+        let validator = format!("|(get_trash_{resource})");
+        assert!(!GSAD_GMP.contains(&handler), "gsad still defines {handler}");
+        assert!(
+            !GSAD_GMP_HEADER.contains(&handler),
+            "gsad still declares {handler}"
+        );
+        assert!(
+            !GSAD_GMP.contains(&dispatch),
+            "gsad still dispatches {dispatch}"
+        );
+        assert!(
+            !GSAD_VALIDATOR.contains(&validator),
+            "gsad still accepts {validator}"
+        );
+    }
+    assert!(!GSAD_GMP_HEADER.contains("get_trash_gmp"));
+
+    let normalized_gvmd_gmp = GVMD_GMP.split_whitespace().collect::<Vec<_>>().join(" ");
+    for (data, resource_type) in [
+        ("get_alerts_data", "alert"),
+        ("get_configs_data", "config"),
+        ("get_credentials_data", "credential"),
+        ("get_filters_data", "filter"),
+        ("get_overrides_data", "override"),
+        ("get_port_lists_data", "port_list"),
+        ("get_report_formats_data", "report_format"),
+        ("get_scanners_data", "scanner"),
+        ("get_schedules_data", "schedule"),
+        ("get_tags_data", "tag"),
+        ("get_targets_data", "target"),
+        ("get_tasks_data", "task"),
+    ] {
+        let parser = format!(
+            "get_data_parse_attributes (&{data}->get, \"{resource_type}\", attribute_names, attribute_values);"
+        );
+        assert!(
+            normalized_gvmd_gmp.contains(&parser),
+            "raw manager trash compatibility lost {resource_type} attribute parsing"
+        );
+    }
+    let normalized_gmp_get = GVMD_GMP_GET
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(normalized_gmp_get.contains(
+        "find_attribute (attribute_names, attribute_values, \"trash\", &attribute)"
+    ));
+    assert!(normalized_gmp_get.contains("data->trash = strcmp (attribute, \"0\")"));
 }
 
 #[test]

@@ -33,6 +33,30 @@ Ensure (gsad_validator, reject_removed_native_only_commands)
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_features"),
                is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_trash_alerts"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_trash_configs"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_trash_credentials"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_trash_filters"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_trash_overrides"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_trash_port_lists"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_trash_report_formats"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_trash_scanners"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_trash_schedules"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_trash_tags"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_trash_targets"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_trash_tasks"),
+               is_equal_to (2));
 }
 
 Ensure (gsad_validator, reject_removed_scan_config_commands)

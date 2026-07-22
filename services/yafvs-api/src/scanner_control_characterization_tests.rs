@@ -193,7 +193,7 @@ fn retired_browser_gmp_scanner_mutations_stay_absent_while_control_compatibility
     }
     assert!(GSAD_GMP_C.contains("get_scanner_gmp"));
     assert!(GSAD_GMP_C.contains("export_scanner_gmp"));
-    assert!(GSAD_GMP_C.contains("get_trash_scanners_gmp"));
+    assert!(!GSAD_GMP_C.contains("get_trash_scanners_gmp"));
     assert!(GMP_C.contains("CLIENT_VERIFY_SCANNER"));
     assert!(GMP_SCHEMA.contains("<name>verify_scanner</name>"));
 }

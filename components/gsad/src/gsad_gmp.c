@@ -4151,263 +4151,7 @@ restore_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   return ret;
 }
 
-/**
- * @brief Create a tag, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-create_tag_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                params_t *params, gsad_command_response_data_t *response_data)
-{
-  char *ret;
-  gchar *response;
-  const char *name, *comment, *filter, *value, *resource_type, *active;
-  params_t *resource_ids;
-  GString *command;
-  entity_t entity;
 
-  name = params_value (params, "tag_name");
-  comment = params_value (params, "comment");
-  filter = params_value (params, "filter");
-  value = params_value (params, "tag_value");
-  resource_type = params_value (params, "resource_type");
-  resource_ids = params_values (params, "resource_ids:");
-  active = params_value (params, "active");
-
-  CHECK_VARIABLE_INVALID (name, "Create Tags")
-  CHECK_VARIABLE_INVALID (comment, "Create Tags")
-  if (params_given (params, "filter"))
-    CHECK_VARIABLE_INVALID (filter, "Create Tags")
-  CHECK_VARIABLE_INVALID (value, "Create Tags")
-  CHECK_VARIABLE_INVALID (resource_type, "Create Tags")
-  CHECK_VARIABLE_INVALID (active, "Create Tags")
-
-  command = g_string_new ("");
-
-  xml_string_append (command,
-                     "<create_tag>"
-                     "<name>%s</name>"
-                     "<comment>%s</comment>"
-                     "<value>%s</value>"
-                     "<active>%s</active>"
-                     "<resources filter=\"%s\">"
-                     "<type>%s</type>",
-                     name, comment, value, active, filter ? filter : "",
-                     resource_type);
-
-  if (resource_ids)
-    {
-      params_iterator_t iter;
-      char *name;
-      param_t *param;
-
-      params_iterator_init (&iter, resource_ids);
-      while (params_iterator_next (&iter, &name, &param))
-        if (param->value && strcmp (param->value, "0"))
-          g_string_append_printf (command, "<resource id=\"%s\"/>",
-                                  param->value ? param->value : "");
-    }
-
-  xml_string_append (command, "</resources>"
-                              "</create_tag>");
-
-  response = NULL;
-  entity = NULL;
-  switch (gmp (connection, credentials, &response, &entity, response_data,
-               command->str))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      g_string_free (command, TRUE);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new tag. "
-        "No new tag was created. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      g_string_free (command, TRUE);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new tag. "
-        "It is unclear whether the tag has been created or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      g_string_free (command, TRUE);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new tag. "
-        "It is unclear whether the tag has been created or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  g_string_free (command, TRUE);
-  ret = response_from_entity (connection, credentials, params, entity,
-                              "Create Tag", response_data);
-
-  free_entity (entity);
-  g_free (response);
-  return ret;
-}
-
-/**
- * @brief Delete tag, get next page, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-delete_tag_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                params_t *params, gsad_command_response_data_t *response_data)
-{
-  return move_resource_to_trash (connection, "tag", credentials, params,
-                                 response_data);
-}
-
-/**
- * @brief Modify a tag, get all tags, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-save_tag_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-              params_t *params, gsad_command_response_data_t *response_data)
-{
-  gchar *response;
-  const char *name, *comment, *filter, *value, *resource_type, *active;
-  const char *resources_action;
-  params_t *resource_ids;
-  const char *tag_id;
-  GString *command;
-  entity_t entity;
-  char *ret;
-
-  tag_id = params_value (params, "tag_id");
-  name = params_value (params, "tag_name");
-  comment = params_value (params, "comment");
-  filter = params_value (params, "filter");
-  value = params_value (params, "tag_value");
-  resource_type = params_value (params, "resource_type");
-  resource_ids = params_values (params, "resource_ids:");
-  resources_action = params_value (params, "resources_action");
-  active = params_value (params, "active");
-
-  CHECK_VARIABLE_INVALID (tag_id, "Save Tag")
-  CHECK_VARIABLE_INVALID (name, "Save Tag")
-  CHECK_VARIABLE_INVALID (comment, "Save Tag")
-  if (params_given (params, "filter"))
-    CHECK_VARIABLE_INVALID (filter, "Save Tag")
-  CHECK_VARIABLE_INVALID (value, "Save Tag")
-  if (params_given (params, "resources_action"))
-    CHECK_VARIABLE_INVALID (resources_action, "Save Tag")
-  CHECK_VARIABLE_INVALID (resource_type, "Save Tag")
-  CHECK_VARIABLE_INVALID (active, "Save Tag")
-
-  command = g_string_new ("");
-
-  xml_string_append (command,
-                     "<modify_tag tag_id=\"%s\">"
-                     "<name>%s</name>"
-                     "<comment>%s</comment>"
-                     "<value>%s</value>"
-                     "<active>%s</active>"
-                     "<resources action=\"%s\" filter=\"%s\">"
-                     "<type>%s</type>",
-                     tag_id, name, comment, value, active,
-                     resources_action ? resources_action : "",
-                     filter ? filter : "", resource_type);
-
-  if (resource_ids)
-    {
-      params_iterator_t iter;
-      char *name;
-      param_t *param;
-
-      params_iterator_init (&iter, resource_ids);
-      while (params_iterator_next (&iter, &name, &param))
-        if (param->value && strcmp (param->value, "0"))
-          g_string_append_printf (command, "<resource id=\"%s\"/>",
-                                  param->value ? param->value : "");
-    }
-
-  xml_string_append (command, "</resources>"
-                              "</modify_tag>");
-
-  response = NULL;
-  entity = NULL;
-  switch (gmp (connection, credentials, &response, &entity, response_data,
-               command->str))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      g_string_free (command, TRUE);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a tag. "
-        "The tag remains the same. "
-        "Diagnostics: Failure to send command to "
-        "manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      g_string_free (command, TRUE);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a tag. "
-        "It is unclear whether the tag has been saved "
-        "or not. "
-        "Diagnostics: Failure to receive response from "
-        "manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      g_string_free (command, TRUE);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a tag. "
-        "It is unclear whether the tag has been saved "
-        "or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  g_string_free (command, TRUE);
-  ret = response_from_entity (connection, credentials, params, entity,
-                              "Save Tag", response_data);
-
-  free_entity (entity);
-  g_free (response);
-  return ret;
-}
 
 /**
  * @brief Export a tag.
@@ -4475,72 +4219,6 @@ get_tags_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
                    response_data);
 }
 
-/**
- * @brief Set tag enabled status.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-toggle_tag_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                params_t *params, gsad_command_response_data_t *response_data)
-{
-  gchar *html;
-  const char *tag_id, *enable;
-  entity_t entity;
-
-  tag_id = params_value (params, "tag_id");
-  enable = params_value (params, "enable");
-
-  CHECK_VARIABLE_INVALID (tag_id, "Toggle Tag")
-  CHECK_VARIABLE_INVALID (enable, "Toggle Tag")
-
-  /* Delete the resource and get all resources. */
-
-  if (gvm_connection_sendf (connection,
-                            "<modify_tag tag_id=\"%s\">"
-                            "<active>%s</active>"
-                            "</modify_tag>",
-                            tag_id, enable)
-      == -1)
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while modifying a tag. "
-        "The tag is not modified. "
-        "Diagnostics: Failure to send command to"
-        " manager daemon.",
-        response_data);
-    }
-
-  entity = NULL;
-  if (read_entity_c (connection, &entity))
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while modifying a tag. "
-        "It is unclear whether the tag has been modified"
-        " or not. "
-        "Diagnostics: Failure to read response from"
-        " manager daemon.",
-        response_data);
-    }
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Toggle Tag", response_data);
-
-  free_entity (entity);
-
-  return html;
-}
 
 /**
  * @brief Get one target, envelope the result.
@@ -10538,7 +10216,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (create_credential)
   ELSE (create_host)
   ELSE (create_task)
-  ELSE (create_tag)
   ELSE (create_target)
   ELSE (create_tls_certificate)
   ELSE (create_user)
@@ -10549,7 +10226,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_from_trash)
   ELSE (delete_report)
   ELSE (delete_schedule)
-  ELSE (delete_tag)
   ELSE (delete_target)
   ELSE (delete_task)
   ELSE (delete_tls_certificate)
@@ -10564,7 +10240,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (save_config_nvt)
   ELSE (save_credential)
   ELSE (save_license)
-  ELSE (save_tag)
   ELSE (save_target)
   ELSE (save_task)
   ELSE (save_tls_certificate)
@@ -10575,7 +10250,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (sync_scap)
   ELSE (sync_cert)
   ELSE (test_alert)
-  ELSE (toggle_tag)
   ELSE (verify_scanner)
   else
   {

@@ -12,6 +12,8 @@ const MANAGE_TAGS: &str = include_str!("../../../components/gvmd/src/manage_tags
 const YAFVS_CONTROL: &str = include_str!("../../../components/gvmd/src/yafvs_control.c");
 const TAG_WRITES: &str = include_str!("tag_writes.rs");
 const GSA_TAGS: &str = include_str!("../../../components/gsa/src/gmp/native-api/tags.ts");
+const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GSA_TAG_SELECTION: &str =
     include_str!("../../../components/gsa/src/gmp/native-api/tag-resource-selection.ts");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
@@ -97,6 +99,27 @@ fn tag_creation_has_no_transitional_filter_control_path() {
         .0;
     assert!(!gsa_create.contains("resource_filter"));
     assert!(!GSA_TAGS.contains("resource_filter"));
+}
+
+#[test]
+fn obsolete_gsad_tag_mutation_commands_stay_removed() {
+    for function in [
+        "create_tag_gmp",
+        "delete_tag_gmp",
+        "save_tag_gmp",
+        "toggle_tag_gmp",
+    ] {
+        assert!(
+            !GSAD_GMP.contains(function),
+            "obsolete GSAD function remains: {function}"
+        );
+    }
+    for command in ["create_tag", "delete_tag", "save_tag", "toggle_tag"] {
+        assert!(
+            !GSAD_VALIDATOR.contains(&format!("|({command})")),
+            "obsolete GSAD validator command remains: {command}"
+        );
+    }
 }
 
 fn openapi_path_block(path: &str) -> String {

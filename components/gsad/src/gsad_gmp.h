@@ -187,26 +187,14 @@ export_schedules_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                       gsad_command_response_data_t *);
 
 char *
-create_tag_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                gsad_command_response_data_t *);
-char *
 create_tags_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                  gsad_command_response_data_t *);
-char *
-delete_tag_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                gsad_command_response_data_t *);
 char *
 get_tag_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
              gsad_command_response_data_t *);
 char *
 get_tags_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
               gsad_command_response_data_t *);
-char *
-save_tag_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-              gsad_command_response_data_t *);
-char *
-toggle_tag_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                gsad_command_response_data_t *);
 
 char *
 get_target_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,

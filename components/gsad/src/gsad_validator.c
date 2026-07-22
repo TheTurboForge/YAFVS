@@ -27,7 +27,6 @@ gsad_init_validator ()
                      "|(create_asset)"
                      "|(create_credential)"
                      "|(create_host)"
-                     "|(create_tag)"
                      "|(create_tags)"
                      "|(create_target)"
                      "|(create_task)"
@@ -40,7 +39,6 @@ gsad_init_validator ()
                      "|(delete_from_trash)"
                      "|(delete_report)"
                      "|(delete_schedule)"
-                     "|(delete_tag)"
                      "|(delete_target)"
                      "|(delete_task)"
                      "|(delete_tls_certificate)"
@@ -149,7 +147,6 @@ gsad_init_validator ()
                      "|(save_credential)"
                      "|(save_license)"
                      "|(save_my_settings)"
-                     "|(save_tag)"
                      "|(save_target)"
                      "|(save_task)"
                      "|(save_tls_certificate)"
@@ -160,7 +157,6 @@ gsad_init_validator ()
                      "|(sync_scap)"
                      "|(sync_cert)"
                      "|(sync_config)"
-                     "|(toggle_tag)"
                      "|(verify_scanner)"
                      "|(wizard_get))$");
 

@@ -274,15 +274,6 @@ sync_cert_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
 
 
 char *
-export_user_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                 gsad_command_response_data_t *);
-char *
-export_users_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                  gsad_command_response_data_t *);
-char *
-get_user_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-              gsad_command_response_data_t *);
-char *
 bulk_delete_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                  gsad_command_response_data_t *);
 char *

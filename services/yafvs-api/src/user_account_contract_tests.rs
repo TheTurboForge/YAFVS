@@ -11,6 +11,9 @@ use crate::{
 
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 const GSA_USER_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/user.ts");
+const GSA_USERS_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/users.ts");
+const GSA_USER_NATIVE_API: &str =
+    include_str!("../../../components/gsa/src/gmp/native-api/users.ts");
 const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_NATIVE_API: &str = include_str!("../../../components/gsad/src/gsad_native_api.c");
@@ -45,6 +48,12 @@ fn openapi_path_block(path: &str) -> String {
             }
         })
         .unwrap_or_else(|| tail.to_string())
+}
+
+fn contains_source_identifier(source: &str, identifier: &str) -> bool {
+    source
+        .split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+        .any(|token| token == identifier)
 }
 
 #[test]
@@ -125,7 +134,17 @@ fn legacy_user_lifecycle_is_native_only_not_public_gmp_transport() {
 
 #[test]
 fn user_inventory_is_native_and_legacy_user_inventory_transports_are_absent() {
-    assert!(GSA_USER_COMMAND.contains("gmp/native-api/users"));
+    for helper in ["fetchUserManagementUser", "exportNativeUserMetadata"] {
+        assert!(GSA_USER_COMMAND.contains(helper));
+    }
+    for helper in ["fetchUserManagementUsers", "exportNativeUsersMetadata"] {
+        assert!(GSA_USERS_COMMAND.contains(helper));
+    }
+    assert!(GSA_USER_NATIVE_API.contains("'api/v1/user-management/users'"));
+    assert!(GSA_USER_NATIVE_API.contains("api/v1/user-management/users/${encodeURIComponent(id)}"));
+    assert!(GSA_USER_NATIVE_API.contains("api/v1/users/${encodeURIComponent(id)}"));
+    assert!(OPENAPI.contains("  /users:"));
+    assert!(OPENAPI.contains("  /users/{user_id}:"));
     for source in [GSAD_GMP, GSAD_GMP_HEADER, GSAD_VALIDATOR, GVMD, GVMD_GMP] {
         assert!(!source.contains("get_users_gmp"));
         assert!(!source.contains("GET_USERS"));
@@ -141,6 +160,18 @@ fn user_inventory_is_native_and_legacy_user_inventory_transports_are_absent() {
         assert!(!source.contains("--get-users"));
     }
     assert!(GVMD_SQL_USERS.contains("\"get_users\""));
+
+    for (alias, handler) in [
+        ("get_user", "get_user_gmp"),
+        ("export_user", "export_user_gmp"),
+        ("export_users", "export_users_gmp"),
+    ] {
+        assert!(!contains_source_identifier(GSAD_GMP, alias));
+        assert!(!contains_source_identifier(GSAD_GMP, handler));
+        assert!(!contains_source_identifier(GSAD_GMP_HEADER, handler));
+        assert!(!GSAD_GMP.contains(&format!("ELSE ({alias})")));
+        assert!(!GSAD_VALIDATOR.contains(&format!("|({alias})")));
+    }
 }
 
 #[test]

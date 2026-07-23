@@ -185,10 +185,6 @@ static char *
 get_schedule (gvm_connection_t *, gsad_credentials_t *, params_t *,
               const char *, gsad_command_response_data_t *);
 
-static char *
-get_user (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
-          gsad_command_response_data_t *);
-
 static int
 gmp_success (entity_t entity);
 
@@ -6212,79 +6208,6 @@ export_schedules_gmp (gvm_connection_t *connection,
 /* Users. */
 
 /**
- * @brief Get one user, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[in]  extra_xml      Extra XML to insert inside page element.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_user (gvm_connection_t *connection, gsad_credentials_t *credentials,
-          params_t *params, const char *extra_xml,
-          gsad_command_response_data_t *response_data)
-{
-  return get_one (connection, "user", credentials, params, extra_xml, NULL,
-                  response_data);
-}
-
-/**
- * @brief Get one user, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_user_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-              params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_user (connection, credentials, params, NULL, response_data);
-}
-
-/**
- * @brief Export a user.
- *
- * @param[in]   connection           Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Note XML on success.  Enveloped XML on error.
- */
-char *
-export_user_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                 params_t *params, gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "user", credentials, params,
-                          response_data);
-}
-
-/**
- * @brief Export a list of users.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Users XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_users_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                  params_t *params, gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "user", credentials, params, response_data);
-}
-
-/**
  * @brief Get all user defined settings
  *
  * @param[in]  connection     Connection to manager.
@@ -7767,8 +7690,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (export_targets)
   ELSE (export_task)
   ELSE (export_tasks)
-  ELSE (export_user)
-  ELSE (export_users)
   ELSE (get_asset)
   ELSE (get_assets)
   ELSE (get_aggregate)
@@ -7797,7 +7718,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_targets)
   ELSE (get_task)
   ELSE (get_tasks)
-  ELSE (get_user)
   else if (!strcmp (cmd, "download_ssl_cert"))
   {
     gsad_command_response_data_set_content_type (response_data,

@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
 // SPDX-License-Identifier: GPL-3.0-or-later
+// YAFVS-Derivation: original
 
 //! Exact compatibility contract for the currently supported gvmd public schema.
 //!

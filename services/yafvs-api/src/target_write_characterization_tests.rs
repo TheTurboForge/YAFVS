@@ -96,6 +96,8 @@ fn target_reads_exports_and_acl_are_native_only_without_retiring_target_control(
         "CLIENT_GET_TARGETS",
         "handle_get_targets",
         "strcasecmp (\"GET_TARGETS\"",
+        "send_alive_tests_str",
+        "send_alive_tests_subelems",
     ] {
         assert!(!GMP_C.contains(retired), "gvmd still contains {retired}");
     }

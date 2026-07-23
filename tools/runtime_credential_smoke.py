@@ -97,8 +97,24 @@ async function login(page) {
   await screenshot(page, 'login-after-submit');
 }
 
+async function gotoStable(page, route) {
+  await page.goto(new URL(route, config.baseUrl).toString(), {
+    waitUntil: 'domcontentloaded',
+    timeout: config.timeoutMs,
+  });
+  await page
+    .waitForLoadState('networkidle', {
+      timeout: Math.min(config.timeoutMs, 5000),
+    })
+    .catch(() => null);
+  await page.locator('body').waitFor({
+    state: 'visible',
+    timeout: config.timeoutMs,
+  });
+}
+
 async function createCredential(page) {
-  await page.goto(new URL('/credentials', config.baseUrl).toString(), {waitUntil: 'networkidle', timeout: config.timeoutMs});
+  await gotoStable(page, '/credentials');
   await screenshot(page, `credentials-before-create-${config.urlIndex}`);
   const newClicked = await clickFirst(page, [
     page.getByTitle('New Credential').first(),
@@ -126,7 +142,7 @@ async function createCredential(page) {
 }
 
 async function deleteCredential(page) {
-  await page.goto(new URL('/credentials', config.baseUrl).toString(), {waitUntil: 'networkidle', timeout: config.timeoutMs});
+  await gotoStable(page, '/credentials');
   const row = await credentialRow(page);
   if (!(await row.count())) {
     add('warn', 'credential-smoke.cleanup', 'Temporary credential row was not visible during cleanup; it may not have been created.');

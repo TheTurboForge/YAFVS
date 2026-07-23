@@ -8367,6 +8367,22 @@ class YAFVSCtlTests(unittest.TestCase):
             runtime_credential_smoke.playwright_node_path_candidates,
             runtime_browser_smoke.playwright_node_path_candidates,
         )
+        self.assertIn(
+            "async function gotoStable(page, route)",
+            runtime_credential_smoke.BROWSER_SCRIPT,
+        )
+        self.assertIn(
+            "waitUntil: 'domcontentloaded'",
+            runtime_credential_smoke.BROWSER_SCRIPT,
+        )
+        self.assertIn(
+            "Math.min(config.timeoutMs, 5000)",
+            runtime_credential_smoke.BROWSER_SCRIPT,
+        )
+        self.assertNotIn(
+            "waitUntil: 'networkidle'",
+            runtime_credential_smoke.BROWSER_SCRIPT,
+        )
 
     def test_runtime_credential_smoke_uses_environment_password_and_redacts_artifact(self):
         with tempfile.TemporaryDirectory() as tmp:

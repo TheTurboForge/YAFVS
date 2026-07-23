@@ -6,7 +6,6 @@
 
 #include "manage_sql_settings.h"
 #include "manage_acl.h"
-#include "manage_runtime_flags.h"
 #include "manage_sql_configs.h"
 #include "manage_sql_port_lists.h"
 #include "manage_sql_report_formats.h"
@@ -432,7 +431,6 @@ modify_setting (const gchar *uuid, const gchar *name,
     }
 
   if (uuid && (strcmp (uuid, SETTING_UUID_AUTO_CACHE_REBUILD) == 0
-               || strcmp (uuid, SETTING_UUID_SECURITY_INTELLIGENCE_EXPORT) == 0
                || strcmp (uuid, SETTING_UUID_AUTO_REFRESH) == 0
                || strcmp (uuid, SETTING_UUID_DEFAULT_SEVERITY) == 0
                || strcmp (uuid, SETTING_UUID_DYNAMIC_SEVERITY) == 0
@@ -564,27 +562,6 @@ modify_setting (const gchar *uuid, const gchar *name,
         {
           int value_int;
           /* Auto Cache Rebuild */
-          if (sscanf (value, "%d", &value_int) != 1
-              || (strcmp (value, "0") && strcmp (value, "1")))
-            {
-              g_free (value);
-              return MODIFY_SETTING_RESULT_SYNTAX_ERROR;
-            }
-        }
-
-      if (strcmp (uuid, SETTING_UUID_SECURITY_INTELLIGENCE_EXPORT) == 0)
-        {
-          if (!feature_enabled (FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT))
-            {
-              g_free (value);
-
-              g_warning("Export Reports to OPENVAS SECURITY INTELLIGENCE Feature"
-                        "is disabled");
-              return MODIFY_SETTING_RESULT_FEATURE_DISABLED;
-            }
-
-          int value_int;
-          /* Export Reports SECURITY INTELLIGENCE */
           if (sscanf (value, "%d", &value_int) != 1
               || (strcmp (value, "0") && strcmp (value, "1")))
             {
@@ -1008,9 +985,8 @@ setting_verify (const gchar *uuid, const gchar *value, const gchar *user)
         return 1;
     }
 
-  if ((strcmp (uuid, SETTING_UUID_FEED_IMPORT_OWNER) == 0
-     || (strcmp (uuid, SETTING_UUID_INTEGRATION_CONFIG_OWNER) == 0 ))
-    && strlen (value))
+  if (strcmp (uuid, SETTING_UUID_FEED_IMPORT_OWNER) == 0
+      && strlen (value))
     {
       user_t value_user;
       gchar *quoted_uuid;
@@ -1074,9 +1050,6 @@ setting_description (const gchar *uuid)
            " in SecInfo updates before the end of the file being processed.";
   if (strcmp (uuid, SETTING_UUID_CVE_CPE_MATCHING_VERSION) == 0)
     return "Version of the CVE-CPE matching used in CVE scans.";
-  if (strcmp (uuid, SETTING_UUID_INTEGRATION_CONFIG_OWNER) == 0)
-    return "User who is given ownership of integration configs.";
-
   return NULL;
 }
 
@@ -1102,9 +1075,6 @@ setting_name (const gchar *uuid)
     return "SecInfo SQL Buffer Threshold";
   if (strcmp (uuid, SETTING_UUID_CVE_CPE_MATCHING_VERSION) == 0)
     return "CVE-CPE Matching Version";
-  if (strcmp (uuid, SETTING_UUID_INTEGRATION_CONFIG_OWNER) == 0)
-    return "Integration Configs Owner";
-
   return NULL;
 }
 
@@ -1135,8 +1105,7 @@ manage_modify_setting (GSList *log_config, const db_conn_info_t *database,
       && strcmp (uuid, SETTING_UUID_LSC_DEB_MAINTAINER)
       && strcmp (uuid, SETTING_UUID_FEED_IMPORT_OWNER)
       && strcmp (uuid, SETTING_UUID_SECINFO_SQL_BUFFER_THRESHOLD)
-      && strcmp (uuid, SETTING_UUID_CVE_CPE_MATCHING_VERSION)
-      && strcmp (uuid, SETTING_UUID_INTEGRATION_CONFIG_OWNER))
+      && strcmp (uuid, SETTING_UUID_CVE_CPE_MATCHING_VERSION))
     {
       fprintf (stderr, "Error in setting UUID.\n");
       return 3;
@@ -1164,8 +1133,7 @@ manage_modify_setting (GSList *log_config, const db_conn_info_t *database,
       if ((strcmp (uuid, SETTING_UUID_DEFAULT_CA_CERT) == 0)
           || (strcmp (uuid, SETTING_UUID_FEED_IMPORT_OWNER) == 0)
           || (strcmp (uuid, SETTING_UUID_SECINFO_SQL_BUFFER_THRESHOLD) == 0)
-          || (strcmp (uuid, SETTING_UUID_CVE_CPE_MATCHING_VERSION) == 0)
-          || (strcmp (uuid, SETTING_UUID_INTEGRATION_CONFIG_OWNER) == 0))
+          || (strcmp (uuid, SETTING_UUID_CVE_CPE_MATCHING_VERSION) == 0))
         {
           sql_rollback ();
           fprintf (stderr,
@@ -1249,11 +1217,6 @@ manage_modify_setting (GSList *log_config, const db_conn_info_t *database,
                   manage_option_cleanup ();
                   return -1;
                 }
-            }
-
-          if (strcmp (uuid, SETTING_UUID_INTEGRATION_CONFIG_OWNER) == 0)
-            {
-              check_db_integration_configs ();
             }
         }
     }

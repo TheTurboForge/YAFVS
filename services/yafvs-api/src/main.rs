@@ -204,6 +204,8 @@ mod scope_write_sql;
 mod scope_write_transactions;
 mod scope_write_validation;
 mod scope_writes;
+#[cfg(test)]
+mod security_intelligence_export_characterization_tests;
 mod ssh_host_key_pins;
 mod startup;
 #[cfg(test)]

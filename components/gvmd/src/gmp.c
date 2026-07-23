@@ -75,7 +75,6 @@
 #include "gmp_base.h"
 #include "gmp_get.h"
 #include "gmp_configs.h"
-#include "gmp_integration_configs.h"
 #include "gmp_logout.h"
 #include "manage.h"
 #include "manage_acl.h"
@@ -2266,7 +2265,6 @@ typedef enum
   CLIENT_GET_CONFIGS,
   CLIENT_GET_CREDENTIALS,
   CLIENT_GET_INFO,
-  CLIENT_GET_INTEGRATION_CONFIGS,
   CLIENT_GET_NVTS,
   CLIENT_GET_OVERRIDES,
   CLIENT_GET_PORT_LISTS,
@@ -2307,7 +2305,6 @@ typedef enum
   CLIENT_MODIFY_CREDENTIAL_PRIVACY_ALGORITHM,
   CLIENT_MODIFY_CREDENTIAL_PRIVACY_PASSWORD,
   CLIENT_MODIFY_CREDENTIAL_REALM,
-  CLIENT_MODIFY_INTEGRATION_CONFIG,
   CLIENT_MODIFY_SETTING,
   CLIENT_MODIFY_SETTING_NAME,
   CLIENT_MODIFY_SETTING_VALUE,
@@ -2842,8 +2839,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &get_credentials_data->format);
             set_client_state (CLIENT_GET_CREDENTIALS);
           }
-        ELSE_GET_START (integration_configs, INTEGRATION_CONFIGS)
-
         else if (strcasecmp ("GET_NVTS", element_name) == 0)
           {
             const gchar* attribute;
@@ -3187,14 +3182,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               "credential_id",
                               &modify_credential_data->credential_id);
             set_client_state (CLIENT_MODIFY_CREDENTIAL);
-          }
-        else if (strcasecmp ("MODIFY_INTEGRATION_CONFIG", element_name)
-                 == 0)
-          {
-            modify_integration_config_start (gmp_parser,
-                                             attribute_names,
-                                             attribute_values);
-            set_client_state (CLIENT_MODIFY_INTEGRATION_CONFIG);
           }
         else if (strcasecmp ("MODIFY_SETTING", element_name) == 0)
           {
@@ -12391,8 +12378,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         handle_get_info (gmp_parser, error);
         break;
 
-      CASE_GET_END (INTEGRATION_CONFIGS, integration_configs);
-
       case CLIENT_GET_NVTS:
         handle_get_nvts (gmp_parser, error);
         break;
@@ -14100,11 +14085,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
 
 
-    case CLIENT_MODIFY_INTEGRATION_CONFIG:
-      if (modify_integration_config_element_end (gmp_parser, error, element_name))
-        set_client_state (CLIENT_AUTHENTIC);
-      break;
-
       case CLIENT_MODIFY_SETTING:
         {
           gchar *errdesc = NULL;
@@ -15645,10 +15625,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
 
 
-
-      case CLIENT_MODIFY_INTEGRATION_CONFIG:
-        modify_integration_config_element_text (text, text_len);
-        break;
 
 
 

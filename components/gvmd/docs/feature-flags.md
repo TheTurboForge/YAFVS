@@ -22,7 +22,6 @@ Inside this file, feature flags appear under the `[features]` section.
 [features]
 enable_openvasd = false
 enable_vt_metadata = false
-enable_security_intelligence_export = false
 enable_jwt_auth = false
 ```
 
@@ -37,7 +36,6 @@ If a line is missing, gvmd does not apply a value from the config file.
 |-------------------------------------|-----------------------------------------------------------|---------------------------------------------|-------------------------------------------|
 | OpenVASd Integration                | `ENABLE_OPENVASD`                                         | `GVMD_ENABLE_OPENVASD`                      | `enable_openvasd`                         |
 | VT Metadata Feed                    | Always exists in binary                                   | `GVMD_ENABLE_VT_METADATA`                   | `enable_vt_metadata`                      |
-| Security Intelligence Report Export | Always exists in binary                                   | `GVMD_ENABLE_SECURITY_INTELLIGENCE_EXPORT`  | `enable_security_intelligence_export`     |
 | JSON web token authentication       | `ENABLE_JWT_AUTH`                                         | `GVMD_ENABLE_JWT_AUTH`                      | `enable_jwt_auth`                         |
 ---
 
@@ -65,16 +63,3 @@ Order of priority:
 4. **Default** feature becomes disabled.
 
 **NOTE**: After changing the config file or environment variables, restart **gvmd** to apply the changes.
-
-## Disabled Commands
-
-When a feature is disabled, gvmd automatically removes related commands from the protocol.
-
-### Security intelligence export disabled - these commands are hidden
-
-```
-get_integration_configs
-modify_integration_config
-```
-
----

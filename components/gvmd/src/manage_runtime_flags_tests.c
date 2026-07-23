@@ -57,8 +57,6 @@ Ensure (manage_runtime_flags, default_flags_no_config_no_env)
 
   assert_that (feature_compiled_in (FEATURE_ID_VT_METADATA), is_equal_to (1));
   assert_that (feature_enabled (FEATURE_ID_VT_METADATA), is_equal_to (0));
-  assert_that (feature_compiled_in (FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT), is_equal_to (1));
-  assert_that (feature_enabled (FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT), is_equal_to (0));
 }
 
 int

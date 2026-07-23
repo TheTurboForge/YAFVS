@@ -22,7 +22,7 @@ use time::OffsetDateTime;
 use time::format_description;
 
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(60);
-const EXPECTED_ARTIFACT_COUNT: usize = 20;
+const EXPECTED_ARTIFACT_COUNT: usize = 19;
 const RETAINED_ARTIFACTS: usize = 30;
 const COMPONENTS: [&str; 6] = [
     "gvm-libs",
@@ -32,20 +32,23 @@ const COMPONENTS: [&str; 6] = [
     "gvmd",
     "gsad",
 ];
-const RETIRED_PREFIX_ARTIFACTS: [&str; 6] = [
+const RETIRED_PREFIX_ARTIFACTS: [&str; 9] = [
     "include/gvm/agent_controller",
     "include/gvm/container_image_scanner",
+    "include/gvm/security_intelligence",
     "lib/libgvm_agent_controller.so*",
     "lib/libgvm_container_image_scanner.so*",
+    "lib/libgvm_security_intelligence.so*",
     "lib/pkgconfig/libgvm_agent_controller.pc",
     "lib/pkgconfig/libgvm_container_image_scanner.pc",
+    "lib/pkgconfig/libgvm_security_intelligence.pc",
 ];
 const HARDENED_CONFIGURATION: &str = "build/hardened/hardening-configuration.json";
 const HARDENED_CMAKE_INJECTION: &str = "build/hardened/yafvs-hardening.cmake";
 const HARDENED_BUILD_MANIFEST: &str = "build/hardened/hardening-manifest.json";
 static NEXT_MANIFEST_TEMP: AtomicU64 = AtomicU64::new(0);
 
-const GVM_LIBS: [&str; 9] = [
+const GVM_LIBS: [&str; 8] = [
     "build/gvm-libs/base/libgvm_base.so.*",
     "build/gvm-libs/boreas/libgvm_boreas.so.*",
     "build/gvm-libs/gmp/libgvm_gmp.so.*",
@@ -53,7 +56,6 @@ const GVM_LIBS: [&str; 9] = [
     "build/gvm-libs/http_scanner/libgvm_http_scanner.so.*",
     "build/gvm-libs/openvasd/libgvm_openvasd.so.*",
     "build/gvm-libs/osp/libgvm_osp.so.*",
-    "build/gvm-libs/security_intelligence/libgvm_security_intelligence.so.*",
     "build/gvm-libs/util/libgvm_util.so.*",
 ];
 const OPENVAS_SMB: [&str; 2] = [
@@ -1696,7 +1698,7 @@ mod tests {
                 .iter()
                 .map(|(_, patterns)| patterns.len())
                 .sum::<usize>(),
-            20
+            EXPECTED_ARTIFACT_COUNT
         );
         assert!(
             artifact_spec_matches(Path::new("/not-present"), Some("hardened"))

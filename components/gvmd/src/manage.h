@@ -20,7 +20,6 @@
 #include "manage_configs.h"
 #include "manage_events.h"
 #include "manage_get.h"
-#include "manage_integration_configs.h"
 #include "manage_report_applications.h"
 #include "manage_report_cves.h"
 #include "manage_report_vulns.h"
@@ -2029,11 +2028,6 @@ slave_relay_connection (gvm_connection_t *, gvm_connection_t *);
  * @brief Seconds between calls to manage_queued_task_actions.
  */
 #define QUEUE_PERIOD 5
-
-/**
- * @brief Seconds between calls to fork_report_export
- */
-#define REPORT_EXPORT_PERIOD 600 /* every 10 minutes */
 
 /**
  * @brief Minimum schedule timeout seconds.

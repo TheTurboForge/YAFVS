@@ -204,13 +204,13 @@ notes = "Retain bounded native report views and exports; classify or delete inhe
 
 [[responsibilities]]
 id = "report-export-scheduler"
-target_owner = "manager-worker"
-status = "inventoried"
+target_owner = "delete"
+status = "retired"
 weight = 3
-evidence = ["components/gvmd/src/manage_report_export_scheduler.c::manage_report_export_scheduler"]
-independent_authority = ["components/gvmd/src/manage_report_export_scheduler.c::reset_stale_report_exports"]
-dependencies = ["report-finalization-projections", "alert-event-delivery"]
-notes = "Move due export processing, retry state, and recovery only if retained product behavior needs it."
+evidence = ["services/yafvs-api/src/security_intelligence_export_characterization_tests.rs::security_intelligence_export_surface_is_retired"]
+independent_authority = ["services/yafvs-api/src/security_intelligence_export_characterization_tests.rs::ordinary_scan_finalization_remains_without_export_queueing"]
+dependencies = []
+notes = "The hidden Security Intelligence Export stored secret-bearing configuration and queued retries, but its outbound export implementation was a failing stub. YAFVS deletes the UI, GMP commands, manager modules, queue hooks, scheduler, runtime flag, schema, and orphaned gvm-libs client instead of retaining or replacing it."
 
 [[responsibilities]]
 id = "alert-event-delivery"

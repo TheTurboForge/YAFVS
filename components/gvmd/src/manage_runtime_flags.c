@@ -48,12 +48,6 @@ static feature_state_t feature_vt_metadata =
 /**
  * @brief State of a single feature.
  */
-static feature_state_t feature_security_intelligence_export =
-  {1, 0};
-
-/**
- * @brief State of a single feature.
- */
 static feature_state_t feature_jwt_auth =
   {ENABLE_JWT_AUTH, 0};
 
@@ -67,9 +61,6 @@ struct conf_feature_flags
 
   int has_vt_metadata;         ///< Whether flag is present.
   int vt_metadata;             ///< Value of flag.
-
-  int has_security_intelligence_export;         ///< Whether flag is present.
-  int security_intelligence_export;             ///< Value of flag.
 
   int has_jwt_auth;           ///< Whether flag is present.
   int jwt_auth;               ///< Value of flag.
@@ -85,7 +76,6 @@ conf_file_feature_flags_init_empty (struct conf_feature_flags *t)
 {
   memset (t, 0, sizeof (*t));
 }
-
 /**
  * @brief Load all feature flags from a gvmd configuration file.
  *
@@ -116,10 +106,6 @@ load_conf_file_feature_flags (struct conf_feature_flags *out)
   gvmd_config_get_boolean (kf, "features", "enable_vt_metadata",
                            &out->has_vt_metadata,
                            &out->vt_metadata);
-
-  gvmd_config_get_boolean (kf, "features", "enable_security_intelligence_export",
-                           &out->has_security_intelligence_export,
-                           &out->security_intelligence_export);
 
   gvmd_config_get_boolean (kf, "features", "enable_jwt_auth",
                            &out->has_jwt_auth,
@@ -162,24 +148,6 @@ resolve_feature (feature_state_t *feature,
 }
 
 /**
- * @brief Append a comma-separated command list to a GString.
- *
- * @param[in,out] buf   Output buffer. May be NULL (then nothing is done).
- * @param[in]     cmds  Command list to append (no leading comma).
- */
-static void
-append_commands (GString *buf, const char *cmds)
-{
-  if (!buf)
-    return;
-
-  if (buf->len)
-    g_string_append_c (buf, ',');
-
-  g_string_append (buf, cmds);
-}
-
-/**
  * @brief Initialize runtime feature flags from config file and environment.
  *
  * @return Always 0 (errors are handled internally and fall back to defaults).
@@ -204,11 +172,6 @@ runtime_flags_init ()
                    "GVMD_ENABLE_VT_METADATA",
                    conf_flags.has_vt_metadata,
                    conf_flags.vt_metadata);
-
-  resolve_feature (&feature_security_intelligence_export,
-                   "GVMD_ENABLE_SECURITY_INTELLIGENCE_EXPORT",
-                   conf_flags.has_security_intelligence_export,
-                   conf_flags.security_intelligence_export);
 
   resolve_feature (&feature_jwt_auth,
                    "GVMD_ENABLE_JWT_AUTH",
@@ -238,15 +201,12 @@ feature_enabled (feature_id_t t)
       return feature_openvasd.enabled;
     case FEATURE_ID_VT_METADATA:
       return feature_vt_metadata.enabled;
-    case FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT:
-      return feature_security_intelligence_export.enabled;
     case FEATURE_ID_JWT_AUTH:
       return feature_jwt_auth.enabled;
     default:
       return 0;
     }
 }
-
 /**
  * @brief Check whether a feature is compiled into this binary.
  *
@@ -263,29 +223,9 @@ feature_compiled_in (feature_id_t t)
       return feature_openvasd.compiled_in;
     case FEATURE_ID_VT_METADATA:
       return feature_vt_metadata.compiled_in;
-    case FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT:
-      return feature_security_intelligence_export.compiled_in;
     case FEATURE_ID_JWT_AUTH:
       return feature_jwt_auth.enabled;
     default:
       return 0;
-    }
-}
-
-/**
- * @brief Append commands that must be disabled for inactive features.
- *
- * @param[in,out] buf  Output buffer for disabled commands. Must not be NULL.
- */
-void
-runtime_append_disabled_commands (GString *buf)
-{
-  /* SECURITY_INTELLIGENCE_EXPORT */
-  if (!feature_enabled (FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT))
-    {
-      append_commands (
-        buf,
-        "get_integration_configs,"
-        "modify_integration_config");
     }
 }

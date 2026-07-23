@@ -60,11 +60,6 @@
 #define SETTING_UUID_FEED_IMPORT_OWNER "78eceaec-3385-11ea-b237-28d24461215b"
 
 /**
- * @brief UUID of 'Integration Configs Owner' setting.
- */
-#define SETTING_UUID_INTEGRATION_CONFIG_OWNER "e15e8a57-0285-439b-929a-068880b410b4"
-
-/**
  * @brief UUID of setting.
  */
 #define SETTING_UUID_FILE_DETAILS "a6ac88c5-729c-41ba-ac0a-deea4a3441f2"
@@ -78,11 +73,6 @@
  * @brief UUID of setting.
  */
 #define SETTING_UUID_FILE_REPORT "e1a2ae0b-736e-4484-b029-330c9e15b900"
-
-/**
- * @brief UUID of 'Export Reports to SECURITY INTELLIGENCE' setting.
- */
-#define SETTING_UUID_SECURITY_INTELLIGENCE_EXPORT "8f0602d4-431a-4321-bfd7-cfb7eb0af55f"
 
 /**
  * @brief UUID of 'Debian LSC Package Maintainer' setting.

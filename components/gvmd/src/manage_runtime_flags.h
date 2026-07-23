@@ -30,7 +30,6 @@ typedef enum
 {
   FEATURE_ID_OPENVASD_SCANNER = 0,
   FEATURE_ID_VT_METADATA,
-  FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT,
   FEATURE_ID_JWT_AUTH,
 } feature_id_t;
 
@@ -42,8 +41,5 @@ feature_enabled (feature_id_t);
 
 int
 feature_compiled_in (feature_id_t);
-
-void
-runtime_append_disabled_commands (GString *buf);
 
 #endif // not _GVMD_MANAGE_RUNTIME_FLAGS_H

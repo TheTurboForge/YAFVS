@@ -3530,21 +3530,6 @@ check_db_settings ()
          "  'Whether to rebuild report caches on changes affecting severity.',"
          "  '1');");
 
-  if (feature_enabled (FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT))
-    {
-      if (sql_int ("SELECT count(*) FROM settings"
-                   " WHERE uuid = '" SETTING_UUID_SECURITY_INTELLIGENCE_EXPORT "'"
-                   " AND " ACL_IS_GLOBAL () ";")
-          == 0)
-        sql ("INSERT into settings (uuid, owner, name, comment, value)"
-             " VALUES"
-             " ('" SETTING_UUID_SECURITY_INTELLIGENCE_EXPORT "', NULL,"
-             "  'SECURITY INTELLIGENCE Export',"
-             "  'Whether to automatically export scan reports to "
-             "OPENVAS SECURITY INTELLIGENCE.',"
-             "  '0');");
-    }
-
   if (sql_int ("SELECT count(*) FROM settings"
                " WHERE uuid = '9246a0f6-c6ad-44bc-86c2-557a527c8fb3'"
                " AND " ACL_IS_GLOBAL () ";")
@@ -3889,7 +3874,6 @@ check_db (int check_encryption_key, int avoid_db_check_inserts)
     {
       check_db_permissions ();
       check_db_settings ();
-      check_db_integration_configs ();
     }
   cleanup_schedule_times ();
   if (check_encryption_key && check_db_encryption_key ())

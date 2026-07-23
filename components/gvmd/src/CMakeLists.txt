@@ -143,7 +143,6 @@ set(
   manage_commands.c
   manage_get.c
   manage_http_scanner.c
-  manage_integration_configs.c
   manage_openvas.c
   manage_openvasd.c
   manage_osp.c
@@ -175,7 +174,6 @@ set(
   manage_schedules.c
   manage_targets.c
   manage_users.c
-  manage_report_export_scheduler.c
 )
 
 set(
@@ -186,7 +184,6 @@ set(
   manage_sql_assets.c
   manage_sql_events.c
   manage_sql_filters.c
-  manage_sql_integration_configs.c
   manage_sql_nvts.c
   manage_sql_secinfo.c
   manage_sql_overrides.c
@@ -215,7 +212,6 @@ set(
   manage_sql_nvts_openvasd.c
   manage_sql_nvts_common.c
   manage_sql_scan_queue.c
-  manage_sql_report_exports.c
 )
 
 set(
@@ -224,7 +220,6 @@ set(
   gmp_base.c
   gmp_configs.c
   gmp_get.c
-  gmp_integration_configs.c
   gmp_logout.c
   gmp_report_formats.c
 )

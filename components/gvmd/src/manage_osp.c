@@ -13,8 +13,6 @@
 
 #include "ipc.h"
 #include "manage_assets.h"
-#include "manage_report_exports.h"
-#include "manage_runtime_flags.h"
 #include "manage_scan_queue.h"
 #include "manage_sql.h"
 #include "manage_sql_nvts.h"
@@ -1366,10 +1364,6 @@ handle_osp_scan_end (task_t task, int handle_progress_rc, gboolean discovery)
       asset_snapshots_target (global_current_report, task, discovery);
       set_task_run_status (task, TASK_STATUS_DONE);
       set_report_scan_run_status (global_current_report, TASK_STATUS_DONE);
-      if (feature_enabled (FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT))
-        {
-          queue_report_for_export (global_current_report);
-        }
     }
   else if (already_finalized == FALSE
            && (handle_progress_rc == -1 || handle_progress_rc == -2))

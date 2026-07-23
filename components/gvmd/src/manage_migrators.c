@@ -251,6 +251,50 @@ migrate_286_to_287 ()
 }
 
 /**
+ * @brief Migrate the database from version 287 to version 288.
+ *
+ * Remove the unused Security Intelligence Export configuration and queue
+ * schema. Refuse to discard any legacy configuration, queued export, or
+ * associated setting so an operator must explicitly resolve unexpected state.
+ *
+ * @return 0 success, -1 error.
+ */
+static int
+migrate_287_to_288 ()
+{
+  sql_begin_immediate ();
+
+  if (manage_db_version () != 287)
+    {
+      sql_rollback ();
+      return -1;
+    }
+
+  if (sql_int ("SELECT"
+               " (SELECT count(*) FROM integration_configs)"
+               " + (SELECT count(*) FROM report_exports)"
+               " + (SELECT count(*) FROM settings"
+               "    WHERE uuid IN"
+               "      ('e15e8a57-0285-439b-929a-068880b410b4',"
+               "       '8f0602d4-431a-4321-bfd7-cfb7eb0af55f'));"))
+    {
+      g_warning ("Refusing to remove Security Intelligence Export while"
+                 " legacy configuration, queued exports, or settings exist");
+      sql_rollback ();
+      return -1;
+    }
+
+  sql ("DROP TABLE report_exports;");
+  sql ("DROP TABLE integration_configs;");
+
+  set_db_version (288);
+
+  sql_commit ();
+
+  return 0;
+}
+
+/**
  * @brief Migrate the database from version 205 to version 206.
  *
  * @return 0 success, -1 error.
@@ -5030,6 +5074,7 @@ static migrator_t database_migrators[] = {
   {285, migrate_284_to_285},
   {286, migrate_285_to_286},
   {287, migrate_286_to_287},
+  {288, migrate_287_to_288},
   /* End marker. */
   {-1, NULL}};
 

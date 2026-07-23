@@ -2726,16 +2726,6 @@ create_tables ()
        " (result_nvt INTEGER,"
        "  report INTEGER);");
 
-  sql ("CREATE TABLE IF NOT EXISTS report_exports"
-       " (id SERIAL PRIMARY KEY,"
-       "  report_id integer NOT NULL,"
-       "  status text,"
-       "  reason text,"
-       "  retry_count integer,"
-       "  next_retry_time integer,"
-       "  creation_time integer,"
-       "  modification_time integer);");
-
   sql ("CREATE TABLE IF NOT EXISTS report_formats"
        " (id SERIAL PRIMARY KEY,"
        "  uuid text UNIQUE NOT NULL,"
@@ -2941,20 +2931,6 @@ create_tables ()
        "  resource_uuid text,"
        "  resource_location integer);");
 
-  sql ("CREATE TABLE IF NOT EXISTS integration_configs"
-       " (id SERIAL PRIMARY KEY,"
-       "  uuid text UNIQUE NOT NULL,"
-       "  owner integer REFERENCES users (id) ON DELETE RESTRICT,"
-       "  name text NOT NULL,"
-       "  comment text,"
-       "  service_url text NOT NULL,"
-       "  service_cacert text,"
-       "  oidc_url text NOT NULL,"
-       "  oidc_client_id text NOT NULL,"
-       "  oidc_client_secret text NOT NULL,"
-       "  creation_time integer,"
-       "  modification_time integer);");
-
   /* Create result views. */
 
   /* Create functions, so that current_severity is created for
@@ -3108,16 +3084,6 @@ create_tables ()
   sql ("SELECT create_index ('tls_certificate_origins_by_origin_id_and_type',"
        "                     'tls_certificate_origins',"
        "                     'origin_id, origin_type')");
-
-  sql ("SELECT create_index"
-       "    ('report_exports_by_report_id',"
-       "     'report_exports',"
-       "     'report_id');");
-
-  sql ("SELECT create_index"
-       "    ('report_exports_by_status_retry_count_retry_time',"
-       "     'report_exports',"
-       "     'status, retry_count, next_retry_time');");
 
   /* Previously this included the value column but that can be bigger than 8191,
    * the maximum size that Postgres can handle.  For example, this can happen

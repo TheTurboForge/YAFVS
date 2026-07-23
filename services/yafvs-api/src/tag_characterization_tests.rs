@@ -352,8 +352,8 @@ fn inherited_tag_schema_has_live_trash_and_resource_tables() {
         .split_once("CREATE TABLE IF NOT EXISTS tag_resources_trash")
         .expect("tag_resources_trash table definition must exist")
         .1
-        .split_once("CREATE TABLE IF NOT EXISTS integration_configs")
-        .expect("integration_configs must follow tag_resources_trash")
+        .split_once("/* Create result views. */")
+        .expect("result views must follow tag_resources_trash")
         .0;
     for column in [
         "tag integer REFERENCES tags_trash (id)",

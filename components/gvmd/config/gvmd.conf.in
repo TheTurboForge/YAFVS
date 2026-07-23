@@ -11,12 +11,4 @@ jwt_encode_secret_path = @GVMD_STATE_DIR@/jwt/ecdsa-private.pem
 [features]
 enable_openvasd = false
 enable_vt_metadata = false
-enable_security_intelligence_export = false
 enable_jwt_auth = false
-
-[security_intelligence_export]
-max_retries = 10
-retry_base_delay = 10
-retry_multiplier = 2
-retry_max_delay = 600
-stale_threshold = 720

@@ -189,8 +189,12 @@ function forwardedAuthHeaders(headers) {
   return forwarded;
 }
 
-async function captureDownloadRequest(page, action, format) {
-  const pattern = '**/gmp?*';
+async function captureDownloadRequest(page, action, format, credentialId) {
+  if (format !== 'key') {
+    throw new Error(`Unsupported credential download capture format: ${format}`);
+  }
+  const expectedPath = `/api/v1/credentials/${encodeURIComponent(credentialId)}/public-key`;
+  const pattern = '**/api/v1/credentials/*/public-key?*';
   let timer;
   let resolveCapture;
   let rejectCapture;
@@ -206,8 +210,7 @@ async function captureDownloadRequest(page, action, format) {
     const request = route.request();
     try {
       const url = new URL(request.url());
-      if (url.searchParams.get('cmd') === 'download_credential'
-          && url.searchParams.get('package_format') === format) {
+      if (request.method() === 'GET' && url.pathname === expectedPath) {
         const headers = await request.allHeaders();
         clearTimeout(timer);
         resolveCapture({url: request.url(), headers});
@@ -566,7 +569,7 @@ async function characterizeDownload(page, fixture, format) {
     add('fail', `credential-smoke.download.${format}.action`, `Could not find ${contract.title}.`);
     return {ok: false};
   }
-  const captured = await captureDownloadRequest(page, action, format);
+  const captured = await captureDownloadRequest(page, action, format, fixture.id);
   const streamed = await boundedAuthenticatedGet(captured.url, captured.headers);
   const {bytes, declaredLength, headers} = streamed;
   const contentType = (headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
@@ -574,7 +577,7 @@ async function characterizeDownload(page, fixture, format) {
   const disposition = headers['content-disposition'] || '';
   const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
   const filename = filenameMatch ? path.basename(filenameMatch[1]) : '';
-  const expectedFilename = `credential-${config.credentialLogin}.${contract.extension}`;
+  const expectedFilename = `credential-${fixture.id}.${contract.extension}`;
   const statusOk = streamed.status === 200;
   const contentTypeOk = contentType === contract.contentType;
   const filenameOk = filename === expectedFilename;
@@ -604,26 +607,35 @@ async function characterizeDownload(page, fixture, format) {
 
 async function characterizeMissingCredential(requestUrl, requestHeaders) {
   const url = new URL(requestUrl);
-  url.searchParams.set('credential_id', '00000000-0000-0000-0000-000000000000');
+  url.pathname = '/api/v1/credentials/00000000-0000-0000-0000-000000000000/public-key';
   const streamed = await boundedAuthenticatedGet(url.toString(), requestHeaders);
   const {bytes, declaredLength, headers} = streamed;
   const contentType = (headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
   const contentEncoding = (headers['content-encoding'] || 'identity').trim().toLowerCase();
+  let errorCode = '';
+  try {
+    errorCode = JSON.parse(bytes.toString('utf8')).error?.code || '';
+  } catch {
+    // A malformed error response fails the exact contract below.
+  }
   const containsSecret = [loginPassword, credentialPassword]
     .filter(Boolean)
     .some(secret => bytes.includes(Buffer.from(secret, 'utf8')));
-  const ok = streamed.status === 500
-    && contentType === 'application/xml'
+  const ok = streamed.status === 404
+    && contentType === 'application/json'
     && contentEncoding === 'identity'
     && bytes.length === declaredLength
-    && bytes.length === 431
+    && bytes.length > 0
+    && bytes.length <= 1024
+    && errorCode === 'credential_key_download_failed'
     && !containsSecret;
-  add(ok ? 'pass' : 'fail', 'credential-smoke.download.missing.contract', ok ? 'Missing credential download retained its bounded failure contract without exposing configured secrets.' : 'Missing credential download did not match the bounded failure contract.', {
+  add(ok ? 'pass' : 'fail', 'credential-smoke.download.missing.contract', ok ? 'Missing native credential public-key download retained its bounded failure contract without exposing configured secrets.' : 'Missing native credential public-key download did not match the bounded failure contract.', {
     status: streamed.status,
     contentType,
     contentEncoding,
     declaredLength,
     byteLength: bytes.length,
+    errorCode,
     containsConfiguredSecret: containsSecret,
   });
   return ok;

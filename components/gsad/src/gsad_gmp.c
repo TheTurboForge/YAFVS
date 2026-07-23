@@ -177,10 +177,6 @@ static char *
 get_target (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
             gsad_command_response_data_t *);
 
-static char *
-get_schedule (gvm_connection_t *, gsad_credentials_t *, params_t *,
-              const char *, gsad_command_response_data_t *);
-
 static int
 gmp_success (entity_t entity);
 
@@ -5680,88 +5676,6 @@ get_override_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   return get_override (connection, credentials, params, NULL, response_data);
 }
 
-/* Schedules. */
-
-/**
- * @brief Get one schedule, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[in]  extra_xml    Extra XML to insert inside page element.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-static char *
-get_schedule (gvm_connection_t *connection, gsad_credentials_t *credentials,
-              params_t *params, const char *extra_xml,
-              gsad_command_response_data_t *response_data)
-{
-  gmp_arguments_t *arguments;
-  arguments = gmp_arguments_new ();
-
-  gmp_arguments_add (arguments, "tasks", "1");
-
-  return get_one (connection, "schedule", credentials, params, extra_xml,
-                  arguments, response_data);
-}
-
-/**
- * @brief Get one schedule, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_schedule_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                  params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_schedule (connection, credentials, params, NULL, response_data);
-}
-
-/**
- * @brief Get all schedules, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_schedules_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  return get_many (connection, "schedules", credentials, params, NULL,
-                   response_data);
-}
-
-/**
- * @brief Delete a schedule, get all schedules, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-delete_schedule_gmp (gvm_connection_t *connection,
-                     gsad_credentials_t *credentials, params_t *params,
-                     gsad_command_response_data_t *response_data)
-{
-  return move_resource_to_trash (connection, "schedule", credentials, params,
-                                 response_data);
-}
-
 /**
  * @brief Get resource names, envelope the result.
  *
@@ -5979,46 +5893,6 @@ sync_cert_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 {
   return sync_feed (connection, credentials, params, "sync_cert",
                     "Synchronize CERT Feed", "the CERT feed", response_data);
-}
-
-/* Schedules. */
-
-/**
- * @brief Export a schedule.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Schedule XML on success.  Enveloped XML on error.
- */
-char *
-export_schedule_gmp (gvm_connection_t *connection,
-                     gsad_credentials_t *credentials, params_t *params,
-                     gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "schedule", credentials, params,
-                          response_data);
-}
-
-/**
- * @brief Export a list of schedules.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Schedules XML on success. Enveloped XML on error.
- */
-char *
-export_schedules_gmp (gvm_connection_t *connection,
-                      gsad_credentials_t *credentials, params_t *params,
-                      gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "schedule", credentials, params,
-                      response_data);
 }
 
 /* Users. */
@@ -7498,8 +7372,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (export_preference_file)
   ELSE (export_result)
   ELSE (export_results)
-  ELSE (export_schedule)
-  ELSE (export_schedules)
   ELSE (export_target)
   ELSE (export_targets)
   ELSE (export_task)
@@ -7520,8 +7392,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_report)
   ELSE (get_reports)
   ELSE (get_resource_names)
-  ELSE (get_schedule)
-  ELSE (get_schedules)
   ELSE (get_scope)
   ELSE (get_scopes)
   ELSE (get_setting)
@@ -7752,7 +7622,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_config)
   ELSE (delete_credential)
   ELSE (delete_report)
-  ELSE (delete_schedule)
   ELSE (delete_target)
   ELSE (delete_task)
   ELSE (move_task)

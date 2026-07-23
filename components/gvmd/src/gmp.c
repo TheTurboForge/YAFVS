@@ -723,28 +723,6 @@ delete_report_data_reset (delete_report_data_t *data)
 
 
 /**
- * @brief Command data for the delete_schedule command.
- */
-typedef struct
-{
-  char *schedule_id;   ///< ID of schedule to delete.
-  int ultimate;        ///< Boolean.  Whether to remove entirely or to trashcan.
-} delete_schedule_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_schedule_data_reset (delete_schedule_data_t *data)
-{
-  free (data->schedule_id);
-
-  memset (data, 0, sizeof (delete_schedule_data_t));
-}
-
-/**
  * @brief Command data for the delete_target command.
  */
 typedef struct
@@ -1086,27 +1064,6 @@ get_resource_names_data_reset (get_resource_names_data_t *data)
   get_data_reset (&data->get);
 
   memset (data, 0, sizeof (get_resource_names_data_t));
-}
-
-/**
- * @brief Command data for the get_schedules command.
- */
-typedef struct
-{
-  get_data_t get;      ///< Get args.
-  int tasks;           ///< Boolean.  Whether to include tasks that use this schedule.
-} get_schedules_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_schedules_data_reset (get_schedules_data_t *data)
-{
-  get_data_reset (&data->get);
-  memset (data, 0, sizeof (get_schedules_data_t));
 }
 
 /**
@@ -1620,7 +1577,6 @@ typedef union
   delete_credential_data_t delete_credential;         ///< delete_credential
   delete_config_data_t delete_config;                 ///< delete_config
   delete_report_data_t delete_report;                 ///< delete_report
-  delete_schedule_data_t delete_schedule;             ///< delete_schedule
   delete_target_data_t delete_target;                 ///< delete_target
   delete_task_data_t delete_task;                     ///< delete_task
   get_aggregates_data_t get_aggregates;               ///< get_aggregates
@@ -1636,7 +1592,6 @@ typedef union
   get_resource_names_data_t get_resource_names;       ///< get_resource_names
   scope_command_data_t get_scope;                     ///< get_scope
   scope_command_data_t get_scopes;                    ///< get_scopes
-  get_schedules_data_t get_schedules;                 ///< get_schedules
   get_settings_data_t get_settings;                   ///< get_settings
   get_targets_data_t get_targets;                     ///< get_targets
   get_tasks_data_t get_tasks;                         ///< get_tasks
@@ -1720,12 +1675,6 @@ static delete_credential_data_t *delete_credential_data
 static delete_report_data_t *delete_report_data
  = (delete_report_data_t*) &(command_data.delete_report);
 
-
-/**
- * @brief Parser callback data for DELETE_SCHEDULE.
- */
-static delete_schedule_data_t *delete_schedule_data
- = (delete_schedule_data_t*) &(command_data.delete_schedule);
 
 /**
  * @brief Parser callback data for DELETE_TARGET.
@@ -1816,12 +1765,6 @@ static scope_command_data_t *get_scope_data
  */
 static scope_command_data_t *get_scopes_data
  = &(command_data.get_scopes);
-
-/**
- * @brief Parser callback data for GET_SCHEDULES.
- */
-static get_schedules_data_t *get_schedules_data
- = &(command_data.get_schedules);
 
 /**
  * @brief Parser callback data for GET_SETTINGS.
@@ -2011,7 +1954,6 @@ typedef enum
   CLIENT_DELETE_CONFIG,
   CLIENT_DELETE_CREDENTIAL,
   CLIENT_DELETE_REPORT,
-  CLIENT_DELETE_SCHEDULE,
   CLIENT_DELETE_TARGET,
   CLIENT_DELETE_TASK,
   CLIENT_GET_AGGREGATES,
@@ -2030,7 +1972,6 @@ typedef enum
   CLIENT_GET_RESOURCE_NAMES,
   CLIENT_GET_SCOPE,
   CLIENT_GET_SCOPES,
-  CLIENT_GET_SCHEDULES,
   CLIENT_GET_SETTINGS,
   CLIENT_GET_TARGETS,
   CLIENT_GET_TASKS,
@@ -2343,18 +2284,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "report_id",
                               &delete_report_data->report_id);
             set_client_state (CLIENT_DELETE_REPORT);
-          }
-        else if (strcasecmp ("DELETE_SCHEDULE", element_name) == 0)
-          {
-            const gchar* attribute;
-            append_attribute (attribute_names, attribute_values, "schedule_id",
-                              &delete_schedule_data->schedule_id);
-            if (find_attribute (attribute_names, attribute_values,
-                                "ultimate", &attribute))
-              delete_schedule_data->ultimate = strcmp (attribute, "0");
-            else
-              delete_schedule_data->ultimate = 0;
-            set_client_state (CLIENT_DELETE_SCHEDULE);
           }
         else if (strcasecmp ("DELETE_TARGET", element_name) == 0)
           {
@@ -2736,19 +2665,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             scope_command_data_start (get_scopes_data, attribute_names,
                                       attribute_values, 0);
             set_client_state (CLIENT_GET_SCOPES);
-          }
-        else if (strcasecmp ("GET_SCHEDULES", element_name) == 0)
-          {
-            const gchar *attribute;
-            get_data_parse_attributes (&get_schedules_data->get, "schedule",
-                                       attribute_names,
-                                       attribute_values);
-            if (find_attribute (attribute_names, attribute_values,
-                                "tasks", &attribute))
-              get_schedules_data->tasks = strcmp (attribute, "0");
-            else
-              get_schedules_data->tasks = 0;
-            set_client_state (CLIENT_GET_SCHEDULES);
           }
         else if (strcasecmp ("GET_SETTINGS", element_name) == 0)
           {
@@ -9497,130 +9413,6 @@ handle_get_resource_names (gmp_parser_t *gmp_parser, GError **error)
   set_client_state (CLIENT_AUTHENTIC);
 }
 
-/**
- * @brief Handle end of GET_SCHEDULES element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_schedules (gmp_parser_t *gmp_parser, GError **error)
-{
-  if (get_schedules_data->tasks && get_schedules_data->get.trash)
-    SEND_TO_CLIENT_OR_FAIL
-     (XML_ERROR_SYNTAX ("get_schedules",
-                        "Attributes tasks and trash both given"));
-  else
-    {
-      iterator_t schedules;
-      int count, filtered, ret, first;
-
-      INIT_GET (schedule, Schedule);
-
-      ret = init_schedule_iterator (&schedules, &get_schedules_data->get);
-      if (ret)
-        {
-          switch (ret)
-            {
-              case 1:
-                if (send_find_error_to_client ("get_schedules",
-                                               "schedule",
-                                               get_schedules_data->get.id,
-                                               gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 2:
-                if (send_find_error_to_client
-                      ("get_schedules", "filter",
-                       get_schedules_data->get.filt_id, gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case -1:
-                SEND_TO_CLIENT_OR_FAIL
-                  (XML_INTERNAL_ERROR ("get_schedules"));
-                break;
-            }
-          get_schedules_data_reset (get_schedules_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          return;
-        }
-
-      SEND_GET_START ("schedule");
-      while (1)
-        {
-          const char *icalendar;
-
-          ret = get_next (&schedules, &get_schedules_data->get, &first,
-                          &count, init_schedule_iterator);
-          if (ret == 1)
-            break;
-          if (ret == -1)
-            {
-              internal_error_send_to_client (error);
-              return;
-            }
-
-          SEND_GET_COMMON (schedule, &get_schedules_data->get, &schedules);
-
-          icalendar = schedule_iterator_icalendar (&schedules);
-
-          SENDF_TO_CLIENT_OR_FAIL
-           ("<icalendar>%s</icalendar>"
-            "<timezone>%s</timezone>",
-            icalendar ? icalendar : "",
-            schedule_iterator_timezone (&schedules)
-              ? schedule_iterator_timezone (&schedules)
-              : "UTC");
-
-          if (get_schedules_data->tasks)
-            {
-              iterator_t tasks;
-
-              SEND_TO_CLIENT_OR_FAIL ("<tasks>");
-              init_schedule_task_iterator (&tasks,
-                                            get_iterator_resource
-                                            (&schedules));
-              while (next (&tasks))
-                {
-                  SENDF_TO_CLIENT_OR_FAIL ("<task id=\"%s\">"
-                                           "<name>%s</name>",
-                                           schedule_task_iterator_uuid (&tasks),
-                                           schedule_task_iterator_name
-                                            (&tasks));
-                  if (schedule_task_iterator_readable (&tasks))
-                    SEND_TO_CLIENT_OR_FAIL ("</task>");
-                  else
-                    SEND_TO_CLIENT_OR_FAIL ("<permissions/>"
-                                            "</task>");
-                }
-              cleanup_iterator (&tasks);
-              SEND_TO_CLIENT_OR_FAIL ("</tasks>");
-            }
-          SEND_TO_CLIENT_OR_FAIL ("</schedule>");
-          count++;
-        }
-      cleanup_iterator (&schedules);
-      filtered = get_schedules_data->get.id
-                  ? 1
-                  : schedule_count (&get_schedules_data->get);
-      SEND_GET_END ("schedule", &get_schedules_data->get, count, filtered);
-    }
-  get_schedules_data_reset (get_schedules_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
- * @brief Handle end of GET_SCHEDULES element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
 static void
 handle_get_settings (gmp_parser_t *gmp_parser, GError **error)
 {
@@ -11476,7 +11268,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
 
 
-      CASE_DELETE (SCHEDULE, schedule, "Schedule");
       CASE_DELETE (TARGET, target, "Target");
 
       case CLIENT_DELETE_TASK:
@@ -11616,10 +11407,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       case CLIENT_GET_SCOPES:
         handle_get_scopes_command (gmp_parser, error, get_scopes_data,
                                    "get_scopes");
-        break;
-
-      case CLIENT_GET_SCHEDULES:
-        handle_get_schedules (gmp_parser, error);
         break;
 
       case CLIENT_GET_SETTINGS:

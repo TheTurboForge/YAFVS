@@ -7,6 +7,7 @@ use axum::http::Method;
 use crate::direct_api::direct_api_v1_method_is_allowed;
 
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
+const GSA_SCHEDULES: &str = include_str!("../../../components/gsa/src/gmp/native-api/schedules.ts");
 const MANAGE_COMMANDS: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
 const MANAGE_SQL_SCHEDULES: &str =
     include_str!("../../../components/gvmd/src/manage_sql_schedules.c");
@@ -41,6 +42,24 @@ fn openapi_path_block(path: &str) -> String {
             }
         })
         .unwrap_or_else(|| tail.to_string())
+}
+
+#[test]
+fn native_gsa_owns_schedule_commands_and_gmp_transport_is_retired() {
+    assert!(GSA_SCHEDULES.contains("export class ScheduleCommand"));
+    assert!(GSA_SCHEDULES.contains("export class SchedulesCommand"));
+    assert!(GSA_SCHEDULES.contains("async delete"));
+    assert!(GSA_SCHEDULES.contains("async getAll"));
+    assert!(MANAGE_COMMANDS.contains("\"CREATE_SCHEDULE\""));
+    assert!(MANAGE_COMMANDS.contains("\"MODIFY_SCHEDULE\""));
+    assert!(MANAGE_COMMANDS.contains("\"DELETE_SCHEDULE\""));
+    assert!(MANAGE_COMMANDS.contains("\"GET_SCHEDULES\""));
+    assert!(MANAGE_SQL_SCHEDULES.contains("schedule_next_time"));
+    assert!(MANAGE_SQL_SCHEDULES.contains("task_schedule_iterator_start_due"));
+    assert!(MANAGE_SQL_SCHEDULES.contains("task_schedule_iterator_stop_due"));
+    assert!(GMP_XML_SCHEMA.contains("<command>GET_SCHEDULES</command>"));
+    assert!(!GMP_XML_SCHEMA.contains("<name>delete_schedule</name>"));
+    assert!(!GMP_XML_SCHEMA.contains("<name>get_schedules</name>"));
 }
 
 #[test]

@@ -11,6 +11,9 @@ const MANAGE_ALERTS: &str = include_str!("../../../components/gvmd/src/manage_al
 const MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
 const MANAGE_SQL_ALERTS: &str = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
 const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
+const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
+const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 
 fn advertised_commands() -> BTreeSet<String> {
     let block = MANAGE_COMMANDS
@@ -112,9 +115,13 @@ fn retired_public_commands_keep_only_live_native_authority_keys() {
         "GET_USERS",
         "MODIFY_USER",
         "TEST_ALERT",
+        "DELETE_SCHEDULE",
+        "GET_SCHEDULES",
     ];
 
     for command in [
+        "DELETE_SCHEDULE",
+        "GET_SCHEDULES",
         "CREATE_FILTER",
         "CREATE_PORT_LIST",
         "CREATE_PORT_RANGE",
@@ -180,4 +187,45 @@ fn retired_public_commands_keep_only_live_native_authority_keys() {
     assert!(MANAGE_ALERTS.contains("\"test_alert\""));
     assert!(MANAGE_SQL.contains("\"get_alerts\""));
     assert!(GMP_SCHEMA.contains("<command>GET_ALERTS</command>"));
+}
+
+#[test]
+fn retired_schedule_transport_has_no_gsad_or_live_gmp_surface() {
+    for alias in [
+        "get_schedule_gmp",
+        "get_schedules_gmp",
+        "export_schedule_gmp",
+        "export_schedules_gmp",
+        "delete_schedule_gmp",
+    ] {
+        assert!(!GSAD_GMP.contains(alias));
+        assert!(!GSAD_GMP_HEADER.contains(alias));
+    }
+    for dispatch in [
+        "ELSE (get_schedule)",
+        "ELSE (get_schedules)",
+        "ELSE (export_schedule)",
+        "ELSE (export_schedules)",
+        "ELSE (delete_schedule)",
+    ] {
+        assert!(!GSAD_GMP.contains(dispatch));
+    }
+    for token in [
+        "|(get_schedule)",
+        "|(get_schedules)",
+        "|(export_schedule)",
+        "|(export_schedules)",
+        "|(delete_schedule)",
+    ] {
+        assert!(!GSAD_VALIDATOR.contains(token));
+    }
+    for command in ["DELETE_SCHEDULE", "GET_SCHEDULES"] {
+        let lower = command.to_ascii_lowercase();
+        assert!(!GMP.contains(&format!("strcasecmp (\"{command}\"")));
+        assert!(!GMP.contains(&format!("CLIENT_{command}")));
+        assert!(!MANAGE_COMMANDS.contains(&format!("{{\"{command}\"")));
+        assert!(!GMP_SCHEMA.contains(&format!("<name>{lower}</name>")));
+        assert!(native_acl_operations().contains(command));
+    }
+    assert!(GMP_SCHEMA.contains("<command>GET_SCHEDULES</command>"));
 }

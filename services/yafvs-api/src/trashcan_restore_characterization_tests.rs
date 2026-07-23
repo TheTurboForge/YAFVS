@@ -99,7 +99,6 @@ fn trashcan_inventory_is_native_only_and_has_no_gmp_fallback() {
         ("get_credentials_data", "credential"),
         ("get_overrides_data", "override"),
         ("get_port_lists_data", "port_list"),
-        ("get_schedules_data", "schedule"),
         ("get_targets_data", "target"),
         ("get_tasks_data", "task"),
     ] {

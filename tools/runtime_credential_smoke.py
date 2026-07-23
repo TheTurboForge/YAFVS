@@ -38,31 +38,17 @@ let ownedFixtures = Array.isArray(config.cleanupFixtures)
   ? config.cleanupFixtures.filter(fixture => fixture && fixture.name && fixture.kind)
   : [];
 const DOWNLOAD_CONTRACTS = {
-  exe: {
-    title: 'Download Windows Executable (.exe)',
-    contentType: 'application/exe',
-    extension: 'exe',
-    operational: false,
-  },
   key: {
     title: 'Download Public Key',
     contentType: 'application/key',
     extension: 'pub',
-    operational: true,
-  },
-  rpm: {
-    title: 'Download RPM (.rpm) Package',
-    contentType: 'application/rpm',
-    extension: 'rpm',
-    operational: false,
-  },
-  deb: {
-    title: 'Download Debian (.deb) Package',
-    contentType: 'application/deb',
-    extension: 'deb',
-    operational: false,
   },
 };
+const REMOVED_DOWNLOAD_TITLES = [
+  'Download Windows Executable (.exe)',
+  'Download RPM (.rpm) Package',
+  'Download Debian (.deb) Package',
+];
 
 function add(status, check, message, details = {}) {
   findings.push({status, check, message, details});
@@ -390,14 +376,30 @@ async function createCredential(page, fixture) {
 }
 
 function hasExpectedSignature(format, bytes) {
-  if (format === 'exe') return bytes.length >= 2 && bytes[0] === 0x4d && bytes[1] === 0x5a;
-  if (format === 'rpm') return bytes.length >= 4 && bytes.subarray(0, 4).equals(Buffer.from([0xed, 0xab, 0xee, 0xdb]));
-  if (format === 'deb') return bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from('!<arch>\n', 'ascii'));
   if (format === 'key') {
     const prefix = bytes.subarray(0, Math.min(bytes.length, 96)).toString('utf8').trimStart();
     return prefix.startsWith('ssh-') || prefix.startsWith('-----BEGIN');
   }
   return false;
+}
+
+async function removedDownloadActionsAreAbsent(page, fixtures) {
+  await gotoStable(page, '/credentials');
+  const unexpected = [];
+  for (const fixture of fixtures) {
+    const row = await credentialRow(page, fixture.name);
+    for (const title of REMOVED_DOWNLOAD_TITLES) {
+      if (await row.getByTitle(title).count()) {
+        unexpected.push({credentialName: fixture.name, title});
+      }
+    }
+  }
+  const ok = unexpected.length === 0;
+  add(ok ? 'pass' : 'fail', 'credential-smoke.download.removed-actions',
+      ok ? 'Removed EXE/RPM/DEB credential download actions are absent.'
+         : 'A removed credential download action is still advertised.',
+      {unexpected});
+  return ok;
 }
 
 async function characterizeDownload(page, fixture, format) {
@@ -422,18 +424,14 @@ async function characterizeDownload(page, fixture, format) {
   const contentTypeOk = contentType === contract.contentType;
   const filenameOk = filename === expectedFilename;
   const lengthMatched = bytes.length === declaredLength;
-  const sizeOk = format === 'key'
-    ? bytes.length === 80
-    : bytes.length > 0;
+  const sizeOk = bytes.length === 80;
   const signatureOk = hasExpectedSignature(format, bytes);
   const operationalOk = statusOk && contentTypeOk && contentEncoding === 'identity' && filenameOk && lengthMatched && sizeOk && signatureOk;
-  const knownEmpty = statusOk && contentTypeOk && contentEncoding === 'identity' && filenameOk && lengthMatched && bytes.length === 0;
-  const ok = contract.operational ? operationalOk : knownEmpty;
-  const status = ok && !contract.operational ? 'warn' : ok ? 'pass' : 'fail';
-  const message = contract.operational
-    ? (ok ? `Characterized ${format.toUpperCase()} credential download transport.` : `${format.toUpperCase()} credential download violated the inherited transport contract.`)
-    : (ok ? `${format.toUpperCase()} remains advertised but returns an empty body; this broken inherited surface should be removed.` : `${format.toUpperCase()} no longer matches the characterized empty inherited response.`);
-  add(status, `credential-smoke.download.${format}.contract`, message, {
+  const ok = operationalOk;
+  const message = ok
+    ? `Characterized ${format.toUpperCase()} credential download transport.`
+    : `${format.toUpperCase()} credential download violated the inherited transport contract.`;
+  add(ok ? 'pass' : 'fail', `credential-smoke.download.${format}.contract`, message, {
     status: streamed.status,
     contentType,
     contentEncoding,
@@ -441,7 +439,6 @@ async function characterizeDownload(page, fixture, format) {
     declaredLength,
     byteLength: bytes.length,
     signatureMatched: signatureOk,
-    operational: contract.operational,
   });
   return {
     ok,
@@ -543,13 +540,14 @@ async function runForBaseUrl(baseUrl, urlIndex) {
         typeLabel: 'Username + SSH Key',
       });
       if (upFixture && sshFixture) {
-        const exe = await characterizeDownload(page, upFixture, 'exe');
+        const removedActionsOk = await removedDownloadActionsAreAbsent(
+          page,
+          [upFixture, sshFixture],
+        );
         const key = await characterizeDownload(page, sshFixture, 'key');
-        const rpm = await characterizeDownload(page, sshFixture, 'rpm');
-        const deb = await characterizeDownload(page, sshFixture, 'deb');
         requestUrl = key.requestUrl;
         requestHeaders = key.requestHeaders;
-        downloadsOk = [exe, key, rpm, deb].every(result => result.ok);
+        downloadsOk = removedActionsOk && key.ok;
       }
     } finally {
       sshCleaned = sshFixture ? await deleteCredential(page, sshFixture) : true;

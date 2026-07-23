@@ -233,7 +233,7 @@ set(
   gvmd_config.c
   gmpd.c
   ipc.c
-  lsc_user.c
+  credential_key.c
   lsc_crypt.c
   yafvs_control.c
   utils.c

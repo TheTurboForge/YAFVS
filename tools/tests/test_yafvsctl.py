@@ -8404,8 +8404,8 @@ class YAFVSCtlTests(unittest.TestCase):
             runtime_credential_smoke.BROWSER_SCRIPT,
         )
         for title in (
-            "Download Windows Executable (.exe)",
             "Download Public Key",
+            "Download Windows Executable (.exe)",
             "Download RPM (.rpm) Package",
             "Download Debian (.deb) Package",
         ):
@@ -8426,6 +8426,8 @@ class YAFVSCtlTests(unittest.TestCase):
             "response.on('data'",
             "request.destroy(new Error",
             "bytes.length === 80",
+            "removedDownloadActionsAreAbsent",
+            "credential-smoke.download.removed-actions",
             "bytes.length === 431",
             "hasExpectedSignature",
             "containsConfiguredSecret",

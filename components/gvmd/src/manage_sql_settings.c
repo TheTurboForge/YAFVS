@@ -929,11 +929,6 @@ setting_normalise (const gchar *uuid, const gchar *value)
       return g_strdup_printf ("%i", max_rows);
     }
 
-  if (strcmp (uuid, SETTING_UUID_LSC_DEB_MAINTAINER) == 0)
-    {
-      return g_strstrip (g_strdup (value));
-    }
-
   if (strcmp (uuid, SETTING_UUID_SECINFO_SQL_BUFFER_THRESHOLD) == 0)
     {
       int threshold;
@@ -974,14 +969,6 @@ setting_verify (const gchar *uuid, const gchar *value, const gchar *user)
             return 1;
         }
       else if (max_rows < 0)
-        return 1;
-    }
-
-  if (strcmp (uuid, SETTING_UUID_LSC_DEB_MAINTAINER) == 0)
-    {
-      if (g_regex_match_simple
-            ("^([[:alnum:]\\-_]*@[[:alnum:]\\-_][[:alnum:]\\-_.]*)?$",
-            value, 0, 0) == FALSE)
         return 1;
     }
 
@@ -1041,8 +1028,6 @@ setting_description (const gchar *uuid)
     return "Default CA Certificate for Scanners";
   if (strcmp (uuid, SETTING_UUID_MAX_ROWS_PER_PAGE) == 0)
     return "The default maximum number of rows displayed in any listing.";
-  if (strcmp (uuid, SETTING_UUID_LSC_DEB_MAINTAINER) == 0)
-    return "Maintainer email address used in generated Debian LSC packages.";
   if (strcmp (uuid, SETTING_UUID_FEED_IMPORT_OWNER) == 0)
     return "User who is given ownership of new resources from feed.";
   if (strcmp (uuid, SETTING_UUID_SECINFO_SQL_BUFFER_THRESHOLD) == 0)
@@ -1067,8 +1052,6 @@ setting_name (const gchar *uuid)
     return "Default CA Cert";
   if (strcmp (uuid, SETTING_UUID_MAX_ROWS_PER_PAGE) == 0)
     return "Max Rows Per Page";
-  if (strcmp (uuid, SETTING_UUID_LSC_DEB_MAINTAINER) == 0)
-    return "Debian LSC Package Maintainer";
   if (strcmp (uuid, SETTING_UUID_FEED_IMPORT_OWNER) == 0)
     return "Feed Import Owner";
   if (strcmp (uuid, SETTING_UUID_SECINFO_SQL_BUFFER_THRESHOLD) == 0)
@@ -1102,7 +1085,6 @@ manage_modify_setting (GSList *log_config, const db_conn_info_t *database,
 
   if (strcmp (uuid, SETTING_UUID_DEFAULT_CA_CERT)
       && strcmp (uuid, SETTING_UUID_MAX_ROWS_PER_PAGE)
-      && strcmp (uuid, SETTING_UUID_LSC_DEB_MAINTAINER)
       && strcmp (uuid, SETTING_UUID_FEED_IMPORT_OWNER)
       && strcmp (uuid, SETTING_UUID_SECINFO_SQL_BUFFER_THRESHOLD)
       && strcmp (uuid, SETTING_UUID_CVE_CPE_MATCHING_VERSION))

@@ -61,7 +61,7 @@
 #include "manage_commands.h"
 #include "manage_authentication.h"
 #include "manage_users.h"
-#include "lsc_user.h"
+#include "credential_key.h"
 #include "sql.h"
 #include "utils.h"
 /* TODO This is for buffer_get_filter_xml, for print_report_xml_start.  We
@@ -3543,16 +3543,8 @@ check_db_settings ()
          "  '%d');",
          EXCERPT_SIZE_DEFAULT);
 
-  if (sql_int ("SELECT count(*) FROM settings"
-               " WHERE uuid = '" SETTING_UUID_LSC_DEB_MAINTAINER "'"
-               " AND " ACL_IS_GLOBAL () ";")
-      == 0)
-    sql ("INSERT into settings (uuid, owner, name, comment, value)"
-         " VALUES"
-         " ('" SETTING_UUID_LSC_DEB_MAINTAINER "', NULL,"
-         "  'Debian LSC Package Maintainer',"
-         "  'Maintainer email address used in generated Debian LSC packages.',"
-         "  '');");
+  sql ("DELETE FROM settings"
+       " WHERE uuid = '2fcbeac8-4237-438f-b52a-540a23e7af97';");
 
   sql ("DELETE FROM settings WHERE uuid = 'ff000362-338f-11ea-9051-28d24461215b';");
 
@@ -15841,53 +15833,6 @@ validate_credential_username (const gchar *username)
   return 1;
 }
 
-/**
- * @brief Test if a username is valid for a credential export format.
- *
- * @param[in]  username  The username string to test.
- * @param[in]  format    The credential format to validate for.
- *
- * @return Whether the username is valid.
- */
-static gboolean
-validate_credential_username_for_format (const gchar *username,
-                                         credential_format_t format)
-{
-  const char *s, *name_characters;
-
-  name_characters = NULL;
-  switch (format)
-    {
-      case CREDENTIAL_FORMAT_NONE:
-      case CREDENTIAL_FORMAT_KEY:
-      case CREDENTIAL_FORMAT_PEM:
-        // No validation required
-        break;
-      case CREDENTIAL_FORMAT_RPM:
-      case CREDENTIAL_FORMAT_DEB:
-        name_characters = "-_";
-        break;
-      case CREDENTIAL_FORMAT_EXE:
-        name_characters = "-_\\.@";
-        break;
-      case CREDENTIAL_FORMAT_ERROR:
-        return 0;
-    }
-
-  if (name_characters)
-    {
-      s = username;
-      while (*s)
-        if (isalnum (*s)
-            || strchr (name_characters, *s))
-          s++;
-        else
-          return FALSE;
-    }
-
-  return TRUE;
-}
-
 static gboolean manage_auth_settings_text_is_valid (
   const gchar *, size_t, gboolean, gboolean);
 
@@ -16562,7 +16507,8 @@ create_credential (const char* name, const char* comment, const char* login,
 
   if (given_type == NULL || strcmp (given_type, "usk") == 0)
     {
-      if (lsc_user_keys_create (generated_password, &generated_private_key))
+      if (credential_ssh_key_create (generated_password,
+                                     &generated_private_key))
         {
           sql_rollback ();
           return -1;
@@ -17824,136 +17770,6 @@ credential_iterator_privacy_password (iterator_t* iterator)
 
 
 /**
- * @brief Get the rpm from a Credential iterator.
- *
- * @param[in]  iterator  Iterator.
- *
- * @return Rpm, or NULL if iteration is complete. Free with g_free().
- */
-char*
-credential_iterator_rpm (iterator_t *iterator)
-{
-  const char *private_key, *login, *pass;
-  void *rpm;
-  char *public_key;
-  gsize rpm_size;
-  gchar *rpm64;
-
-  if (iterator->done) return NULL;
-
-  private_key = credential_iterator_private_key (iterator);
-  pass = credential_iterator_password (iterator);
-  public_key = gvm_ssh_public_from_private (private_key, pass);
-  if (!public_key)
-    return NULL;
-  login = credential_iterator_login (iterator);
-  if (credential_iterator_format_available
-          (iterator, CREDENTIAL_FORMAT_RPM) == FALSE)
-    {
-      g_free (public_key);
-      return NULL;
-    }
-  else if (lsc_user_rpm_recreate (login, public_key, &rpm, &rpm_size))
-    {
-      g_warning ("%s: Failed to create RPM", __func__);
-      g_free (public_key);
-      return NULL;
-    }
-  g_free (public_key);
-  rpm64 = (rpm && rpm_size)
-          ? g_base64_encode (rpm, rpm_size)
-          : g_strdup ("");
-  free (rpm);
-  return rpm64;
-}
-
-/**
- * @brief Get the deb from a Credential iterator.
- *
- * @param[in]  iterator  Iterator.
- *
- * @return Deb, or NULL if iteration is complete. Free with g_free().
- */
-char*
-credential_iterator_deb (iterator_t *iterator)
-{
-  const char *login, *private_key, *pass;
-  char *public_key, *maintainer;
-  void *deb;
-  gsize deb_size;
-  gchar *deb64;
-
-  if (iterator->done) return NULL;
-
-  maintainer = NULL;
-  setting_value (SETTING_UUID_LSC_DEB_MAINTAINER, &maintainer);
-  private_key = credential_iterator_private_key (iterator);
-  pass = credential_iterator_password (iterator);
-  public_key = gvm_ssh_public_from_private (private_key, pass);
-  if (!public_key)
-    return NULL;
-  login = credential_iterator_login (iterator);
-  if (credential_iterator_format_available
-          (iterator, CREDENTIAL_FORMAT_DEB) == FALSE)
-    {
-      g_free (public_key);
-      free (maintainer);
-      return NULL;
-    }
-  else if (lsc_user_deb_recreate (login, public_key,
-                                  maintainer ? maintainer : "",
-                                  &deb, &deb_size))
-    {
-      g_warning ("%s: Failed to create DEB", __func__);
-      g_free (public_key);
-      free (maintainer);
-      return NULL;
-    }
-  g_free (public_key);
-  free (maintainer);
-
-  deb64 = (deb && deb_size)
-          ? g_base64_encode (deb, deb_size)
-          : g_strdup ("");
-  free (deb);
-  return deb64;
-}
-
-/**
- * @brief Get the exe from a Credential iterator.
- *
- * @param[in]  iterator  Iterator.
- *
- * @return Exe, or NULL if iteration is complete. Free with g_free().
- */
-char*
-credential_iterator_exe (iterator_t *iterator)
-{
-  const char *login, *password;
-  void *exe;
-  gsize exe_size;
-  gchar *exe64;
-
-  if (iterator->done) return NULL;
-
-  login = credential_iterator_login (iterator);
-  password = credential_iterator_password (iterator);
-  if (credential_iterator_format_available
-          (iterator, CREDENTIAL_FORMAT_EXE) == FALSE)
-    return NULL;
-  else if (lsc_user_exe_recreate (login, password, &exe, &exe_size))
-    {
-      g_warning ("%s: Failed to create EXE", __func__);
-      return NULL;
-    }
-  exe64 = (exe && exe_size)
-          ? g_base64_encode (exe, exe_size)
-          : g_strdup ("");
-  free (exe);
-  return exe64;
-}
-
-/**
  * @brief  Test if a credential format is available for an iterator.
  *
  * @param[in]  iterator  Iterator.
@@ -17965,10 +17781,9 @@ gboolean
 credential_iterator_format_available (iterator_t* iterator,
                                       credential_format_t format)
 {
-  const char *type, *login, *private_key;
+  const char *type, *private_key;
 
   type = credential_iterator_type (iterator);
-  login = credential_iterator_login (iterator);
   private_key = credential_iterator_private_key (iterator);
 
   switch (format)
@@ -17976,20 +17791,13 @@ credential_iterator_format_available (iterator_t* iterator,
       case CREDENTIAL_FORMAT_NONE:
         return TRUE;
       case CREDENTIAL_FORMAT_KEY:
-      case CREDENTIAL_FORMAT_RPM:
-      case CREDENTIAL_FORMAT_DEB:
         if (strcasecmp (type, "usk") == 0 && private_key)
-          return validate_credential_username_for_format (login, format);
-        else
-          return FALSE;
-      case CREDENTIAL_FORMAT_EXE:
-        if (strcasecmp (type, "up") == 0)
-          return validate_credential_username_for_format (login, format);
+          return TRUE;
         else
           return FALSE;
       case CREDENTIAL_FORMAT_PEM:
         if (strcasecmp (type, "cc") == 0)
-          return validate_credential_username_for_format (login, format);
+          return TRUE;
         else
           return FALSE;
       case CREDENTIAL_FORMAT_ERROR:
@@ -18015,18 +17823,6 @@ credential_iterator_formats_xml (iterator_t* iterator)
   if (credential_iterator_format_available (iterator,
                                             CREDENTIAL_FORMAT_KEY))
     g_string_append (xml, "<format>key</format>");
-
-  if (credential_iterator_format_available (iterator,
-                                            CREDENTIAL_FORMAT_RPM))
-    g_string_append (xml, "<format>rpm</format>");
-
-  if (credential_iterator_format_available (iterator,
-                                            CREDENTIAL_FORMAT_DEB))
-    g_string_append (xml, "<format>deb</format>");
-
-  if (credential_iterator_format_available (iterator,
-                                            CREDENTIAL_FORMAT_EXE))
-    g_string_append (xml, "<format>exe</format>");
 
   if (credential_iterator_format_available (iterator,
                                             CREDENTIAL_FORMAT_PEM))

@@ -1693,9 +1693,6 @@ typedef enum
 {
   CREDENTIAL_FORMAT_NONE = 0,   /// normal XML output
   CREDENTIAL_FORMAT_KEY = 1,    /// public key
-  CREDENTIAL_FORMAT_RPM = 2,    /// RPM package
-  CREDENTIAL_FORMAT_DEB = 3,    /// DEB package
-  CREDENTIAL_FORMAT_EXE = 4,    /// EXE installer
   CREDENTIAL_FORMAT_PEM = 5,    /// Certificate PEM
   CREDENTIAL_FORMAT_ERROR = -1  /// Error / Invalid format
 } credential_format_t;
@@ -1773,15 +1770,6 @@ credential_iterator_allow_insecure (iterator_t*);
 
 const char*
 credential_full_type (const char*);
-
-char*
-credential_iterator_rpm (iterator_t*);
-
-char*
-credential_iterator_deb (iterator_t*);
-
-char*
-credential_iterator_exe (iterator_t*);
 
 const char*
 credential_iterator_certificate (iterator_t*);

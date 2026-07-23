@@ -6689,12 +6689,6 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
         {
           if (strcasecmp (data_format, "key") == 0)
             format = CREDENTIAL_FORMAT_KEY;
-          else if (strcasecmp (data_format, "rpm") == 0)
-            format = CREDENTIAL_FORMAT_RPM;
-          else if (strcasecmp (data_format, "deb") == 0)
-            format = CREDENTIAL_FORMAT_DEB;
-          else if (strcasecmp (data_format, "exe") == 0)
-            format = CREDENTIAL_FORMAT_EXE;
           else if (strcasecmp (data_format, "pem") == 0)
             format = CREDENTIAL_FORMAT_PEM;
           else
@@ -6711,7 +6705,7 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
       SEND_TO_CLIENT_OR_FAIL
         (XML_ERROR_SYNTAX ("get_credentials",
                            "Format attribute should"
-                           " be 'key', 'rpm', 'deb', 'exe' or 'pem'"));
+                           " be 'key' or 'pem'"));
       get_credentials_data_reset (get_credentials_data);
       set_client_state (CLIENT_AUTHENTIC);
       return;
@@ -6925,8 +6919,6 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
 
       switch (format)
         {
-          char *package;
-
           case CREDENTIAL_FORMAT_KEY:
             {
               if (public_key && strcmp (public_key, ""))
@@ -6944,24 +6936,6 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
                 }
               break;
             }
-          case CREDENTIAL_FORMAT_RPM:
-            package = credential_iterator_rpm (&credentials);
-            SENDF_TO_CLIENT_OR_FAIL
-              ("<package format=\"rpm\">%s</package>", package ?: "");
-            g_free (package);
-            break;
-          case CREDENTIAL_FORMAT_DEB:
-            package = credential_iterator_deb (&credentials);
-            SENDF_TO_CLIENT_OR_FAIL
-              ("<package format=\"deb\">%s</package>", package ?: "");
-            g_free (package);
-            break;
-          case CREDENTIAL_FORMAT_EXE:
-            package = credential_iterator_exe (&credentials);
-            SENDF_TO_CLIENT_OR_FAIL
-              ("<package format=\"exe\">%s</package>", package ?: "");
-            g_free (package);
-            break;
           case CREDENTIAL_FORMAT_PEM:
             {
               SENDF_TO_CLIENT_OR_FAIL

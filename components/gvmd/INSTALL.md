@@ -567,20 +567,6 @@ Prerequisites for generating verinice reports:
 
 * xsltproc, xmlstarlet, zip
 
-Prerequisites for generating credential RPM packages:
-
-* rpm
-* fakeroot
-
-Prerequisites for generating credential DEB packages:
-
-* dpkg
-* fakeroot
-
-Prerequisites for generating credentials .exe packages:
-
-* makensis (usually distributed as part of nsis)
-
 Prerequisites for signature verification:
 
 * gnupg

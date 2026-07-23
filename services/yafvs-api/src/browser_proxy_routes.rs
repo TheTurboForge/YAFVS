@@ -78,6 +78,7 @@ use crate::{
         browser_proxy_clone_target, browser_proxy_create_target, browser_proxy_delete_target,
         browser_proxy_hard_delete_target, browser_proxy_patch_target, browser_proxy_restore_target,
     },
+    credential_public_key::browser_proxy_credential_public_key,
     current_user_password::{
         MAX_CURRENT_USER_PASSWORD_CHANGE_BODY_BYTES, browser_proxy_change_current_user_password,
     },
@@ -106,6 +107,10 @@ pub(crate) fn browser_proxy_native_api_router(
         return router;
     };
     let router = router
+        .route(
+            "/api/v1/credentials/:credential_id/public-key",
+            get(browser_proxy_credential_public_key),
+        )
         .route(
             "/api/v1/authentication-settings",
             get(browser_proxy_authentication_settings),

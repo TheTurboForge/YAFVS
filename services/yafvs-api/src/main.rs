@@ -43,6 +43,7 @@ mod committed_mutation_response_contract_tests;
 mod cpe_catalog;
 mod cpe_catalog_payloads;
 mod credential_payloads;
+mod credential_public_key;
 mod credential_query_sql;
 mod credential_write_db;
 mod credential_write_sql;

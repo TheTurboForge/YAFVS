@@ -23,6 +23,65 @@ struct RegisteredRoute<'a> {
     method: &'a str,
 }
 
+#[test]
+fn credential_public_key_route_is_operator_sensitive_and_canonical() {
+    const ROUTE: &str = "/api/v1/credentials/:credential_id/public-key";
+    const CANONICAL_PATH: &str =
+        "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/public-key";
+
+    let direct_source = include_str!("direct_api_routes.rs");
+    let browser_source = include_str!("browser_proxy_routes.rs");
+    let base_source = include_str!("read_api_routes.rs");
+    let handler_source = include_str!("credential_public_key.rs");
+    let direct_routes = registered_routes(direct_api_route_registration_block(direct_source));
+    let browser_routes = registered_routes(browser_proxy_route_registration_block(browser_source));
+    let base_routes = registered_routes(app_route_registration_block(base_source));
+
+    assert!(
+        direct_routes
+            .iter()
+            .any(|route| { route.method == "get" && route.path == ROUTE })
+    );
+    assert!(
+        browser_routes
+            .iter()
+            .any(|route| { route.method == "get" && route.path == ROUTE })
+    );
+    assert!(!base_routes.iter().any(|route| route.path == ROUTE));
+    assert!(
+        direct_source.find("get(credential_public_key)").unwrap()
+            < direct_source.find("if write_control_enabled").unwrap()
+    );
+    assert!(browser_source.contains("get(browser_proxy_credential_public_key)"));
+    assert!(
+        handler_source
+            .contains("browser_proxy_operator_from_headers(&state, &auth, &headers).await?")
+    );
+    assert!(
+        handler_source.contains(
+            "credential_public_key(Path(credential_id), Some(Extension(operator))).await"
+        )
+    );
+
+    assert!(direct_api_v1_method_is_allowed(
+        &axum::http::Method::GET,
+        CANONICAL_PATH,
+        false
+    ));
+    for rejected in [
+        "/api/v1/credentials/12345678-1234-1234-1234-123456789ABC/public-key",
+        "/api/v1/credentials/{12345678-1234-1234-1234-123456789abc}/public-key",
+        "/api/v1/credentials/not-a-uuid/public-key",
+        "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/public-key/extra",
+        "/api/v1/credentials//public-key",
+    ] {
+        assert!(
+            !direct_api_v1_method_is_allowed(&axum::http::Method::GET, rejected, true),
+            "noncanonical credential public-key path must be denied: {rejected}"
+        );
+    }
+}
+
 struct NativeWriteRouteContract {
     method: &'static str,
     path: &'static str,
@@ -32,6 +91,7 @@ struct NativeWriteRouteContract {
 const APPROVED_NATIVE_DIRECT_READ_ROUTES: &[(&str, &str)] = &[
     ("get", "/api/v1/authentication-settings"),
     ("get", "/api/v1/alerts/:alert_id/definition"),
+    ("get", "/api/v1/credentials/:credential_id/public-key"),
     ("get", "/api/v1/user-management/users"),
     ("get", "/api/v1/user-management/users/:user_id"),
     ("get", "/api/v1/users/current/settings"),

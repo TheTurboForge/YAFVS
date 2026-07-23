@@ -20,6 +20,7 @@ use crate::{
         MAX_AUTHENTICATION_SETTINGS_BODY_BYTES, authentication_settings,
         update_ldap_authentication_settings, update_radius_authentication_settings,
     },
+    credential_public_key::credential_public_key,
     credential_writes::{
         clone_credential, create_credential, delete_credential, hard_delete_credential,
         patch_credential, restore_credential,
@@ -107,6 +108,10 @@ pub(crate) fn direct_native_api_router(
         .route(
             "/api/v1/users/current/settings/:setting_id",
             get(current_user_setting),
+        )
+        .route(
+            "/api/v1/credentials/:credential_id/public-key",
+            get(credential_public_key),
         );
     let router = if write_control_enabled {
         router

@@ -6818,15 +6818,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         <summary>Whether to include a list of targets using the credentials</summary>
         <type>boolean</type>
       </attrib>
-<attrib>
-        <name>format</name>
-        <type>
-          <alts>
-            <alt>key</alt>
-            <alt>pem</alt>
-          </alts>
-        </type>
-      </attrib>
     </pattern>
     <response>
       <pattern>
@@ -6867,7 +6858,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
           <o><e>user_tags</e></o>
           <e>type</e>
           <e>full_type</e>
-          <e>formats</e>
           <o><e>auth_algorithm</e></o>
           <o><e>privacy</e></o>
           <o><e>certificate_info</e></o>
@@ -6875,13 +6865,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
           <o><e>public_key_info</e></o>
           <o><e>scanners</e></o>
           <o><e>targets</e></o>
-<o>
-            <or>
-              <e>public_key</e>
-              <e>package</e>
-              <e>certificate</e>
-            </or>
-          </o>
           <o><e>kdc</e></o>
           <o><e>kdcs</e></o>
           <o><e>realm</e></o>
@@ -7040,23 +7023,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
           </pattern>
         </ele>
         <ele>
-          <name>formats</name>
-          <summary>The export formats available for the credential</summary>
-          <pattern>
-            <any><e>format</e></any>
-          </pattern>
-          <ele>
-            <name>format</name>
-            <summary>Format as used in the command</summary>
-            <pattern>
-              <alts>
-                <alt>key</alt>
-                <alt>pem</alt>
-              </alts>
-            </pattern>
-          </ele>
-        </ele>
-        <ele>
           <name>auth_algorithm</name>
           <summary>The SNMP authentication algorithm</summary>
           <pattern>
@@ -7180,14 +7146,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
               <pattern></pattern>
             </ele>
           </ele>
-        </ele>
-<ele>
-          <name>public_key</name>
-          <pattern>text</pattern>
-        </ele>
-        <ele>
-          <name>certificate</name>
-          <pattern>text</pattern>
         </ele>
         <ele>
           <name>kdc</name>
@@ -7349,7 +7307,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             <in_use>0</in_use>
             <type>usk</type>
             <full_type>username + SSH key</full_type>
-            <formats></formats>
           </credential>
           <credential id="8e305b0b-260d-450d-91a8-dadf0b144e15">
             <name>bob</name>
@@ -7361,7 +7318,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             <login>bob</login>
             <type>up</type>
             <full_type>username + password</full_type>
-            <formats></formats>
           </credential>
           <truncated>...</truncated>
         </get_credentials_response>

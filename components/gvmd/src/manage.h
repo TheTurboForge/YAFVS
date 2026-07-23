@@ -1686,16 +1686,6 @@ nvt_severity_iterator_value (iterator_t *);
 
 /* Credentials. */
 
-/**
- * @brief Export formats for credentials
- */
-typedef enum
-{
-  CREDENTIAL_FORMAT_NONE = 0,   /// normal XML output
-  CREDENTIAL_FORMAT_PEM = 5,    /// Certificate PEM
-  CREDENTIAL_FORMAT_ERROR = -1  /// Error / Invalid format
-} credential_format_t;
-
 int
 check_private_key (const char *, const char *);
 
@@ -1772,12 +1762,6 @@ credential_full_type (const char*);
 
 const char*
 credential_iterator_certificate (iterator_t*);
-
-gboolean
-credential_iterator_format_available (iterator_t*, credential_format_t);
-
-gchar *
-credential_iterator_formats_xml (iterator_t* iterator);
 
 char*
 credential_uuid (credential_t);

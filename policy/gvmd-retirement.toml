@@ -94,14 +94,14 @@ evidence = [
   "services/yafvs-api/src/alert_write_characterization_tests.rs::gsad_and_gsa_alert_definition_paths_are_native_only",
   "services/yafvs-api/src/user_account_contract_tests.rs::legacy_user_lifecycle_is_native_only_not_public_gmp_transport",
   "services/yafvs-api/src/schedule_characterization_tests.rs::native_gsa_owns_schedule_commands_and_gmp_transport_is_retired",
-  "services/yafvs-api/src/credential_contract_tests.rs::credential_metadata_reads_and_browser_certificate_download_are_native",
-  "services/yafvs-api/src/credential_contract_tests.rs::credential_live_delete_is_native_only_but_raw_pem_compatibility_remains",
+  "services/yafvs-api/src/credential_contract_tests.rs::credential_metadata_reads_and_browser_downloads_are_native_only",
+  "services/yafvs-api/src/credential_contract_tests.rs::credential_live_delete_is_native_only",
   "services/yafvs-api/src/credential_writes_tests.rs::credential_delete_moves_live_state_to_trash_atomically_and_opaquely",
   "services/yafvs-api/src/scope_report_mutation_characterization_tests.rs::native_scope_reads_replace_public_gmp_scope_metadata_transport",
 ]
 independent_authority = ["api/openapi/yafvs-v1.yaml::x-yafvs-inherited-still-owns"]
 dependencies = ["login-session-account-auth", "team-authority-permissions"]
-notes = "Native user, alert, schedule, and scope metadata reads, exports where retained, and retained lifecycle operations are authoritative; their dedicated public GMP/XML transports are retired. Native credential list, detail, metadata export, secret-opaque live-to-trash lifecycle, SSH public-key retrieval, and bounded stored client-certificate retrieval are authoritative; stale public gsad metadata/delete aliases, the raw DELETE_CREDENTIAL parser/schema, and the duplicate C lifecycle writer are retired. The browser has no GMP download fallback, while the now-unconsumed raw PEM compatibility branch remains pending deletion. Secret updates, non-UP/USK type creation, allow_insecure mutation, and target/scanner credential-link mutation remain explicitly inherited. Schedule execution and task coupling remain separately inherited until the manager-worker owns them. Finish the remaining retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
+notes = "Native user, alert, schedule, and scope metadata reads, exports where retained, and retained lifecycle operations are authoritative; their dedicated public GMP/XML transports are retired. Native credential list, detail, metadata export, secret-opaque live-to-trash lifecycle, SSH public-key retrieval, and bounded stored client-certificate retrieval are authoritative; stale public gsad metadata/delete/download aliases, the raw DELETE_CREDENTIAL parser/schema, raw credential-format parser/output/schema, and duplicate C lifecycle writer are retired. Secret updates, non-UP/USK type creation, allow_insecure mutation, and target/scanner credential-link mutation remain explicitly inherited. Schedule execution and task coupling remain separately inherited until the manager-worker owns them. Finish the remaining retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
 
 [[responsibilities]]
 id = "team-authority-permissions"

@@ -48,7 +48,7 @@ fn openapi_path_block(path: &str) -> String {
 }
 
 #[test]
-fn credential_live_delete_is_native_only_but_raw_pem_compatibility_remains() {
+fn credential_live_delete_is_native_only() {
     assert!(GSA_CREDENTIAL_COMMAND.contains("deleteNativeCredential(this.http, id)"));
     assert!(!GSA_CREDENTIAL_COMMAND.contains("cmd: 'delete_credential'"));
 
@@ -150,13 +150,12 @@ fn credential_live_delete_is_native_only_but_raw_pem_compatibility_remains() {
         "retired raw GMP credential-delete command remains in the live schema"
     );
 
-    assert!(GSAD_GMP_C.contains("download_credential_gmp"));
     assert!(GVMD_GMP_C.contains("CLIENT_GET_CREDENTIALS"));
     assert!(GMP_SCHEMA.contains("<name>get_credentials</name>"));
 }
 
 #[test]
-fn credential_metadata_reads_and_browser_certificate_download_are_native() {
+fn credential_metadata_reads_and_browser_downloads_are_native_only() {
     for native_marker in [
         "fetchNativeCredential(this.http, id)",
         "exportNativeCredentialMetadata(this.http, id)",
@@ -206,18 +205,16 @@ fn credential_metadata_reads_and_browser_certificate_download_are_native() {
         );
     }
 
-    for retained in [
-        "download_credential_gmp",
-        "ELSE (download_credential)",
-        "<get_credentials",
-    ] {
+    for retired in ["download_credential_gmp", "ELSE (download_credential)"] {
         assert!(
-            GSAD_GMP_C.contains(retained),
-            "secret-bearing credential download dependency must remain until it is migrated: {retained}"
+            !GSAD_GMP_C.contains(retired),
+            "retired credential-download transport remains in gsad C: {retired}"
         );
     }
-    assert!(GSAD_GMP_HEADER.contains("download_credential_gmp"));
-    assert!(GSAD_VALIDATOR_C.contains("|(download_credential)"));
+    assert!(!GSAD_GMP_C.contains("content_type_from_format_string"));
+    assert!(!GSAD_GMP_HEADER.contains("download_credential_gmp"));
+    assert!(!GSAD_VALIDATOR_C.contains("|(download_credential)"));
+    assert!(!GSAD_VALIDATOR_C.contains("\"package_format\""));
     assert!(GVMD_GMP_C.contains("CLIENT_GET_CREDENTIALS"));
     assert!(GMP_SCHEMA.contains("<name>get_credentials</name>"));
 
@@ -229,33 +226,60 @@ fn credential_metadata_reads_and_browser_certificate_download_are_native() {
         !GSA_CREDENTIAL_COMMAND.contains("format === 'key' && canUseNativeApi"),
         "GSA must not fall back to inherited KEY transport"
     );
-    assert!(GSAD_VALIDATOR_C.contains("\"package_format\", \"^pem$\""));
-    assert!(!GSAD_VALIDATOR_C.contains("pem|key"));
-    let inherited_download = GSAD_GMP_C
-        .split_once("download_credential_gmp (")
-        .expect("retained PEM download handler")
+    let inherited_get = GVMD_GMP_C
+        .split_once("handle_get_credentials (")
+        .expect("retained credential metadata handler")
         .1
-        .split_once("return data;")
-        .expect("PEM download handler boundary")
+        .split_once("handle_get_info (")
+        .expect("credential metadata handler boundary")
         .0;
-    assert!(inherited_download.contains("entity_child (credential_entity, \"certificate\")"));
-    assert!(!inherited_download.contains("entity_child (credential_entity, \"public_key\")"));
-    assert!(!inherited_download.contains("\"pub\""));
-
     for retired in [
+        "get_credentials_data->format",
+        "credential_iterator_formats_xml",
         "CREDENTIAL_FORMAT_KEY",
-        "Format attribute should\"\\n                           \" be 'key' or 'pem'",
+        "CREDENTIAL_FORMAT_PEM",
+        "\"<certificate>%s</certificate>\"",
         "\"<public_key>%s</public_key>\"",
     ] {
         assert!(
-            !GVMD_GMP_C.contains(retired),
-            "retired inherited credential KEY response remains: {retired}"
+            !inherited_get.contains(retired),
+            "retired inherited credential download response remains: {retired}"
         );
     }
-    assert!(!GVMD_MANAGE_HEADER.contains("CREDENTIAL_FORMAT_KEY"));
-    assert!(!GVMD_MANAGE_SQL.contains("<format>key</format>"));
-    assert!(!GMP_SCHEMA.contains("format=\"key\""));
-    assert!(!GMP_SCHEMA.contains("<format>key</format>"));
+    for retired in [
+        "credential_format_t",
+        "credential_iterator_format_available",
+        "credential_iterator_formats_xml",
+    ] {
+        assert!(
+            !GVMD_MANAGE_HEADER.contains(retired),
+            "retired credential format declaration remains: {retired}"
+        );
+        assert!(
+            !GVMD_MANAGE_SQL.contains(retired),
+            "retired credential format helper remains: {retired}"
+        );
+    }
+    let get_credentials_schema = GMP_SCHEMA
+        .split_once("<name>get_credentials</name>")
+        .expect("retained get_credentials schema")
+        .1
+        .split_once("</command>")
+        .expect("get_credentials schema boundary")
+        .0;
+    for retired in [
+        "<name>format</name>",
+        "<name>formats</name>",
+        "<name>public_key</name>",
+        "<name>package</name>",
+        "<name>certificate</name>",
+        "<formats>",
+    ] {
+        assert!(
+            !get_credentials_schema.contains(retired),
+            "retired credential download schema remains: {retired}"
+        );
+    }
     assert!(
         !GSA_CREDENTIAL_COMMAND.contains("cmd: 'download_credential'"),
         "GSA client-certificate download must fail closed without a GMP fallback"

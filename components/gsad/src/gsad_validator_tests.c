@@ -14,20 +14,14 @@ BeforeEach (gsad_validator)
   gsad_init_validator ();
 }
 
-Ensure (gsad_validator, restrict_credential_download_formats)
+Ensure (gsad_validator, reject_removed_credential_download_transport)
 {
   validator_t validator = gsad_get_validator ();
 
   assert_that (gvm_validate (validator, "package_format", "key"),
-               is_equal_to (2));
+               is_equal_to (1));
   assert_that (gvm_validate (validator, "package_format", "pem"),
-               is_equal_to (0));
-  assert_that (gvm_validate (validator, "package_format", "rpm"),
-               is_equal_to (2));
-  assert_that (gvm_validate (validator, "package_format", "deb"),
-               is_equal_to (2));
-  assert_that (gvm_validate (validator, "package_format", "exe"),
-               is_equal_to (2));
+               is_equal_to (1));
 }
 
 Ensure (gsad_validator, reject_removed_native_only_commands)
@@ -76,7 +70,7 @@ Ensure (gsad_validator, reject_removed_native_only_commands)
   assert_that (gvm_validate (validator, "cmd", "export_credentials"),
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "download_credential"),
-               is_equal_to (0));
+               is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "delete_credential"),
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_target"),
@@ -350,7 +344,7 @@ main (int argc, char **argv)
   add_test_with_context (suite, gsad_validator,
                          reject_removed_scan_config_commands);
   add_test_with_context (suite, gsad_validator,
-                         restrict_credential_download_formats);
+                         reject_removed_credential_download_transport);
   add_test_with_context (suite, gsad_validator, validate_kdcs_name_and_value);
   add_test_with_context (suite, gsad_validator, validate_ca_pub);
   add_test_with_context (suite, gsad_validator,

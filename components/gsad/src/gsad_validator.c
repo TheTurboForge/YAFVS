@@ -33,7 +33,6 @@ gsad_init_validator ()
                      "|(delete_report)"
                      "|(delete_target)"
                      "|(delete_task)"
-                     "|(download_credential)"
                      "|(download_ssl_cert)"
                      "|(download_ca_pub)"
                      "|(download_key_pub)"
@@ -229,7 +228,6 @@ gsad_init_validator ()
   gvm_validator_add (validator, "oid", "^([0-9.]{1,80}|CVE-[-0-9]{1,14})$");
   gvm_validator_add (validator, "page", "^[_[:alnum:] ]+$");
   gvm_validator_add (validator, "page_size", "^[0-9]+$");
-  gvm_validator_add (validator, "package_format", "^pem$");
   gvm_validator_add (validator, "password", "^.*$");
   gvm_validator_add (validator, "password:value", "(?s)^.*$");
   gvm_validator_add (validator, "port", "^.*$");

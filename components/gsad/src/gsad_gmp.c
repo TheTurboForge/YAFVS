@@ -261,35 +261,6 @@ member1 (params_t *params, const char *string)
 }
 
 /**
- * @brief Set a content type from a format string.
- *
- * @param[out]  content_type  Return location for the newly set content type,
- *                            defaults to GSAD_CONTENT_TYPE_OCTET_STREAM.
- * @param[in]   format        Lowercase format string as in the respective
- *                            GMP commands.
- */
-static void
-content_type_from_format_string (enum content_type *content_type,
-                                 const char *format)
-{
-  if (!format)
-    *content_type = GSAD_CONTENT_TYPE_OCTET_STREAM;
-
-  else if (strcmp (format, "html") == 0)
-    *content_type = GSAD_CONTENT_TYPE_TEXT_HTML;
-  else if (strcmp (format, "key") == 0)
-    *content_type = GSAD_CONTENT_TYPE_APP_KEY;
-  else if (strcmp (format, "nbe") == 0)
-    *content_type = GSAD_CONTENT_TYPE_APP_NBE;
-  else if (strcmp (format, "pdf") == 0)
-    *content_type = GSAD_CONTENT_TYPE_APP_PDF;
-  else if (strcmp (format, "xml") == 0)
-    *content_type = GSAD_CONTENT_TYPE_APP_XML;
-  else
-    *content_type = GSAD_CONTENT_TYPE_OCTET_STREAM;
-}
-
-/**
  * @brief Check a modify_config response.
  *
  * @param[in]  connection   Connection with manager.
@@ -2690,124 +2661,6 @@ create_credential_gmp (gvm_connection_t *connection,
                                "Create Credential", response_data);
   free_entity (entity);
   return html;
-}
-
-/**
- * @brief Export a Credential in a defined format.
- *
- * @param[in]   connection     Connection to manager.
- * @param[in]   credentials    Username and password for authentication.
- * @param[in]   params         Request parameters.
- * @param[out]  response_data  Extra data return for the HTTP response.
- *
- * @return Binary data
- */
-char *
-download_credential_gmp (gvm_connection_t *connection,
-                         gsad_credentials_t *credentials, params_t *params,
-                         gsad_command_response_data_t *response_data)
-{
-  entity_t entity = NULL, credential_entity = NULL;
-  const gchar *credential_id, *format;
-  gchar *data = NULL, *content_disposition = NULL, *login = NULL;
-  content_type_t content_type = GSAD_CONTENT_TYPE_OCTET_STREAM;
-
-  credential_id = params_value (params, "credential_id");
-  format = params_value (params, "package_format");
-
-  CHECK_VARIABLE_INVALID (format, "Download Credential");
-  CHECK_VARIABLE_INVALID (credential_id, "Download Credential");
-
-  if (str_equal (credential_id, ""))
-    return message_invalid (connection, credentials, params, response_data,
-                            "Required credential_id parameter is missing.",
-                            "Download Credential");
-
-  if (gvm_connection_sendf (connection,
-                            "<get_credentials"
-                            " credential_id=\"%s\""
-                            " format=\"%s\"/>",
-                            credential_id, format)
-      == -1)
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting a credential. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    }
-
-    {
-      entity_t certificate_entity = NULL;
-
-      /* A client certificate. SSH public keys use the native API. */
-      if (read_entity_c (connection, &entity))
-        {
-          gsad_command_response_data_set_status_code (
-            response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-          return gsad_http_create_gsad_message (
-            credentials,
-            "An internal error occurred while getting a credential. "
-            "The credential could not be delivered. "
-            "Diagnostics: Failure to receive credential from manager daemon.",
-            response_data);
-        }
-
-      credential_entity = entity_child (entity, "credential");
-      if (credential_entity)
-        certificate_entity = entity_child (credential_entity, "certificate");
-      if (certificate_entity != NULL)
-        {
-          data = g_strdup (entity_text (certificate_entity));
-          entity_t login_entity = entity_child (credential_entity, "login");
-          if (login_entity)
-            login = g_strdup (entity_text (login_entity));
-          else
-            login = NULL;
-
-          gsad_command_response_data_set_content_length (response_data,
-                                                         strlen (data));
-        }
-      else
-        {
-          gsad_command_response_data_set_status_code (
-            response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-          free_entity (entity);
-          return gsad_http_create_gsad_message (
-            credentials,
-            "An internal error occurred while getting a credential. "
-            "The credential could not be delivered. "
-            "Diagnostics: Failure to parse credential from manager daemon.",
-            response_data);
-        }
-    }
-
-  if (credential_entity != NULL)
-    {
-      entity_t login_entity;
-      login_entity = entity_child (credential_entity, "login");
-      if (login_entity)
-        login = g_strdup (entity_text (login_entity));
-      else
-        login = NULL;
-    }
-
-  content_disposition =
-    g_strdup_printf ("attachment; filename=credential-%s.%s",
-                     (login && strcmp (login, "")) ? login : credential_id,
-                     format);
-  content_type_from_format_string (&content_type, format);
-
-  gsad_command_response_data_set_content_disposition (response_data,
-                                                      content_disposition);
-  gsad_command_response_data_set_content_type (response_data, content_type);
-
-  free_entity (entity);
-  g_free (login);
-
-  return data;
 }
 
 /**
@@ -7140,7 +6993,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (edit_config_family_all)
   ELSE (export_asset)
   ELSE (export_assets)
-  ELSE (download_credential)
   ELSE (export_override)
   ELSE (export_overrides)
   ELSE (export_preference_file)

@@ -17770,60 +17770,6 @@ credential_iterator_privacy_password (iterator_t* iterator)
 
 
 /**
- * @brief  Test if a credential format is available for an iterator.
- *
- * @param[in]  iterator  Iterator.
- * @param[in]  format    The format to test availability of.
- *
- * @return  Whether format is available for the current credential of iterator.
- */
-gboolean
-credential_iterator_format_available (iterator_t* iterator,
-                                      credential_format_t format)
-{
-  const char *type;
-
-  type = credential_iterator_type (iterator);
-
-  switch (format)
-    {
-      case CREDENTIAL_FORMAT_NONE:
-        return TRUE;
-      case CREDENTIAL_FORMAT_PEM:
-        if (strcasecmp (type, "cc") == 0)
-          return TRUE;
-        else
-          return FALSE;
-      case CREDENTIAL_FORMAT_ERROR:
-        return FALSE;
-    }
-  return FALSE;
-}
-
-/**
- * @brief  Get XML of available formats for a credential iterator.
- *
- * @param[in]  iterator  Iterator.
- *
- * @return  Newly allocated XML string.
- */
-gchar *
-credential_iterator_formats_xml (iterator_t* iterator)
-{
-  GString *xml;
-
-  xml = g_string_new ("<formats>");
-
-  if (credential_iterator_format_available (iterator,
-                                            CREDENTIAL_FORMAT_PEM))
-    g_string_append (xml, "<format>pem</format>");
-
-  g_string_append (xml, "</formats>");
-
-  return g_string_free (xml, FALSE);
-}
-
-/**
  * @brief Get the UUID of a Credential.
  *
  * @param[in]  credential  Credential.

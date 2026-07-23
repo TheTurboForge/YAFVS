@@ -379,7 +379,6 @@ const allowedSnakeCase = [
   'os_txt',
   'override_list',
   'overrides_data',
-  'package_format',
   'package_unreliable',
   'param_item',
   'param_name',

@@ -836,7 +836,6 @@ get_configs_data_reset (get_configs_data_t *data)
  */
 typedef struct
 {
-  char *format;      ///< Format requested: "key", "deb", ....
   get_data_t get;    ///< Get Args.
   int scanners;      ///< Boolean.  Whether to return scanners using credential.
   int targets;       ///< Boolean.  Whether to return targets using credential.
@@ -2328,8 +2327,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
               get_credentials_data->targets = strcmp (attribute, "0");
             else
               get_credentials_data->targets = 0;
-            append_attribute (attribute_names, attribute_values, "format",
-                              &get_credentials_data->format);
             set_client_state (CLIENT_GET_CREDENTIALS);
           }
         else if (strcasecmp ("GET_NVTS", element_name) == 0)
@@ -6679,35 +6676,6 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
 {
   iterator_t credentials;
   int count, filtered, ret, first;
-  credential_format_t format;
-  char *data_format;
-
-  data_format = get_credentials_data->format;
-  if (data_format)
-    {
-      if (strlen (data_format))
-        {
-          if (strcasecmp (data_format, "pem") == 0)
-            format = CREDENTIAL_FORMAT_PEM;
-          else
-            format = CREDENTIAL_FORMAT_ERROR;
-        }
-      else
-        format = CREDENTIAL_FORMAT_NONE;
-    }
-  else
-    format = CREDENTIAL_FORMAT_NONE;
-
-  if (format == CREDENTIAL_FORMAT_ERROR)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-        (XML_ERROR_SYNTAX ("get_credentials",
-                           "Format attribute should"
-                           " be 'pem'"));
-      get_credentials_data_reset (get_credentials_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
 
   INIT_GET (credential, Credential);
 
@@ -6751,7 +6719,6 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
   while (1)
     {
       const char *login, *type, *cert, *private_key, *password, *public_key;
-      gchar *formats_xml;
 
       ret = get_next (&credentials, &get_credentials_data->get,
                       &first, &count, init_credential_iterator);
@@ -6793,11 +6760,6 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
             type ? type : "",
             type ? credential_full_type (type) : "");
         }
-
-      formats_xml = credential_iterator_formats_xml (&credentials);
-      SEND_TO_CLIENT_OR_FAIL (formats_xml);
-      g_free (formats_xml);
-
 
       if (type && strcmp (type, "krb5") == 0)
         {
@@ -6913,20 +6875,6 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
               g_free (fingerprint);
             }
           SENDF_TO_CLIENT_OR_FAIL ("</public_key_info>");
-        }
-
-      switch (format)
-        {
-          case CREDENTIAL_FORMAT_PEM:
-            {
-              SENDF_TO_CLIENT_OR_FAIL
-                ("<certificate>%s</certificate>", cert ?: "");
-              break;
-            }
-          case CREDENTIAL_FORMAT_NONE:
-            break;
-          default:
-            g_warning ("%s: Unexpected credential format.", __func__);
         }
 
       if (get_credentials_data->scanners)

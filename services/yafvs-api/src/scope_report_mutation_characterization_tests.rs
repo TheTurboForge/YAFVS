@@ -9,8 +9,10 @@ use crate::direct_api::direct_api_v1_method_is_allowed;
 const MANAGE_SQL_SCOPES_C: &str = include_str!("../../../components/gvmd/src/manage_sql_scopes.c");
 const MANAGE_SQL_METRICS_C: &str =
     include_str!("../../../components/gvmd/src/manage_sql_metrics.c");
+const MANAGE_COMMANDS_C: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
 const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSAD_GMP_H: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GSA_SCOPES_TS: &str = include_str!("../../../components/gsa/src/gmp/commands/scopes.ts");
 const GSA_SCOPE_DETAILS_TSX: &str =
@@ -19,6 +21,8 @@ const GSA_SCOPE_LIST_TSX: &str =
     include_str!("../../../components/gsa/src/web/pages/scopes/ScopeListPage.tsx");
 const GSA_SCOPE_REPORT_LIST_TSX: &str =
     include_str!("../../../components/gsa/src/web/pages/scope-reports/ScopeReportListPage.tsx");
+const NATIVE_SCOPE_READS_RS: &str = include_str!("scope_payloads.rs");
+const NATIVE_SCOPE_REPORTS_RS: &str = include_str!("scope_reports.rs");
 
 fn inherited_function(source: &str, name: &str) -> String {
     let marker = format!("\n{name} (");
@@ -95,6 +99,53 @@ fn legacy_scope_report_gmp_commands_are_removed_end_to_end() {
         assert!(
             !source.contains(legacy_marker),
             "legacy scope-report GMP marker remains: {legacy_marker}"
+        );
+    }
+}
+
+#[test]
+fn native_scope_reads_replace_public_gmp_scope_metadata_transport() {
+    assert!(GSA_SCOPES_TS.contains("fetchNativeScopes"));
+    assert!(GSA_SCOPE_DETAILS_TSX.contains("fetchNativeScope"));
+    for (source, marker) in [
+        (GSAD_GMP_C, "get_scope_gmp"),
+        (GSAD_GMP_C, "get_scopes_gmp"),
+        (GSAD_GMP_C, "ELSE (get_scope)"),
+        (GSAD_GMP_C, "ELSE (get_scopes)"),
+        (GSAD_GMP_H, "get_scope_gmp"),
+        (GSAD_GMP_H, "get_scopes_gmp"),
+        (GSAD_VALIDATOR_C, "|(get_scope)"),
+        (GSAD_VALIDATOR_C, "|(get_scopes)"),
+        (GMP_C, "CLIENT_GET_SCOPE"),
+        (GMP_C, "CLIENT_GET_SCOPES"),
+        (GMP_C, "handle_get_scopes_command"),
+        (GMP_C, "scope_command_data_t"),
+        (MANAGE_COMMANDS_C, "{\"GET_SCOPE\""),
+        (MANAGE_COMMANDS_C, "{\"GET_SCOPES\""),
+    ] {
+        assert!(
+            !source.contains(marker),
+            "retired scope metadata transport marker remains: {marker}"
+        );
+    }
+    for (source, marker) in [
+        (MANAGE_SQL_SCOPES_C, "ensure_organization_scope"),
+        (NATIVE_SCOPE_READS_RS, "pub(crate) async fn scopes("),
+        (NATIVE_SCOPE_READS_RS, "pub(crate) async fn scope_detail("),
+        (GSA_SCOPES_TS, "generateNativeScopeReport"),
+        (GSA_SCOPES_TS, "deleteNativeScopeReport"),
+        (
+            NATIVE_SCOPE_REPORTS_RS,
+            "pub(crate) async fn scope_reports(",
+        ),
+        (
+            NATIVE_SCOPE_REPORTS_RS,
+            "pub(crate) async fn scope_report_detail(",
+        ),
+    ] {
+        assert!(
+            source.contains(marker),
+            "retained native scope/report behavior missing: {marker}"
         );
     }
 }

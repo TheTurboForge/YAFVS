@@ -52,8 +52,6 @@ command_t gmp_commands[]
     {"GET_PORT_LISTS", "Get all port lists."},
     {"GET_PREFERENCES", "Get preferences for all available NVTs."},
     {"GET_REPORTS", "Get all reports."},
-    {"GET_SCOPE", "Get one reporting scope."},
-    {"GET_SCOPES", "Get reporting scopes."},
     {"GET_SETTINGS", "Get all settings."},
     {"GET_TARGETS", "Get all targets."},
     {"GET_TASKS", "Get all tasks."},

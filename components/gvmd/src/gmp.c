@@ -1464,85 +1464,6 @@ stop_task_data_reset (stop_task_data_t *data)
 }
 
 /**
- * @brief Command data for scope commands.
- */
-typedef struct
-{
-  char *scope_id;                  ///< ID of scope.
-  char *report_id;                 ///< ID of raw scan report.
-  char *scope_report_id;           ///< ID of scope report.
-  char *name;                      ///< Scope name.
-  char *comment;                   ///< Scope comment.
-  char *protection_requirement;    ///< Scope protection requirement.
-  char *target_ids;                ///< Comma or whitespace separated targets.
-  char *host_ids;                  ///< Comma or whitespace separated hosts.
-  char *filter;                    ///< Optional collection filter.
-  int details;                     ///< Whether to include details.
-} scope_command_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-scope_command_data_reset (scope_command_data_t *data)
-{
-  free (data->scope_id);
-  free (data->report_id);
-  free (data->scope_report_id);
-  free (data->name);
-  free (data->comment);
-  free (data->protection_requirement);
-  free (data->target_ids);
-  free (data->host_ids);
-  free (data->filter);
-
-  memset (data, 0, sizeof (scope_command_data_t));
-}
-
-static void
-scope_command_data_start (scope_command_data_t *data,
-                          const gchar **attribute_names,
-                          const gchar **attribute_values,
-                          int default_details)
-{
-  const gchar *attribute;
-
-  scope_command_data_reset (data);
-  data->details = default_details;
-
-  if (find_attribute (attribute_names, attribute_values, "scope_id",
-                      &attribute))
-    data->scope_id = g_strdup (attribute);
-  if (find_attribute (attribute_names, attribute_values, "report_id",
-                      &attribute))
-    data->report_id = g_strdup (attribute);
-  if (find_attribute (attribute_names, attribute_values, "scope_report_id",
-                      &attribute))
-    data->scope_report_id = g_strdup (attribute);
-  if (find_attribute (attribute_names, attribute_values, "name", &attribute))
-    data->name = g_strdup (attribute);
-  if (find_attribute (attribute_names, attribute_values, "comment", &attribute))
-    data->comment = g_strdup (attribute);
-  if (find_attribute (attribute_names, attribute_values,
-                      "protection_requirement", &attribute))
-    data->protection_requirement = g_strdup (attribute);
-  if (find_attribute (attribute_names, attribute_values, "target_ids",
-                      &attribute))
-    data->target_ids = g_strdup (attribute);
-  if (find_attribute (attribute_names, attribute_values, "host_ids",
-                      &attribute))
-    data->host_ids = g_strdup (attribute);
-  if (find_attribute (attribute_names, attribute_values, "filter",
-                      &attribute))
-    data->filter = g_strdup (attribute);
-  if (find_attribute (attribute_names, attribute_values, "details",
-                      &attribute))
-    data->details = strcmp (attribute, "0") != 0;
-}
-
-/**
  * @brief Command data, as passed between GMP parser callbacks.
  */
 typedef union
@@ -1567,8 +1488,6 @@ typedef union
   get_preferences_data_t get_preferences;             ///< get_preferences
   get_reports_data_t get_reports;                     ///< get_reports
   get_resource_names_data_t get_resource_names;       ///< get_resource_names
-  scope_command_data_t get_scope;                     ///< get_scope
-  scope_command_data_t get_scopes;                    ///< get_scopes
   get_settings_data_t get_settings;                   ///< get_settings
   get_targets_data_t get_targets;                     ///< get_targets
   get_tasks_data_t get_tasks;                         ///< get_tasks
@@ -1724,18 +1643,6 @@ static get_reports_data_t *get_reports_data
  */
 static get_resource_names_data_t *get_resource_names_data
  = &(command_data.get_resource_names);
-
-/**
- * @brief Parser callback data for GET_SCOPE.
- */
-static scope_command_data_t *get_scope_data
- = &(command_data.get_scope);
-
-/**
- * @brief Parser callback data for GET_SCOPES.
- */
-static scope_command_data_t *get_scopes_data
- = &(command_data.get_scopes);
 
 /**
  * @brief Parser callback data for GET_SETTINGS.
@@ -1940,8 +1847,6 @@ typedef enum
   CLIENT_GET_PREFERENCES,
   CLIENT_GET_REPORTS,
   CLIENT_GET_RESOURCE_NAMES,
-  CLIENT_GET_SCOPE,
-  CLIENT_GET_SCOPES,
   CLIENT_GET_SETTINGS,
   CLIENT_GET_TARGETS,
   CLIENT_GET_TASKS,
@@ -2609,18 +2514,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                                 "type", &typebuf))
               get_resource_names_data->type = g_ascii_strdown (typebuf, -1);
             set_client_state (CLIENT_GET_RESOURCE_NAMES);
-          }
-        else if (strcasecmp ("GET_SCOPE", element_name) == 0)
-          {
-            scope_command_data_start (get_scope_data, attribute_names,
-                                      attribute_values, 1);
-            set_client_state (CLIENT_GET_SCOPE);
-          }
-        else if (strcasecmp ("GET_SCOPES", element_name) == 0)
-          {
-            scope_command_data_start (get_scopes_data, attribute_names,
-                                      attribute_values, 0);
-            set_client_state (CLIENT_GET_SCOPES);
           }
         else if (strcasecmp ("GET_SETTINGS", element_name) == 0)
           {
@@ -10877,33 +10770,6 @@ extern char client_address[];
  * @param[in]  error             Error parameter.
  */
 static void
-handle_get_scopes_command (gmp_parser_t *gmp_parser, GError **error,
-                           scope_command_data_t *data,
-                           const char *response_name)
-{
-  GString *xml;
-  int count;
-
-  count = scope_count (data->scope_id);
-  xml = g_string_new ("");
-  g_string_append_printf (xml,
-                          "<%s_response status=\"" STATUS_OK "\""
-                          " status_text=\"" STATUS_OK_TEXT "\">"
-                          "<scopes start=\"1\" max=\"-1\">",
-                          response_name);
-  buffer_scopes_xml (xml, data->scope_id, data->details);
-  g_string_append_printf (xml,
-                          "</scopes><scope_count><filtered>%i</filtered>"
-                          "<page>%i</page>%i</scope_count></%s_response>",
-                          count, count, count, response_name);
-
-  SEND_TO_CLIENT_OR_FAIL (xml->str);
-  g_string_free (xml, TRUE);
-  scope_command_data_reset (data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-static void
 gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                             const gchar *element_name,
                             gpointer user_data,
@@ -11352,16 +11218,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
       case CLIENT_GET_RESOURCE_NAMES:
         handle_get_resource_names (gmp_parser, error);
-        break;
-
-      case CLIENT_GET_SCOPE:
-        handle_get_scopes_command (gmp_parser, error, get_scope_data,
-                                   "get_scope");
-        break;
-
-      case CLIENT_GET_SCOPES:
-        handle_get_scopes_command (gmp_parser, error, get_scopes_data,
-                                   "get_scopes");
         break;
 
       case CLIENT_GET_SETTINGS:

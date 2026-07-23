@@ -65,8 +65,6 @@ gsad_init_validator ()
                      "|(get_report)"
                      "|(get_reports)"
                      "|(get_resource_names)"
-                     "|(get_scope)"
-                     "|(get_scopes)"
                      "|(get_setting)"
                      "|(get_settings)"
                      "|(get_target)"

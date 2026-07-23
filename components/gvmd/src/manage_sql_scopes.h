@@ -28,10 +28,4 @@ typedef resource_t scope_report_t;
 int
 ensure_organization_scope (void);
 
-int
-buffer_scopes_xml (GString *, const char *, int);
-
-int
-scope_count (const char *);
-
 #endif /* not _GVMD_MANAGE_SQL_SCOPES_H */

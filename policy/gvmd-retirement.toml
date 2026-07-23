@@ -97,10 +97,11 @@ evidence = [
   "services/yafvs-api/src/credential_contract_tests.rs::credential_metadata_reads_have_no_public_gsad_aliases_but_download_remains",
   "services/yafvs-api/src/credential_contract_tests.rs::credential_live_delete_is_native_only_but_secret_download_remains_inherited",
   "services/yafvs-api/src/credential_writes_tests.rs::credential_delete_moves_live_state_to_trash_atomically_and_opaquely",
+  "services/yafvs-api/src/scope_report_mutation_characterization_tests.rs::native_scope_reads_replace_public_gmp_scope_metadata_transport",
 ]
 independent_authority = ["api/openapi/yafvs-v1.yaml::x-yafvs-inherited-still-owns"]
 dependencies = ["login-session-account-auth", "team-authority-permissions"]
-notes = "Native user, alert, and schedule reads, exports, and retained lifecycle operations are authoritative, and their dedicated public GMP/XML transports are retired. Native credential list, detail, metadata export, and secret-opaque live-to-trash lifecycle are authoritative; stale public gsad metadata/delete aliases, the raw DELETE_CREDENTIAL parser/schema, and the duplicate C lifecycle writer are retired. Secret-bearing download, secret updates, non-UP/USK type creation, allow_insecure mutation, and target/scanner credential-link mutation remain explicitly inherited. Schedule execution and task coupling remain separately inherited until the manager-worker owns them. Finish the remaining retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
+notes = "Native user, alert, schedule, and scope metadata reads, exports where retained, and retained lifecycle operations are authoritative; their dedicated public GMP/XML transports are retired. Native credential list, detail, metadata export, and secret-opaque live-to-trash lifecycle are authoritative; stale public gsad metadata/delete aliases, the raw DELETE_CREDENTIAL parser/schema, and the duplicate C lifecycle writer are retired. Secret-bearing download, secret updates, non-UP/USK type creation, allow_insecure mutation, and target/scanner credential-link mutation remain explicitly inherited. Schedule execution and task coupling remain separately inherited until the manager-worker owns them. Finish the remaining retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
 
 [[responsibilities]]
 id = "team-authority-permissions"

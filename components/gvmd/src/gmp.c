@@ -732,30 +732,6 @@ get_aggregates_data_reset (get_aggregates_data_t *data)
 }
 
 /**
- * @brief Command data for the get_assets command.
- */
-typedef struct
-{
-  char *type;         ///< Requested asset type.
-  get_data_t get;     ///< Get Args.
-  int details;        ///< Boolean.  Whether to include full details.
-} get_assets_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_assets_data_reset (get_assets_data_t *data)
-{
-  free (data->type);
-  get_data_reset (&data->get);
-
-  memset (data, 0, sizeof (get_assets_data_t));
-}
-
-/**
  * @brief Command data for the get_configs command.
  */
 typedef struct
@@ -1356,7 +1332,6 @@ typedef union
   delete_task_data_t delete_task;                     ///< delete_task
   get_aggregates_data_t get_aggregates;               ///< get_aggregates
   get_configs_data_t get_configs;                     ///< get_configs
-  get_assets_data_t get_assets;                       ///< get_assets
   get_credentials_data_t get_credentials;             ///< get_credentials
   get_info_data_t get_info;                           ///< get_info
   get_nvts_data_t get_nvts;                           ///< get_nvts
@@ -1451,12 +1426,6 @@ static get_aggregates_data_t *get_aggregates_data
  */
 static get_configs_data_t *get_configs_data
  = &(command_data.get_configs);
-
-/**
- * @brief Parser callback data for GET_ASSETS.
- */
-static get_assets_data_t *get_assets_data
- = &(command_data.get_assets);
 
 /**
  * @brief Parser callback data for GET_CREDENTIALS.
@@ -1672,7 +1641,6 @@ typedef enum
   CLIENT_GET_AGGREGATES_DATA_COLUMN,
   CLIENT_GET_AGGREGATES_SORT,
   CLIENT_GET_AGGREGATES_TEXT_COLUMN,
-  CLIENT_GET_ASSETS,
   CLIENT_GET_CONFIGS,
   CLIENT_GET_CREDENTIALS,
   CLIENT_GET_INFO,
@@ -2081,17 +2049,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
               }
 
             set_client_state (CLIENT_GET_AGGREGATES);
-          }
-        else if (strcasecmp ("GET_ASSETS", element_name) == 0)
-          {
-            const gchar* typebuf;
-            get_data_parse_attributes (&get_assets_data->get, "asset",
-                                       attribute_names,
-                                       attribute_values);
-            if (find_attribute (attribute_names, attribute_values,
-                                "type", &typebuf))
-              get_assets_data->type = g_ascii_strdown (typebuf, -1);
-            set_client_state (CLIENT_GET_ASSETS);
           }
         else if (strcasecmp ("GET_CONFIGS", element_name) == 0)
           {
@@ -5883,311 +5840,6 @@ handle_get_aggregates (gmp_parser_t *gmp_parser, GError **error)
 }
 
 /**
- * @brief Handle end of GET_ASSETS element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_assets (gmp_parser_t *gmp_parser, GError **error)
-{
-  iterator_t assets;
-  int count, first, filtered, ret;
-  int (*init_asset_iterator) (iterator_t *, const get_data_t *);
-  int (*asset_count) (const get_data_t *get);
-
-  if (acl_user_may ("get_assets") == 0)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-        (XML_ERROR_SYNTAX ("get_assets",
-                           "Permission denied"));
-      get_assets_data_reset (get_assets_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  if (get_assets_data->type == NULL)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-        (XML_ERROR_SYNTAX ("get_assets",
-                           "No type specified."));
-      get_assets_data_reset (get_assets_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  /* Set type specific functions. */
-  if (g_strcmp0 ("host", get_assets_data->type) == 0)
-    {
-      INIT_GET (asset, Host);
-      init_asset_iterator = init_asset_host_iterator;
-      asset_count = asset_host_count;
-      get_assets_data->get.subtype = g_strdup ("host");
-    }
-  else if (g_strcmp0 ("os", get_assets_data->type) == 0)
-    {
-      INIT_GET (asset, Operating System);
-      init_asset_iterator = init_asset_os_iterator;
-      asset_count = asset_os_count;
-      get_assets_data->get.subtype = g_strdup ("os");
-    }
-  else
-    {
-      if (send_find_error_to_client ("get_assets", "type",
-                                     get_assets_data->type, gmp_parser))
-        {
-          error_send_to_client (error);
-        }
-      get_assets_data_reset (get_assets_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  ret = init_asset_iterator (&assets, &get_assets_data->get);
-  if (ret)
-    {
-      switch (ret)
-        {
-        case 1:
-          if (send_find_error_to_client ("get_assets", "type",
-                                         get_assets_data->type,
-                                         gmp_parser))
-            {
-              error_send_to_client (error);
-              return;
-            }
-          break;
-        case 2:
-          if (send_find_error_to_client
-              ("get_assets", "filter", get_assets_data->get.filt_id,
-               gmp_parser))
-            {
-              error_send_to_client (error);
-              return;
-            }
-          break;
-        case -1:
-          SEND_TO_CLIENT_OR_FAIL
-            (XML_INTERNAL_ERROR ("get_assets"));
-          break;
-        }
-      get_assets_data_reset (get_assets_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  count = 0;
-  manage_filter_controls (get_assets_data->get.filter, &first, NULL, NULL, NULL);
-  SEND_GET_START ("asset");
-  while (next (&assets))
-    {
-      GString *result;
-      iterator_t identifiers;
-      resource_t asset;
-      gchar *routes_xml;
-
-      asset = get_iterator_resource (&assets);
-      if (send_get_common ("asset", &get_assets_data->get, &assets,
-                           gmp_parser->client_writer,
-                           gmp_parser->client_writer_data,
-                           asset_iterator_writable (&assets),
-                           asset_iterator_in_use (&assets)))
-        {
-          error_send_to_client (error);
-          return;
-        }
-
-      result = g_string_new ("");
-
-      /* Information depending on type. */
-
-      if (g_strcmp0 ("host", get_assets_data->type) == 0)
-        {
-          xml_string_append (result, "<identifiers>");
-          init_host_identifier_iterator (&identifiers,
-                                          get_iterator_resource (&assets),
-                                          0, NULL);
-          while (next (&identifiers))
-            {
-              const char *source_type;
-              gchar *name;
-
-              source_type = host_identifier_iterator_source_type
-                              (&identifiers);
-              if (strcmp (source_type, "User") == 0)
-                name = user_name (host_identifier_iterator_source_id
-                                    (&identifiers));
-              else
-                name = NULL;
-
-              xml_string_append (result,
-                                 "<identifier id=\"%s\">"
-                                 "<name>%s</name>"
-                                 "<value>%s</value>",
-                                 get_iterator_uuid (&identifiers),
-                                 get_iterator_name (&identifiers),
-                                 host_identifier_iterator_value (&identifiers));
-
-              xml_string_append (result,
-                                 "<creation_time>%s</creation_time>",
-                                 iso_if_time (get_iterator_creation_time (&identifiers)));
-
-              xml_string_append (result,
-                                 "<modification_time>%s</modification_time>",
-                                 iso_if_time (get_iterator_modification_time (&identifiers)));
-
-              xml_string_append (result,
-                                 "<source id=\"%s\">"
-                                 "<type>%s</type>"
-                                 "<data>%s</data>"
-                                 "<deleted>%i</deleted>"
-                                 "<name>%s</name>"
-                                 "</source>",
-                                 host_identifier_iterator_source_id
-                                  (&identifiers),
-                                 source_type,
-                                 host_identifier_iterator_source_data
-                                  (&identifiers),
-                                 host_identifier_iterator_source_orphan
-                                  (&identifiers),
-                                 name ? name : "");
-
-              g_free (name);
-
-              if (strcmp (get_iterator_name (&identifiers), "OS") == 0)
-                xml_string_append (result,
-                                   "<os id=\"%s\">"
-                                   "<title>%s</title>"
-                                   "</os>",
-                                   host_identifier_iterator_os_id
-                                    (&identifiers),
-                                   host_identifier_iterator_os_title
-                                    (&identifiers));
-
-              xml_string_append (result, "</identifier>");
-            }
-          cleanup_iterator (&identifiers);
-          xml_string_append (result, "</identifiers>");
-        }
-
-      g_string_append_printf (result, "<type>%s</type>",
-                              get_assets_data->type);
-      g_string_append_printf (result, "<%s>", get_assets_data->type);
-
-      if (g_strcmp0 ("os", get_assets_data->type) == 0)
-        {
-          iterator_t os_hosts;
-          const char *latest, *highest, *average;
-
-          latest = asset_os_iterator_latest_severity (&assets);
-          highest = asset_os_iterator_highest_severity (&assets);
-          average = asset_os_iterator_average_severity (&assets);
-          g_string_append_printf (result,
-                                  "<latest_severity>"
-                                  "<value>%s</value>"
-                                  "</latest_severity>"
-                                  "<highest_severity>"
-                                  "<value>%s</value>"
-                                  "</highest_severity>"
-                                  "<average_severity>"
-                                  "<value>%s</value>"
-                                  "</average_severity>",
-                                  latest ? latest : "",
-                                  highest ? highest : "",
-                                  average ? average : "");
-
-          g_string_append_printf (result,
-                                  "<title>%s</title>"
-                                  "<installs>%i</installs>"
-                                  "<all_installs>%i</all_installs>"
-                                  "<hosts>"
-                                  "%i",
-                                  asset_os_iterator_title (&assets),
-                                  asset_os_iterator_installs (&assets),
-                                  asset_os_iterator_all_installs (&assets),
-                                  asset_os_iterator_installs (&assets));
-          init_os_host_iterator (&os_hosts,
-                                  get_iterator_resource (&assets));
-          while (next (&os_hosts))
-            {
-              const char *severity;
-              severity = os_host_iterator_severity (&os_hosts);
-              g_string_append_printf (result,
-                                      "<asset id=\"%s\">"
-                                      "<name>%s</name>"
-                                      "<severity>"
-                                      "<value>%s</value>"
-                                      "</severity>"
-                                      "</asset>",
-                                      get_iterator_uuid (&os_hosts),
-                                      get_iterator_name (&os_hosts),
-                                      severity ? severity : "");
-            }
-          cleanup_iterator (&os_hosts);
-          g_string_append_printf (result, "</hosts>");
-        }
-      else if (g_strcmp0 ("host", get_assets_data->type) == 0)
-        {
-          const char *severity;
-          iterator_t details;
-
-          severity = asset_host_iterator_severity (&assets);
-          g_string_append_printf (result,
-                                  "<severity>"
-                                  "<value>%s</value>"
-                                  "</severity>",
-                                  severity ? severity : "");
-
-          init_host_detail_iterator (&details,
-                                      get_iterator_resource (&assets));
-          while (next (&details))
-            g_string_append_printf (result,
-                                    "<detail>"
-                                    "<name>%s</name>"
-                                    "<value>%s</value>"
-                                    "<source id=\"%s\">"
-                                    "<type>%s</type>"
-                                    "</source>"
-                                    "</detail>",
-                                    host_detail_iterator_name
-                                      (&details),
-                                    host_detail_iterator_value
-                                      (&details),
-                                    host_detail_iterator_source_id
-                                      (&details),
-                                    host_detail_iterator_source_type
-                                      (&details));
-          cleanup_iterator (&details);
-
-          if (get_assets_data->get.id)
-            {
-              routes_xml = host_routes_xml (asset);
-              g_string_append (result, routes_xml);
-              g_free (routes_xml);
-            }
-        }
-
-      g_string_append_printf (result,
-                              "</%s>"
-                              "</asset>",
-                              get_assets_data->type);
-      SEND_TO_CLIENT_OR_FAIL (result->str);
-      count++;
-      g_string_free (result, TRUE);
-    }
-  cleanup_iterator (&assets);
-
-  filtered = get_assets_data->get.id
-              ? 1
-              : asset_count (&get_assets_data->get);
-
-  SEND_GET_END ("asset", &get_assets_data->get, count, filtered);
-
-  get_assets_data_reset (get_assets_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
  * @brief Handle end of GET_CONFIGS element.
  *
  * @param[in]  gmp_parser   GMP parser.
@@ -9902,10 +9554,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_GET_AGGREGATES, DATA_COLUMN);
       CLOSE (CLIENT_GET_AGGREGATES, SORT);
       CLOSE (CLIENT_GET_AGGREGATES, TEXT_COLUMN);
-
-      case CLIENT_GET_ASSETS:
-        handle_get_assets (gmp_parser, error);
-        break;
 
       case CLIENT_GET_CONFIGS:
         handle_get_configs (gmp_parser, error);

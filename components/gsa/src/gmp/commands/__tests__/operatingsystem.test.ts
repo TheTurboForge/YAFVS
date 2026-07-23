@@ -14,6 +14,56 @@ afterEach(() => {
 });
 
 describe('OperatingSystemCommand tests', () => {
+  test('should fetch operating system detail through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'os-id',
+        name: 'cpe:/o:debian:debian_linux:12',
+        title: 'Debian GNU/Linux 12',
+        hosts: 2,
+        all_hosts: 3,
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(path => 'https://yafvs.example/' + path);
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const result = await new OperatingSystemCommand(fakeHttp).get({
+      id: 'os-id',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/operating-systems/os-id',
+      {token: 'test-token'},
+    );
+    expect(result.data.id).toEqual('os-id');
+    expect(result.data.title).toEqual('Debian GNU/Linux 12');
+    expect(result.data.hosts).toEqual(2);
+  });
+
+  test('should reject detail reads without a native HTTP adapter', async () => {
+    const legacyHttp = createHttp(undefined);
+
+    const cmd = new OperatingSystemCommand(legacyHttp);
+
+    await expect(cmd.get({id: 'os-id'})).rejects.toThrow(
+      'Operating-system reads and exports require the native HTTP adapter.',
+    );
+    await expect(cmd.export({id: 'os-id'})).rejects.toThrow(
+      'Operating-system reads and exports require the native HTTP adapter.',
+    );
+    expect(legacyHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should export operating system metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

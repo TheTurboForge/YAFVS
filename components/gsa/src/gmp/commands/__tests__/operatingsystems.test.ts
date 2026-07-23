@@ -29,6 +29,21 @@ const createNativeHttp = () => {
 };
 
 describe('OperatingSystemsCommand tests', () => {
+  test('should reject every read and export path without a native HTTP adapter', async () => {
+    const legacyHttp = createHttp(undefined);
+    const cmd = new OperatingSystemsCommand(legacyHttp);
+    const filter = Filter.fromString('first=1 rows=25 search=linux');
+    const error =
+      'Operating-system reads and exports require the native HTTP adapter.';
+
+    await expect(cmd.get()).rejects.toThrow(error);
+    await expect(cmd.getAll()).rejects.toThrow(error);
+    expect(() => cmd.exportByIds(['os-1'])).toThrow(error);
+    expect(() => cmd.export([{id: 'os-1'}])).toThrow(error);
+    await expect(cmd.exportByFilter(filter)).rejects.toThrow(error);
+    expect(legacyHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should fetch operating systems through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

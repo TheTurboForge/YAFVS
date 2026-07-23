@@ -207,21 +207,6 @@ get_info (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
 char *
 save_asset_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                 gsad_command_response_data_t *);
-char *
-get_assets_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                gsad_command_response_data_t *);
-char *
-get_asset_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-               gsad_command_response_data_t *);
-char *
-export_asset_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                  gsad_command_response_data_t *);
-char *
-export_assets_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                   gsad_command_response_data_t *);
-char *
-get_assets_chart_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                      gsad_command_response_data_t *);
 
 char *
 renew_session_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,

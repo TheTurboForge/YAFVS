@@ -35,6 +35,18 @@ fn advertised_commands() -> BTreeSet<String> {
         .collect()
 }
 
+#[test]
+fn get_assets_is_a_native_only_acl_key_not_public_transport() {
+    assert!(!advertised_commands().contains("GET_ASSETS"));
+    assert!(!authenticated_parser_commands().contains("GET_ASSETS"));
+    assert!(native_acl_operations().contains("GET_ASSETS"));
+    assert!(!GMP.contains("CLIENT_GET_ASSETS"));
+    assert!(!GMP.contains("handle_get_assets"));
+    assert!(!GMP_SCHEMA.contains("<name>get_assets</name>"));
+    assert!(GMP_SCHEMA.contains("instead use the GET_ASSETS command"));
+    assert!(GMP_SCHEMA.contains("GET_ASSETS should be used instead"));
+}
+
 fn authenticated_parser_commands() -> BTreeSet<String> {
     let block = GMP
         .split_once("case CLIENT_AUTHENTIC:")

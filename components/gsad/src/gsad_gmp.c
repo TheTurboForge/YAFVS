@@ -154,10 +154,6 @@ gmpf (gvm_connection_t *, gsad_credentials_t *, gchar **, entity_t *,
       gsad_command_response_data_t *, const char *, ...);
 
 static char *
-get_asset (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
-           gsad_command_response_data_t *);
-
-static char *
 get_config_family (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 
@@ -1169,6 +1165,17 @@ export_many (gvm_connection_t *connection, const char *type,
   gchar *fname_format, *file_name;
   int ret;
 
+  if (g_ascii_strcasecmp (type, "asset") == 0)
+    {
+      gsad_command_response_data_set_status_code (response_data,
+                                                  MHD_HTTP_BAD_REQUEST);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "Asset XML bulk export is no longer supported. Use the native host "
+        "and operating-system JSON list/detail/export endpoints instead.",
+        response_data);
+    }
+
   filter = params_value (params, "filter");
 
   filter_escaped = g_markup_escape_text (filter, -1);
@@ -1182,29 +1189,6 @@ export_many (gvm_connection_t *connection, const char *type,
                                 " details=\"1\""
                                 " filter=\"%s\"/>",
                                 params_value (params, "info_type"),
-                                filter_escaped ? filter_escaped : "")
-          == -1)
-        {
-          g_free (filter_escaped);
-          gsad_command_response_data_set_status_code (
-            response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-          return gsad_http_create_gsad_message (
-            credentials,
-            "An internal error occurred while getting a list. "
-            "The list could not be delivered. "
-            "Diagnostics: Failure to send command to manager daemon.",
-            response_data);
-        }
-    }
-  else if (strcmp (type, "asset") == 0)
-    {
-      if (gvm_connection_sendf (connection,
-                                "<get_assets"
-                                " type=\"%s\""
-                                " export=\"1\""
-                                " details=\"1\""
-                                " filter=\"%s\"/>",
-                                params_value (params, "asset_type"),
                                 filter_escaped ? filter_escaped : "")
           == -1)
         {
@@ -5651,6 +5635,17 @@ bulk_export_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (type, "Bulk Export")
   CHECK_VARIABLE_INVALID (bulk_select, "Bulk Export")
 
+  if (g_ascii_strcasecmp (type, "asset") == 0)
+    {
+      gsad_command_response_data_set_status_code (response_data,
+                                                  MHD_HTTP_BAD_REQUEST);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "Asset XML bulk export is no longer supported. Use the native host "
+        "and operating-system JSON list/detail/export endpoints instead.",
+        response_data);
+    }
+
   if (g_ascii_strcasecmp (type, "target") == 0)
     {
       gsad_command_response_data_set_status_code (response_data,
@@ -5705,147 +5700,8 @@ bulk_export_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   return export_many (connection, type, credentials, params, response_data);
 }
 
-/* Assets. */
-
 /**
- * @brief Request an asset.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Credentials for the manager connection.
- * @param[in]  params       Request parameters.
- * @param[in]  extra_xml    Extra XML to insert inside page element.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return XML enveloped asset response or error message.
- */
-char *
-get_asset (gvm_connection_t *connection, gsad_credentials_t *credentials,
-           params_t *params, const char *extra_xml,
-           gsad_command_response_data_t *response_data)
-{
-  const gchar *asset_type;
-  gmp_arguments_t *arguments;
-
-  asset_type = params_value (params, "asset_type");
-
-  CHECK_VARIABLE_INVALID (asset_type, "Get Asset")
-
-  if (params_value (params, "asset_name") && params_value (params, "asset_id"))
-    {
-      gsad_command_response_data_set_status_code (response_data,
-                                                  MHD_HTTP_BAD_REQUEST);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting an asset. "
-        "Diagnostics: Both ID and Name set.",
-        response_data);
-    }
-
-  arguments = gmp_arguments_new ();
-
-  gmp_arguments_add (arguments, "type", asset_type);
-
-  if (params_value (params, "asset_name"))
-    {
-      gmp_arguments_add (arguments, "name",
-                         params_value (params, "asset_name"));
-    }
-
-  return get_one (connection, "asset", credentials, params, NULL, arguments,
-                  response_data);
-}
-
-/**
- * @brief Get asset, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_asset_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-               params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_asset (connection, credentials, params, NULL, response_data);
-}
-
-/**
- * @brief Request assets.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Credentials for the manager connection.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return XML enveloped assets response or error message.
- */
-char *
-get_assets_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                params_t *params, gsad_command_response_data_t *response_data)
-{
-  gmp_arguments_t *arguments;
-  const char *asset_type;
-
-  asset_type = params_value (params, "asset_type");
-
-  CHECK_VARIABLE_INVALID (asset_type, "Get Assets");
-
-  arguments = gmp_arguments_new ();
-
-  gmp_arguments_add (arguments, "type", asset_type);
-
-  if (params_value (params, "ignore_pagination"))
-    {
-      gmp_arguments_add (arguments, "ignore_pagination",
-                         params_value (params, "ignore_pagination"));
-    }
-
-  return get_many (connection, "assets", credentials, params, arguments,
-                   response_data);
-}
-
-/**
- * @brief Export an asset.
- *
- * @param[in]   connection           Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Asset XML on success.  Enveloped XML on error.
- */
-char *
-export_asset_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                  params_t *params, gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "asset", credentials, params,
-                          response_data);
-}
-
-/**
- * @brief Export a list of assets.
- *
- * @param[in]   connection           Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Assets XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_assets_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "asset", credentials, params, response_data);
-}
-
-/**
- * @brief Modify an asset, get all assets, envelope the result.
+ * @brief Modify an asset and envelope the action result.
  *
  * @param[in]  connection     Connection to manager.
  * @param[in]  credentials  Username and password for authentication.
@@ -6490,15 +6346,11 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
     }
   ELSE (edit_config_family)
   ELSE (edit_config_family_all)
-  ELSE (export_asset)
-  ELSE (export_assets)
   ELSE (export_preference_file)
   ELSE (export_result)
   ELSE (export_results)
   ELSE (export_task)
   ELSE (export_tasks)
-  ELSE (get_asset)
-  ELSE (get_assets)
   ELSE (get_aggregate)
   ELSE (get_config)
   ELSE (get_configs)

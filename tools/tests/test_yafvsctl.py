@@ -1363,6 +1363,52 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("manage_process_report_imports", manage + registry)
         self.assertNotIn("process_report_import", manage + manage_sql)
 
+    def test_asset_public_read_export_transport_is_retired(self):
+        root = Path(__file__).resolve().parents[2]
+        gsa_os = (root / "components/gsa/src/gmp/commands/os.js").read_text(encoding="utf-8")
+        gsad = (root / "components/gsad/src/gsad_gmp.c").read_text(encoding="utf-8")
+        validator = (root / "components/gsad/src/gsad_validator.c").read_text(encoding="utf-8")
+        gvmd_gmp = (root / "components/gvmd/src/gmp.c").read_text(encoding="utf-8")
+        inventory = (root / "components/gvmd/src/manage_commands.c").read_text(encoding="utf-8")
+        schema = (root / "components/gvmd/src/schema_formats/XML/GMP.xml.in").read_text(encoding="utf-8")
+
+        self.assertIn("fetchNativeOperatingSystem", gsa_os)
+        self.assertIn("fetchNativeOperatingSystems", gsa_os)
+        self.assertNotIn("get_assets_response", gsa_os)
+        for retired in (
+            "get_asset_gmp",
+            "get_assets_gmp",
+            "export_asset_gmp",
+            "export_assets_gmp",
+            "ELSE (get_asset)",
+            "ELSE (get_assets)",
+            "ELSE (export_asset)",
+            "ELSE (export_assets)",
+        ):
+            self.assertNotIn(retired, gsad)
+        for retired in ("|(get_asset)", "|(get_assets)", "|(export_asset)", "|(export_assets)"):
+            self.assertNotIn(retired, validator)
+        self.assertIn("ELSE (save_asset)", gsad)
+        save_asset = gsad.split("save_asset_gmp (", 1)[1].split("change_password_gmp (", 1)[0]
+        self.assertEqual(save_asset.count("<modify_asset"), 1)
+        self.assertNotIn("<get_", save_asset)
+
+        bulk_export = gsad.split("bulk_export_gmp (", 1)[1].split("save_asset_gmp (", 1)[0]
+        rejection = bulk_export.index("g_ascii_strcasecmp (type, \"asset\") == 0")
+        self.assertLess(rejection, bulk_export.index("if (bulk_select"))
+        self.assertLess(rejection, bulk_export.index("params_add (params"))
+        self.assertLess(rejection, bulk_export.index("export_many (connection"))
+        self.assertIn("MHD_HTTP_BAD_REQUEST", bulk_export)
+        self.assertNotIn("\"<get_assets\"", gsad)
+
+        self.assertNotIn("CLIENT_GET_ASSETS", gvmd_gmp)
+        self.assertNotIn("handle_get_assets", gvmd_gmp)
+        self.assertNotIn("{\"GET_ASSETS\", \"Get all assets.\"}", inventory)
+        self.assertIn("\"GET_ASSETS\",", inventory)
+        self.assertNotIn("<name>get_assets</name>", schema)
+        self.assertIn("instead use the GET_ASSETS command", schema)
+        self.assertIn("GET_ASSETS should be used instead", schema)
+
     def test_native_report_evidence_reads_have_no_legacy_command_surface(self):
         root = Path(__file__).resolve().parents[2]
         gvmd_commands = (root / "components" / "gvmd" / "src" / "manage_commands.c").read_text(encoding="utf-8")

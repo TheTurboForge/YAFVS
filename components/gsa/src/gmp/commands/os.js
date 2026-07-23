@@ -8,6 +8,7 @@ import registerCommand from 'gmp/command';
 import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
 import {
+  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -17,9 +18,18 @@ import OperatingSystem from 'gmp/models/os';
 import {
   exportNativeOperatingSystemMetadata,
   exportNativeOperatingSystemsMetadata,
+  fetchNativeOperatingSystem,
   fetchNativeOperatingSystems,
   nativeOperatingSystemsQueryFromFilter,
 } from 'gmp/native-api/operating-systems';
+
+const assertNativeOperatingSystemHttp = http => {
+  if (!canUseNativeApi(http)) {
+    throw new Error(
+      'Operating-system reads and exports require the native HTTP adapter.',
+    );
+  }
+};
 
 const shouldExportAllByFilter = filter => {
   const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
@@ -32,11 +42,19 @@ class OperatingSystemCommand extends EntityCommand {
     this.setDefaultParam('asset_type', 'os');
   }
 
-  getElementFromRoot(root) {
-    return root.get_asset.get_assets_response.asset;
+  /** @returns {never} */
+  getElementFromRoot(_root) {
+    throw new Error('Legacy operating-system XML parsing is retired.');
+  }
+
+  async get({id}) {
+    assertNativeOperatingSystemHttp(this.http);
+    const {operatingSystem} = await fetchNativeOperatingSystem(this.http, id);
+    return new Response(operatingSystem);
   }
 
   async export({id}) {
+    assertNativeOperatingSystemHttp(this.http);
     return await exportNativeOperatingSystemMetadata(this.http, id);
   }
 }
@@ -47,11 +65,13 @@ class OperatingSystemsCommand extends EntitiesCommand {
     this.setDefaultParam('asset_type', 'os');
   }
 
-  getEntitiesResponse(root) {
-    return root.get_assets.get_assets_response;
+  /** @returns {never} */
+  getEntitiesResponse(_root) {
+    throw new Error('Legacy operating-system XML parsing is retired.');
   }
 
   async get(params = {}, _options) {
+    assertNativeOperatingSystemHttp(this.http);
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeOperatingSystems(
       this.http,
@@ -64,6 +84,7 @@ class OperatingSystemsCommand extends EntitiesCommand {
   }
 
   async getAll(params = {}, _options) {
+    assertNativeOperatingSystemHttp(this.http);
     const filter = filterFromCommandParams(params).all();
     const operatingSystems = [];
     let total = Number.POSITIVE_INFINITY;
@@ -100,14 +121,17 @@ class OperatingSystemsCommand extends EntitiesCommand {
   }
 
   exportByIds(ids, _assetType) {
+    assertNativeOperatingSystemHttp(this.http);
     return exportNativeOperatingSystemsMetadata(this.http, ids);
   }
 
   export(entities, _assetType) {
+    assertNativeOperatingSystemHttp(this.http);
     return this.exportByIds(entities.map(element => element.id));
   }
 
   async exportByFilter(filter) {
+    assertNativeOperatingSystemHttp(this.http);
     const operatingSystems = [];
     if (shouldExportAllByFilter(filter)) {
       let total = Number.POSITIVE_INFINITY;

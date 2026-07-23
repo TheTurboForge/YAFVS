@@ -46,6 +46,8 @@ use crate::{
 
 const GSA_TLS_CERTIFICATE_COMMAND: &str =
     include_str!("../../../components/gsa/src/gmp/commands/tls-certificates.js");
+const GSA_OPERATING_SYSTEM_COMMAND: &str =
+    include_str!("../../../components/gsa/src/gmp/commands/os.js");
 const GSA_REPORT_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/report.ts");
 const GSA_REPORT_TOOLBAR: &str =
     include_str!("../../../components/gsa/src/web/pages/reports/details/ToolbarIcons.jsx");
@@ -61,12 +63,161 @@ const GVMD_CMAKE: &str = include_str!("../../../components/gvmd/src/CMakeLists.t
 const GVMD_GMP_SCHEMA: &str =
     include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 const GVMD_ASSET_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql_assets.c");
+const GVMD_ASSET_HEADER: &str = include_str!("../../../components/gvmd/src/manage_assets.h");
 const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
 const GVMD_TLS_SQL: &str =
     include_str!("../../../components/gvmd/src/manage_sql_tls_certificates.c");
 const READ_API_ROUTES: &str = include_str!("read_api_routes.rs");
 const DIRECT_API_CONTRACT: &str = include_str!("direct_api_contract.rs");
 const GVMD_COMMAND_INVENTORY: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
+
+#[test]
+fn asset_reads_and_exports_are_native_only_while_asset_lifecycle_data_stays_owned() {
+    for route in [
+        "/api/v1/hosts",
+        "/api/v1/hosts/:host_id",
+        "/api/v1/hosts/:host_id/export",
+        "/api/v1/operating-systems",
+        "/api/v1/operating-systems/:os_id",
+        "/api/v1/operating-systems/:os_id/export",
+    ] {
+        assert!(
+            READ_API_ROUTES.contains(route),
+            "native route missing: {route}"
+        );
+    }
+    for native_owner in [
+        "fetchNativeOperatingSystem",
+        "fetchNativeOperatingSystems",
+        "exportNativeOperatingSystemMetadata",
+        "exportNativeOperatingSystemsMetadata",
+        "assertNativeOperatingSystemHttp(this.http)",
+    ] {
+        assert!(
+            GSA_OPERATING_SYSTEM_COMMAND.contains(native_owner),
+            "native operating-system owner missing: {native_owner}"
+        );
+    }
+    assert!(!GSA_OPERATING_SYSTEM_COMMAND.contains("get_assets_response"));
+    assert!(
+        GSA_OPERATING_SYSTEM_COMMAND.contains("Legacy operating-system XML parsing is retired.")
+    );
+
+    for retired in [
+        "get_asset_gmp",
+        "get_assets_gmp",
+        "export_asset_gmp",
+        "export_assets_gmp",
+        "get_assets_chart_gmp",
+        "ELSE (get_asset)",
+        "ELSE (get_assets)",
+        "ELSE (export_asset)",
+        "ELSE (export_assets)",
+    ] {
+        assert!(!GSAD_GMP.contains(retired), "gsad still exposes {retired}");
+        assert!(
+            !GSAD_GMP_H.contains(retired),
+            "gsad still declares {retired}"
+        );
+    }
+    for retired in [
+        "|(get_asset)",
+        "|(get_assets)",
+        "|(export_asset)",
+        "|(export_assets)",
+    ] {
+        assert!(
+            !GSAD_VALIDATOR.contains(retired),
+            "validator still accepts {retired}"
+        );
+    }
+
+    let bulk_export = GSAD_GMP
+        .split_once("bulk_export_gmp (")
+        .expect("bulk export handler must remain")
+        .1
+        .split_once("save_asset_gmp (")
+        .expect("bulk export must precede retained save_asset")
+        .0;
+    let rejection = bulk_export
+        .find("g_ascii_strcasecmp (type, \"asset\") == 0")
+        .expect("asset bulk export must be rejected case-insensitively");
+    for later in [
+        "if (bulk_select",
+        "params_add (params",
+        "export_many (connection",
+    ] {
+        assert!(
+            rejection
+                < bulk_export
+                    .find(later)
+                    .expect("bulk export stage must remain"),
+            "asset rejection must precede {later}"
+        );
+    }
+    assert!(bulk_export.contains("MHD_HTTP_BAD_REQUEST"));
+    assert!(bulk_export.contains("native host"));
+    assert!(bulk_export.contains("operating-system JSON list/detail/export endpoints"));
+    assert!(!GSAD_GMP.contains("\"<get_assets\""));
+
+    let save_asset = GSAD_GMP
+        .split_once("save_asset_gmp (")
+        .expect("save_asset must remain")
+        .1
+        .split_once("change_password_gmp (")
+        .expect("save_asset must have a bounded body")
+        .0;
+    assert_eq!(save_asset.matches("<modify_asset").count(), 1);
+    assert!(!save_asset.contains("<get_"));
+    assert!(save_asset.contains("response_from_entity"));
+    assert!(GSAD_GMP.contains("ELSE (save_asset)"));
+    assert!(GSAD_GMP_H.contains("save_asset_gmp"));
+    assert!(GSAD_VALIDATOR.contains("|(save_asset)"));
+    assert!(GVMD_GMP.contains("CLIENT_MODIFY_ASSET"));
+    assert!(GVMD_COMMAND_INVENTORY.contains("{\"MODIFY_ASSET\""));
+    assert!(GVMD_GMP_SCHEMA.contains("<name>modify_asset</name>"));
+
+    for retired in [
+        "get_assets_data_t",
+        "get_assets_data_reset",
+        "CLIENT_GET_ASSETS",
+        "handle_get_assets",
+        "strcasecmp (\"GET_ASSETS\"",
+    ] {
+        assert!(
+            !GVMD_GMP.contains(retired),
+            "public GMP parser retains {retired}"
+        );
+    }
+    assert!(!GVMD_COMMAND_INVENTORY.contains("{\"GET_ASSETS\""));
+    assert!(GVMD_COMMAND_INVENTORY.contains("\"GET_ASSETS\","));
+    assert!(!GVMD_GMP_SCHEMA.contains("<name>get_assets</name>"));
+    assert!(GVMD_GMP_SCHEMA.contains("instead use the GET_ASSETS command"));
+    assert!(GVMD_GMP_SCHEMA.contains("GET_ASSETS should be used instead"));
+    assert!(GVMD_GMP.contains("acl_user_may (\"get_assets\")"));
+
+    for helper in [
+        "init_host_identifier_iterator",
+        "init_asset_host_iterator",
+        "init_asset_os_iterator",
+        "asset_host_iterator_severity",
+        "asset_os_iterator_latest_severity",
+        "init_host_detail_iterator",
+        "init_os_host_iterator",
+        "host_routes_xml",
+    ] {
+        assert!(
+            GVMD_ASSET_HEADER.contains(helper),
+            "asset helper declaration lost: {helper}"
+        );
+        assert!(
+            GVMD_ASSET_SQL.contains(helper),
+            "asset helper implementation lost: {helper}"
+        );
+    }
+    assert!(GVMD_ASSET_SQL.contains("add_tls_certificates_from_report_host (report_host"));
+    assert!(GVMD_TLS_SQL.contains("add_tls_certificates_from_report_host ("));
+}
 
 #[test]
 fn cve_catalog_detail_reads_reference_context_without_mutation_workflows() {
@@ -177,8 +328,8 @@ fn tls_certificate_reads_and_browser_deletes_are_native_only() {
         .split_once("bulk_export_gmp (")
         .expect("bulk export handler")
         .1
-        .split_once("/* Assets. */")
-        .expect("bulk export must precede asset handlers")
+        .split_once("save_asset_gmp (")
+        .expect("bulk export must precede retained asset modification")
         .0;
     assert!(bulk_export.contains("g_ascii_strcasecmp (type, \"tls_certificate\") == 0"));
 

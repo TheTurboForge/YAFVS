@@ -97,7 +97,6 @@ fn trashcan_inventory_is_native_only_and_has_no_gmp_fallback() {
     for (data, resource_type) in [
         ("get_configs_data", "config"),
         ("get_credentials_data", "credential"),
-        ("get_overrides_data", "override"),
         ("get_targets_data", "target"),
         ("get_tasks_data", "task"),
     ] {

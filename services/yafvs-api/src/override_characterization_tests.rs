@@ -8,6 +8,8 @@ use crate::direct_api::direct_api_v1_method_is_allowed;
 
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
+const GSA_OVERRIDE_COMMANDS: &str =
+    include_str!("../../../components/gsa/src/gmp/commands/overrides.js");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 const OVERRIDES_RS: &str = include_str!("overrides.rs");
 const OVERRIDE_QUERY_SQL_RS: &str = include_str!("override_query_sql.rs");
@@ -99,28 +101,37 @@ fn native_override_reads_are_metadata_only_and_do_not_touch_report_cache_or_scan
 }
 
 #[test]
-fn inherited_override_result_detail_uses_result_expansion_semantics() {
-    for required in [
-        "find_attribute (attribute_names, attribute_values,\n                                \"result\", &attribute)",
-        "get_overrides_data->result = strcmp (attribute, \"0\")",
-        "override_iterator_result (overrides)",
-        "result_uuid (override_iterator_result (overrides),",
-        "buffer_override_xml (buffer, &overrides,\n                               get_overrides_data->get.details,\n                               get_overrides_data->result, &count)",
+fn retired_override_transport_preserves_shared_result_expansion() {
+    for forbidden in [
+        "GET_OVERRIDES",
+        "get_overrides_data",
+        "handle_get_overrides",
     ] {
         assert!(
-            GMP_C.contains(required),
-            "inherited override result detail path missing {required}"
+            !GMP_C.contains(forbidden),
+            "retired GMP override transport still contains {forbidden}"
         );
     }
-    assert!(
-        OVERRIDE_QUERY_SQL_RS.contains("LEFT JOIN results r ON r.id = o.result"),
-        "native override metadata may expose a linked result reference"
-    );
-    assert!(
-        !OVERRIDES_RS.contains("result = strcmp")
-            && !OVERRIDE_QUERY_SQL_RS.contains("result = strcmp"),
-        "native override reads must not claim inherited GET_OVERRIDES result expansion semantics"
-    );
+    for forbidden in ["root.get_override", "root.get_overrides"] {
+        assert!(
+            !GSA_OVERRIDE_COMMANDS.contains(forbidden),
+            "native GSA override command retains XML response parsing: {forbidden}"
+        );
+    }
+    for retained in [
+        "buffer_override_xml (",
+        "buffer_result_overrides_xml (",
+        "override_count (",
+        "init_override_iterator (",
+    ] {
+        assert!(
+            GMP_C.contains(retained),
+            "shared override behavior missing {retained}"
+        );
+    }
+    assert!(OVERRIDE_QUERY_SQL_RS.contains("LEFT JOIN results r ON r.id = o.result"));
+    assert!(!OVERRIDES_RS.contains("result = strcmp"));
+    assert!(!OVERRIDE_QUERY_SQL_RS.contains("result = strcmp"));
 }
 
 #[test]

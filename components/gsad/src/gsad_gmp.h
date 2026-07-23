@@ -157,19 +157,6 @@ char *
 export_preference_file_gmp (gvm_connection_t *, gsad_credentials_t *,
                             params_t *, gsad_command_response_data_t *);
 char *
-get_overrides_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                   gsad_command_response_data_t *);
-char *
-get_override_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                  gsad_command_response_data_t *);
-char *
-export_override_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                     gsad_command_response_data_t *);
-char *
-export_overrides_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                      gsad_command_response_data_t *);
-
-char *
 get_slave_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                gsad_command_response_data_t *);
 char *

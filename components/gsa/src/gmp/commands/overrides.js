@@ -174,10 +174,6 @@ class OverrideCommand extends EntityCommand {
     super(http, 'override', Override);
   }
 
-  getElementFromRoot(root) {
-    return root.get_override.get_overrides_response.override;
-  }
-
   async get({id}) {
     requireNativeOverrideApi(this.http);
     return new Response(await fetchNativeOverride(this.http, id));
@@ -211,10 +207,6 @@ class OverridesCommand extends EntitiesCommand {
   constructor(http) {
     super(http, 'override', Override);
     this.setDefaultParam('details', 1);
-  }
-
-  getEntitiesResponse(root) {
-    return root.get_overrides.get_overrides_response;
   }
 
   exportByIds(ids) {

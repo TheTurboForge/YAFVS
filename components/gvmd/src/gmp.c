@@ -864,31 +864,6 @@ get_nvts_data_reset (get_nvts_data_t *data)
 }
 
 /**
- * @brief Command data for the get_overrides command.
- */
-typedef struct
-{
-  get_data_t get;      ///< Get args.
-  char *nvt_oid;       ///< OID of NVT to which to limit listing.
-  char *task_id;       ///< ID of task to which to limit listing.
-  int result;          ///< Boolean.  Whether to include associated results.
-} get_overrides_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_overrides_data_reset (get_overrides_data_t *data)
-{
-  free (data->nvt_oid);
-  free (data->task_id);
-
-  memset (data, 0, sizeof (get_overrides_data_t));
-}
-
-/**
  * @brief Command data for the get_preferences command.
  */
 typedef struct
@@ -1406,7 +1381,6 @@ typedef union
   get_credentials_data_t get_credentials;             ///< get_credentials
   get_info_data_t get_info;                           ///< get_info
   get_nvts_data_t get_nvts;                           ///< get_nvts
-  get_overrides_data_t get_overrides;                 ///< get_overrides
   get_preferences_data_t get_preferences;             ///< get_preferences
   get_reports_data_t get_reports;                     ///< get_reports
   get_resource_names_data_t get_resource_names;       ///< get_resource_names
@@ -1523,12 +1497,6 @@ static get_info_data_t *get_info_data
  */
 static get_nvts_data_t *get_nvts_data
  = &(command_data.get_nvts);
-
-/**
- * @brief Parser callback data for GET_OVERRIDES.
- */
-static get_overrides_data_t *get_overrides_data
- = &(command_data.get_overrides);
 
 /**
  * @brief Parser callback data for GET_PREFERENCES.
@@ -1737,7 +1705,6 @@ typedef enum
   CLIENT_GET_CREDENTIALS,
   CLIENT_GET_INFO,
   CLIENT_GET_NVTS,
-  CLIENT_GET_OVERRIDES,
   CLIENT_GET_PREFERENCES,
   CLIENT_GET_REPORTS,
   CLIENT_GET_RESOURCE_NAMES,
@@ -2270,28 +2237,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             else
               get_nvts_data->sort_order = 1;
             set_client_state (CLIENT_GET_NVTS);
-          }
-        else if (strcasecmp ("GET_OVERRIDES", element_name) == 0)
-          {
-            const gchar* attribute;
-
-            get_data_parse_attributes (&get_overrides_data->get, "override",
-                                       attribute_names,
-                                       attribute_values);
-
-            append_attribute (attribute_names, attribute_values, "nvt_oid",
-                              &get_overrides_data->nvt_oid);
-
-            append_attribute (attribute_names, attribute_values, "task_id",
-                              &get_overrides_data->task_id);
-
-            if (find_attribute (attribute_names, attribute_values,
-                                "result", &attribute))
-              get_overrides_data->result = strcmp (attribute, "0");
-            else
-              get_overrides_data->result = 0;
-
-            set_client_state (CLIENT_GET_OVERRIDES);
           }
         else if (strcasecmp ("GET_PREFERENCES", element_name) == 0)
           {
@@ -7700,135 +7645,6 @@ handle_get_nvts (gmp_parser_t *gmp_parser, GError **error)
 }
 
 /**
- * @brief Handle end of GET_OVERRIDES element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_overrides (gmp_parser_t *gmp_parser, GError **error)
-{
-  nvt_t nvt = 0;
-  task_t task = 0;
-
-  if (get_overrides_data->get.id && get_overrides_data->nvt_oid)
-    SEND_TO_CLIENT_OR_FAIL
-     (XML_ERROR_SYNTAX ("get_overrides",
-                        "Only one of NVT and the override_id attribute"
-                        " may be given"));
-  else if (get_overrides_data->get.id
-            && get_overrides_data->task_id)
-    SEND_TO_CLIENT_OR_FAIL
-     (XML_ERROR_SYNTAX ("get_overrides",
-                        "Only one of the override_id and task_id"
-                        " attributes may be given"));
-  else if (get_overrides_data->task_id
-           && find_task_with_permission (get_overrides_data->task_id, &task,
-                                         "get_tasks"))
-    SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("get_overrides"));
-  else if (get_overrides_data->task_id && task == 0)
-    {
-      if (send_find_error_to_client ("get_overrides", "task",
-                                     get_overrides_data->task_id,
-                                     gmp_parser))
-        {
-          error_send_to_client (error);
-          return;
-        }
-    }
-  else if (get_overrides_data->nvt_oid
-            && find_nvt (get_overrides_data->nvt_oid, &nvt))
-    SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("get_overrides"));
-  else if (get_overrides_data->nvt_oid && nvt == 0)
-    {
-      if (send_find_error_to_client ("get_overrides",
-                                     "NVT", get_overrides_data->nvt_oid,
-                                     gmp_parser))
-        {
-          error_send_to_client (error);
-          return;
-        }
-    }
-  else
-    {
-      iterator_t overrides;
-      GString *buffer;
-      int count, filtered, ret, first;
-
-      INIT_GET (override, Override);
-
-      ret = init_override_iterator (&overrides,
-                                    &get_overrides_data->get, nvt, 0,
-                                    task);
-      if (ret)
-        {
-          switch (ret)
-            {
-              case 1:
-                if (send_find_error_to_client
-                      ("get_overrides", "override",
-                       get_overrides_data->get.id, gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 2:
-                if (send_find_error_to_client
-                      ("get_overrides", "filter",
-                       get_overrides_data->get.filt_id, gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case -1:
-                SEND_TO_CLIENT_OR_FAIL
-                  (XML_INTERNAL_ERROR ("get_overrides"));
-                break;
-            }
-          get_overrides_data_reset (get_overrides_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          return;
-        }
-
-      SEND_GET_START ("override");
-
-      buffer = g_string_new ("");
-
-      while (1)
-        {
-          ret = get_next (&overrides, &get_overrides_data->get, &first, &count,
-                          init_override_iterator_all);
-          if (ret == 1)
-            break;
-          if (ret == -1)
-            {
-              internal_error_send_to_client (error);
-              return;
-            }
-
-          buffer_override_xml (buffer, &overrides,
-                               get_overrides_data->get.details,
-                               get_overrides_data->result, &count);
-        }
-
-      SEND_TO_CLIENT_OR_FAIL (buffer->str);
-      g_string_free (buffer, TRUE);
-
-      cleanup_iterator (&overrides);
-      filtered = get_overrides_data->get.id
-                  ? 1
-                  : override_count (&get_overrides_data->get, nvt, 0,
-                                    task);
-      SEND_GET_END ("override", &get_overrides_data->get, count,
-                    filtered);
-    }
-  get_overrides_data_reset (get_overrides_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
  * @brief Handle end of GET_PREFERENCES element.
  *
  * @param[in]  gmp_parser   GMP parser.
@@ -10739,10 +10555,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
       case CLIENT_GET_NVTS:
         handle_get_nvts (gmp_parser, error);
-        break;
-
-      case CLIENT_GET_OVERRIDES:
-        handle_get_overrides (gmp_parser, error);
         break;
 
       case CLIENT_GET_PREFERENCES:

@@ -161,9 +161,6 @@ static char *
 get_config_family (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 
-static char *
-get_override (gvm_connection_t *, gsad_credentials_t *, params_t *,
-              const char *, gsad_command_response_data_t *);
 
 static char *
 get_target (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
@@ -4397,45 +4394,6 @@ delete_config_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Export an override.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Override XML on success.  Enveloped XML on error.
- */
-char *
-export_override_gmp (gvm_connection_t *connection,
-                     gsad_credentials_t *credentials, params_t *params,
-                     gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "override", credentials, params,
-                          response_data);
-}
-
-/**
- * @brief Export a list of overrides.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Overrides XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_overrides_gmp (gvm_connection_t *connection,
-                      gsad_credentials_t *credentials, params_t *params,
-                      gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "override", credentials, params,
-                      response_data);
-}
-
-/**
  * @brief Export a file preference.
  *
  * @param[in]  connection     Connection to manager.
@@ -5230,67 +5188,6 @@ get_result_id_from_params (params_t *params)
 }
 
 /**
- * @brief Get all overrides, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_overrides_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  return get_many (connection, "overrides", credentials, params, NULL,
-                   response_data);
-}
-
-/**
- * @brief Get a override, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[in]  extra_xml    Extra XML to insert inside page element.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-static char *
-get_override (gvm_connection_t *connection, gsad_credentials_t *credentials,
-              params_t *params, const char *extra_xml,
-              gsad_command_response_data_t *response_data)
-{
-  gmp_arguments_t *arguments;
-  arguments = gmp_arguments_new ();
-
-  gmp_arguments_add (arguments, "result", "1");
-
-  return get_one (connection, "override", credentials, params, extra_xml,
-                  arguments, response_data);
-}
-
-/**
- * @brief Get an override, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_override_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                  params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_override (connection, credentials, params, NULL, response_data);
-}
-
-/**
  * @brief Get resource names, envelope the result.
  *
  * @param[in]  connection   Connection to manager.
@@ -5859,6 +5756,7 @@ bulk_export_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (bulk_select, "Bulk Export")
 
   if (g_ascii_strcasecmp (type, "filter") == 0
+      || g_ascii_strcasecmp (type, "override") == 0
       || g_ascii_strcasecmp (type, "port_list") == 0
       || g_ascii_strcasecmp (type, "report_format") == 0
       || g_ascii_strcasecmp (type, "tag") == 0
@@ -5869,8 +5767,8 @@ bulk_export_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
                                                   MHD_HTTP_BAD_REQUEST);
       return gsad_http_create_gsad_message (
         credentials,
-        "Filter, port-list, report-format, tag, TLS-certificate, and "
-        "vulnerability XML bulk export are no longer supported. Use the "
+        "Filter, override, port-list, report-format, tag, TLS-certificate, "
+        "and vulnerability XML bulk export are no longer supported. Use the "
         "native JSON metadata export endpoints instead.",
         response_data);
     }
@@ -6686,8 +6584,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (edit_config_family_all)
   ELSE (export_asset)
   ELSE (export_assets)
-  ELSE (export_override)
-  ELSE (export_overrides)
   ELSE (export_preference_file)
   ELSE (export_result)
   ELSE (export_results)
@@ -6702,8 +6598,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_configs)
   ELSE (get_config_family)
   ELSE (get_info)
-  ELSE (get_override)
-  ELSE (get_overrides)
   ELSE (get_report)
   ELSE (get_reports)
   ELSE (get_resource_names)

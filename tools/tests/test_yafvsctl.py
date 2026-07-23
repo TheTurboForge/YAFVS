@@ -1779,10 +1779,21 @@ class YAFVSCtlTests(unittest.TestCase):
         override_sql = retired_sources["gvmd override SQL"].read_text(encoding="utf-8")
         manage_sql = (root / "components" / "gvmd" / "src" / "manage_sql.c").read_text(encoding="utf-8")
         native_write_source = (root / "services" / "yafvs-api" / "src" / "override_writes.rs").read_text(encoding="utf-8")
-        self.assertIn("get_override_gmp", gsad_source)
-        self.assertIn("get_overrides_gmp", gsad_source)
-        self.assertIn("export_override_gmp", gsad_source)
-        self.assertIn("CLIENT_GET_OVERRIDES", gvmd_source)
+        for marker in (
+            "get_override_gmp",
+            "get_overrides_gmp",
+            "export_override_gmp",
+            "export_overrides_gmp",
+            "CLIENT_GET_OVERRIDES",
+            "get_overrides_data",
+            "handle_get_overrides",
+        ):
+            self.assertNotIn(marker, gsad_source)
+            self.assertNotIn(marker, gvmd_source)
+        self.assertNotIn("<name>get_overrides</name>", retired_sources["GMP schema"].read_text(encoding="utf-8"))
+        manage_commands = (root / "components" / "gvmd" / "src" / "manage_commands.c").read_text(encoding="utf-8")
+        self.assertNotIn('{"GET_OVERRIDES", "Get all overrides."}', manage_commands)
+        self.assertIn('"GET_OVERRIDES",', manage_commands)
         self.assertIn("override_count", override_sql)
         self.assertIn("init_override_iterator", override_sql)
         self.assertNotIn('find_trash ("override"', manage_sql)

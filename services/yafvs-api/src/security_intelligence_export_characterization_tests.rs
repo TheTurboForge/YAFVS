@@ -28,6 +28,9 @@ const GVMD_FEATURE_DOCS: &str = include_str!("../../../components/gvmd/docs/feat
 const GSA_FEATURES: &str = include_str!("../../../components/gsa/src/gmp/capabilities/features.ts");
 const GSA_GENERAL_SETTINGS: &str =
     include_str!("../../../components/gsa/src/web/pages/user-settings/GeneralSettings.tsx");
+const DATABASE_COMPATIBILITY: &str = include_str!("database_compatibility.rs");
+const MANAGER_INIT: &str =
+    include_str!("../../../tools/yafvsctl-rs/src/commands/feed_generation/manager_init.rs");
 
 #[test]
 fn security_intelligence_export_surface_is_retired() {
@@ -119,6 +122,12 @@ fn ordinary_scan_finalization_remains_without_export_queueing() {
 #[test]
 fn database_288_removes_only_empty_legacy_export_state() {
     assert!(GVMD_CMAKE.contains("set(GVMD_DATABASE_VERSION 288)"));
+    assert!(DATABASE_COMPATIBILITY.contains("EXPECTED_DATABASE_VERSION: &str = \"288\""));
+    assert!(MANAGER_INIT.contains("SOURCE_DATABASE_VERSION: u64 = 288"));
+    assert!(
+        DATABASE_COMPATIBILITY
+            .contains("c9b9aed02c7ac9313957f17adfe1a6658f18b63c7600731e64d5bb2dd7135d62")
+    );
     assert!(!MANAGE_PG.contains("CREATE TABLE IF NOT EXISTS report_exports"));
     assert!(!MANAGE_PG.contains("CREATE TABLE IF NOT EXISTS integration_configs"));
 

@@ -14,9 +14,9 @@ use sha2::{Digest, Sha256};
 
 use crate::{app_state::AppState, errors::ApiError};
 
-const EXPECTED_DATABASE_VERSION: &str = "287";
+const EXPECTED_DATABASE_VERSION: &str = "288";
 const EXPECTED_SCHEMA_FINGERPRINT: &str =
-    "b87c31288bbdaa9a98d4061f6edd3b01c8e488a422f46fa6fc03a2697f81fb02";
+    "c9b9aed02c7ac9313957f17adfe1a6658f18b63c7600731e64d5bb2dd7135d62";
 
 const DATABASE_VERSION_SQL: &str =
     "SELECT value FROM meta WHERE name = 'database_version' LIMIT 1;";

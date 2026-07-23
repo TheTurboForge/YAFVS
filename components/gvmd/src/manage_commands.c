@@ -39,7 +39,6 @@ command_t gmp_commands[]
     {"CREATE_TASK", "Create a task."},
     {"DELETE_ASSET", "Delete an asset."},
     {"DELETE_CONFIG", "Delete a config."},
-    {"DELETE_CREDENTIAL", "Delete a credential."},
     {"DELETE_REPORT", "Delete a report."},
     {"DELETE_TARGET", "Delete a target."},
     {"DELETE_TASK", "Delete a task."},

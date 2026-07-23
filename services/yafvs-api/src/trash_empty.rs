@@ -777,12 +777,6 @@ mod tests {
                 first_resource_access: "find_task_with_permission",
             },
             LegacyTrashCountWriter {
-                file: "components/gvmd/src/manage_sql.c",
-                source: manage_sql,
-                definition: "delete_credential (const char *credential_id, int ultimate)",
-                first_resource_access: "find_credential_with_permission",
-            },
-            LegacyTrashCountWriter {
                 file: "components/gvmd/src/manage_sql_users.c",
                 source: users,
                 definition: "delete_user (const char *user_id_arg, const char *name_arg,",
@@ -816,7 +810,7 @@ mod tests {
 
         assert_eq!(
             writers.len(),
-            8,
+            7,
             "the remaining legacy trash writer inventory is explicit"
         );
         assert_eq!(

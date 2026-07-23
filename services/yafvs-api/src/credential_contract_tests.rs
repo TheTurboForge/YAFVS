@@ -15,12 +15,15 @@ use crate::{
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 const GSA_CREDENTIAL_COMMAND: &str =
     include_str!("../../../components/gsa/src/gmp/commands/credential.ts");
+const GSA_CREDENTIALS_COMMAND: &str =
+    include_str!("../../../components/gsa/src/gmp/commands/credentials.ts");
 const GSA_NATIVE_CREDENTIALS: &str =
     include_str!("../../../components/gsa/src/gmp/native-api/credentials.ts");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GVMD_GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
+const GVMD_MANAGE_HEADER: &str = include_str!("../../../components/gvmd/src/manage.h");
 const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
 const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 
@@ -41,6 +44,92 @@ fn openapi_path_block(path: &str) -> String {
             }
         })
         .unwrap_or_else(|| tail.to_string())
+}
+
+#[test]
+fn credential_live_delete_is_native_only_but_secret_download_remains_inherited() {
+    assert!(GSA_CREDENTIAL_COMMAND.contains("deleteNativeCredential(this.http, id)"));
+    assert!(!GSA_CREDENTIAL_COMMAND.contains("cmd: 'delete_credential'"));
+
+    for retained in [
+        "export class NativeCredentialBulkDeleteError",
+        "async deleteByIds(ids: string[])",
+        "await deleteNativeCredential(this.http, id)",
+        "ids.slice(index)",
+    ] {
+        assert!(
+            GSA_CREDENTIALS_COMMAND.contains(retained),
+            "native credential bulk-delete contract is missing: {retained}"
+        );
+    }
+    assert!(
+        !GSA_CREDENTIALS_COMMAND.contains("cmd: 'bulk_delete'"),
+        "credential bulk deletion must not fall back to raw GMP/XML"
+    );
+
+    for retired in ["delete_credential_gmp", "ELSE (delete_credential)"] {
+        assert!(
+            !GSAD_GMP_C.contains(retired),
+            "retired gsad credential-delete transport remains: {retired}"
+        );
+        assert!(
+            !GSAD_GMP_HEADER.contains(retired),
+            "retired gsad credential-delete declaration remains: {retired}"
+        );
+    }
+    assert!(
+        !GSAD_VALIDATOR_C.contains("|(delete_credential)"),
+        "retired credential-delete action remains accepted by gsad"
+    );
+    let bulk_delete = GSAD_GMP_C
+        .split_once("bulk_delete_gmp (")
+        .expect("bulk-delete handler must remain for other resource types")
+        .1
+        .split_once("/* Extra attributes */")
+        .expect("bulk-delete credential guard boundary")
+        .0;
+    assert!(bulk_delete.contains("g_ascii_strcasecmp (type, \"credential\") == 0"));
+    assert!(bulk_delete.contains("Credential deletion must use the native API"));
+
+    for retired in [
+        "CLIENT_DELETE_CREDENTIAL",
+        "delete_credential_data",
+        "CASE_DELETE (CREDENTIAL",
+    ] {
+        assert!(
+            !GVMD_GMP_C.contains(retired),
+            "retired gvmd GMP credential-delete parser state remains: {retired}"
+        );
+    }
+    for retired in ["\ndelete_credential ("] {
+        assert!(
+            !GVMD_MANAGE_SQL.contains(retired),
+            "retired gvmd credential-delete writer/helper remains: {retired}"
+        );
+        assert!(
+            !GVMD_MANAGE_HEADER.contains(retired),
+            "retired gvmd credential-delete declaration remains: {retired}"
+        );
+    }
+    for retained in ["\ncredential_in_use (", "\ntrash_credential_in_use ("] {
+        assert!(
+            GVMD_MANAGE_SQL.contains(retained),
+            "credential GET in-use helper must remain: {retained}"
+        );
+        assert!(
+            GVMD_MANAGE_HEADER.contains(retained.trim()),
+            "credential GET in-use declaration must remain: {retained}"
+        );
+    }
+    assert!(GVMD_GMP_C.contains("SEND_GET_COMMON (credential"));
+    assert!(
+        !GMP_SCHEMA.contains("<name>delete_credential</name>"),
+        "retired raw GMP credential-delete command remains in the live schema"
+    );
+
+    assert!(GSAD_GMP_C.contains("download_credential_gmp"));
+    assert!(GVMD_GMP_C.contains("CLIENT_GET_CREDENTIALS"));
+    assert!(GMP_SCHEMA.contains("<name>get_credentials</name>"));
 }
 
 #[test]
@@ -349,7 +438,7 @@ fn credential_openapi_declares_redacted_read_boundary() {
             "x-yafvs-exposure: direct-read",
             "x-yafvs-maturity: live-read",
             replaces,
-            "credential-secret-updates-non-up-usk-types-and-deletes",
+            "credential-secret-updates-non-up-usk-types-and-download",
             "secret",
         ] {
             assert!(
@@ -414,11 +503,44 @@ fn credential_patch_route_is_direct_write_control_metadata_only() {
         "x-yafvs-safety-contract: write-control-v1",
         "x-yafvs-side-effect: metadata-write",
         "CredentialPatchRequest",
-        "Secret updates, allow_insecure mutation, credential type changes, target/scanner link mutation, export, download, moving live credentials to trash, and live deletion remain on inherited compatibility paths; clone, restore, and permanent trash deletion are separately native.",
+        "Secret updates, allow_insecure mutation, credential type changes, target/scanner link mutation, and secret download remain on inherited compatibility paths; clone, live trash move, restore, and permanent trash deletion are separately native.",
     ] {
         assert!(
             block.contains(required),
             "credential patch block missing {required}"
+        );
+    }
+}
+
+#[test]
+fn credential_delete_route_and_openapi_define_native_secret_opaque_trash_move() {
+    let path = "/api/v1/credentials/12345678-1234-1234-1234-123456789abc";
+    assert!(
+        !direct_api_v1_method_is_allowed(&Method::DELETE, path, false),
+        "credential DELETE must be denied without direct write-control"
+    );
+    assert!(
+        direct_api_v1_method_is_allowed(&Method::DELETE, path, true),
+        "credential DELETE must be direct write-control allowlisted"
+    );
+
+    let block = openapi_path_block("/credentials/{credential_id}");
+    for required in [
+        "    delete:",
+        "operationId: deleteCredentialsByCredentialId",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-replaces: credential-live-move-to-trash",
+        "x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-download",
+        "x-yafvs-owner-semantics: preserve-existing-owner",
+        "x-yafvs-safety-contract: write-control-v1",
+        "x-yafvs-side-effect: secret-opaque-trash-move",
+        "allow-insecure state",
+        "opaque encrypted secret-data rows",
+        "'204':",
+    ] {
+        assert!(
+            block.contains(required),
+            "credential delete block missing {required}"
         );
     }
 }

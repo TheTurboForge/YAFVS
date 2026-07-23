@@ -1720,9 +1720,6 @@ modify_credential (const char*, const char*, const char*, const char*,
                    const char*, array_t*, const char*, const char*);
 
 int
-delete_credential (const char *, int);
-
-int
 credential_count (const get_data_t *);
 
 void

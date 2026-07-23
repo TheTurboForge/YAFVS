@@ -678,28 +678,6 @@ delete_config_data_reset (delete_config_data_t *data)
 }
 
 /**
- * @brief Command data for the delete_credential command.
- */
-typedef struct
-{
-  char *credential_id;   ///< ID of Credential to delete.
-  int ultimate;      ///< Boolean.  Whether to remove entirely or to trashcan.
-} delete_credential_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_credential_data_reset (delete_credential_data_t *data)
-{
-  free (data->credential_id);
-
-  memset (data, 0, sizeof (delete_credential_data_t));
-}
-
-/**
  * @brief Command data for the delete_report command.
  */
 typedef struct
@@ -1574,7 +1552,6 @@ typedef union
   create_target_data_t create_target;                 ///< create_target
   create_task_data_t create_task;                     ///< create_task
   delete_asset_data_t delete_asset;                   ///< delete_asset
-  delete_credential_data_t delete_credential;         ///< delete_credential
   delete_config_data_t delete_config;                 ///< delete_config
   delete_report_data_t delete_report;                 ///< delete_report
   delete_target_data_t delete_target;                 ///< delete_target
@@ -1662,12 +1639,6 @@ static delete_asset_data_t *delete_asset_data
  */
 static delete_config_data_t *delete_config_data
  = (delete_config_data_t*) &(command_data.delete_config);
-
-/**
- * @brief Parser callback data for DELETE_CREDENTIAL.
- */
-static delete_credential_data_t *delete_credential_data
- = (delete_credential_data_t*) &(command_data.delete_credential);
 
 /**
  * @brief Parser callback data for DELETE_REPORT.
@@ -1952,7 +1923,6 @@ typedef enum
   CLIENT_CREATE_TASK_USAGE_TYPE,
   CLIENT_DELETE_ASSET,
   CLIENT_DELETE_CONFIG,
-  CLIENT_DELETE_CREDENTIAL,
   CLIENT_DELETE_REPORT,
   CLIENT_DELETE_TARGET,
   CLIENT_DELETE_TASK,
@@ -2264,20 +2234,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             else
               delete_config_data->ultimate = 0;
             set_client_state (CLIENT_DELETE_CONFIG);
-          }
-        else if (strcasecmp ("DELETE_CREDENTIAL", element_name) == 0)
-          {
-            const gchar* attribute;
-            append_attribute (attribute_names, attribute_values,
-                              "credential_id",
-                              &delete_credential_data->credential_id);
-            if (find_attribute (attribute_names, attribute_values,
-                                "ultimate", &attribute))
-              delete_credential_data->ultimate
-               = strcmp (attribute, "0");
-            else
-              delete_credential_data->ultimate = 0;
-            set_client_state (CLIENT_DELETE_CREDENTIAL);
           }
         else if (strcasecmp ("DELETE_REPORT", element_name) == 0)
           {
@@ -11192,7 +11148,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         break;
 
       CASE_DELETE (CONFIG, config, "Config");
-      CASE_DELETE (CREDENTIAL, credential, "Credential");
 
       case CLIENT_DELETE_REPORT:
         if (delete_report_data->report_id)

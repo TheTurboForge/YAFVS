@@ -302,4 +302,50 @@ describe('CredentialCommand tests', () => {
       {id: 'credential-2', name: 'SSH two'},
     ]);
   });
+
+  test('should bulk delete sequentially through the native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({ok: true, status: 204})
+      .mockResolvedValueOnce({ok: true, status: 204});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new CredentialsCommand(fakeHttp);
+
+    const result = await cmd.deleteByIds(['credential-1', 'credential-2']);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(result.data).toEqual(['credential-1', 'credential-2']);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://yafvs.example/api/v1/credentials/credential-1',
+      expect.objectContaining({method: 'DELETE'}),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://yafvs.example/api/v1/credentials/credential-2',
+      expect.objectContaining({method: 'DELETE'}),
+    );
+  });
+
+  test('should report partial native bulk delete without GMP fallback', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({ok: true, status: 204})
+      .mockResolvedValueOnce({ok: false, status: 409});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new CredentialsCommand(fakeHttp);
+
+    await expect(
+      cmd.deleteByIds(['credential-1', 'credential-2', 'credential-3']),
+    ).rejects.toMatchObject({
+      name: 'NativeCredentialBulkDeleteError',
+      deletedIds: ['credential-1'],
+      failedId: 'credential-2',
+      pendingIds: ['credential-2', 'credential-3'],
+    });
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

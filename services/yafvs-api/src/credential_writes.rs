@@ -18,6 +18,7 @@ use crate::{
     credential_write_transactions::{
         execute_credential_clone_transaction, execute_credential_hard_delete_transaction,
         execute_credential_patch_transaction, execute_credential_restore_transaction,
+        execute_credential_trash_transaction,
     },
     credential_write_validation::{
         CredentialCreateRequest, CredentialPatchRequest, ValidatedCredentialCreate,
@@ -112,6 +113,33 @@ pub(crate) async fn hard_delete_credential(
     execute_credential_hard_delete_transaction(&tx, trash.internal_id).await?;
     tx.commit().await.map_err(|error| {
         map_credential_write_db_error(error, "commit hard-delete credential transaction")
+    })?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub(crate) async fn delete_credential(
+    State(state): State<AppState>,
+    Path(credential_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<StatusCode, ApiError> {
+    let operator = require_credential_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_credential_write_db_error(error, "begin delete credential transaction")
+    })?;
+    resolve_credential_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE credentials, credentials_trash, credentials_data, credentials_trash_data, targets_login_data, targets_trash_login_data, scanners, scanners_trash, alert_method_data, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_credential_write_db_error(error, "lock credential tables for delete"))?;
+    let credential = load_credential_write_state(&tx, &credential_id).await?;
+    ensure_credential_is_human_owned(credential.owner_id)?;
+    ensure_live_credential_not_in_use(&tx, credential.internal_id, &credential.uuid).await?;
+    execute_credential_trash_transaction(&tx, credential.internal_id).await?;
+    tx.commit().await.map_err(|error| {
+        map_credential_write_db_error(error, "commit delete credential transaction")
     })?;
 
     Ok(StatusCode::NO_CONTENT)

@@ -2881,25 +2881,6 @@ download_credential_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Delete credential, get all credentials, envelope result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-delete_credential_gmp (gvm_connection_t *connection,
-                       gsad_credentials_t *credentials, params_t *params,
-                       gsad_command_response_data_t *response_data)
-{
-  return move_resource_to_trash (connection, "credential", credentials, params,
-                                 response_data);
-}
-
-/**
  * @brief Save credential, get next page, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -6046,6 +6027,17 @@ bulk_delete_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
         response_data);
     }
 
+  if (g_ascii_strcasecmp (type, "credential") == 0)
+    {
+      gsad_command_response_data_set_status_code (response_data,
+                                                  MHD_HTTP_BAD_REQUEST);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "Credential deletion must use the native API so secret-opaque trash "
+        "movement and reference checks cannot be bypassed.",
+        response_data);
+    }
+
   if (g_ascii_strcasecmp (type, "tls_certificate") == 0)
     {
       gsad_command_response_data_set_status_code (response_data,
@@ -7512,7 +7504,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (create_target)
   ELSE (delete_asset)
   ELSE (delete_config)
-  ELSE (delete_credential)
   ELSE (delete_report)
   ELSE (delete_target)
   ELSE (delete_task)

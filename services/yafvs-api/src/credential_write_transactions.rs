@@ -96,6 +96,63 @@ pub(crate) async fn execute_credential_clone_transaction(
     Ok(CredentialWriteRecord { uuid: cloned.uuid })
 }
 
+pub(crate) async fn execute_credential_trash_transaction(
+    tx: &Transaction<'_>,
+    credential_internal_id: i32,
+) -> Result<(), ApiError> {
+    let trash = query_credential_write_record_with_internal_id(
+        tx,
+        credential_trash_insert_sql(),
+        &[&credential_internal_id],
+        "move credential metadata to trash",
+    )
+    .await?;
+    for (sql, action) in [
+        (
+            credential_trash_data_insert_sql(),
+            "copy credential secret data to trash opaquely",
+        ),
+        (
+            credential_trash_target_references_sql(),
+            "relink trash target credential references",
+        ),
+        (
+            credential_trash_scanner_references_sql(),
+            "relink trash scanner credential references",
+        ),
+        (
+            credential_tag_locations_to_trash_sql(),
+            "move credential tag links to trash",
+        ),
+        (
+            credential_trash_tag_locations_to_trash_sql(),
+            "move trashed credential tag links to credential trash id",
+        ),
+    ] {
+        execute_credential_write_sql(
+            tx,
+            sql,
+            &[&credential_internal_id, &trash.internal_id],
+            action,
+        )
+        .await?;
+    }
+    execute_credential_write_sql(
+        tx,
+        credential_delete_live_data_sql(),
+        &[&credential_internal_id],
+        "delete live credential secret data after trash copy",
+    )
+    .await?;
+    execute_credential_write_sql(
+        tx,
+        credential_delete_live_metadata_sql(),
+        &[&credential_internal_id],
+        "delete live credential metadata after trash move",
+    )
+    .await
+}
+
 pub(crate) async fn execute_credential_hard_delete_transaction(
     tx: &Transaction<'_>,
     trash_internal_id: i32,

@@ -30,7 +30,6 @@ gsad_init_validator ()
                      "|(create_task)"
                      "|(delete_asset)"
                      "|(delete_config)"
-                     "|(delete_credential)"
                      "|(delete_report)"
                      "|(delete_target)"
                      "|(delete_task)"

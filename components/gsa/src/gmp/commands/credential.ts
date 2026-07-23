@@ -18,6 +18,7 @@ import Credential, {
 import {type Element} from 'gmp/models/model';
 import {
   cloneNativeCredential,
+  deleteNativeCredential,
   exportNativeCredentialMetadata,
   fetchNativeCredential,
   patchNativeCredential,
@@ -106,6 +107,10 @@ class CredentialCommand extends EntityCommand<
   async get({id}: EntityCommandParams) {
     const credential = await fetchNativeCredential(this.http, id);
     return new Response(credential);
+  }
+
+  async delete({id}: EntityCommandParams) {
+    await deleteNativeCredential(this.http, id);
   }
 
   private createBase({

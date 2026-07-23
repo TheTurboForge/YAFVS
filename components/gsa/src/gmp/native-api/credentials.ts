@@ -268,6 +268,29 @@ export const fetchNativeCredential = async (
   return nativeCredentialToModel(payload);
 };
 
+export const deleteNativeCredential = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<void> => {
+  const response = await fetch(
+    gmp.buildUrl(`api/v1/credentials/${encodeURIComponent(id)}`),
+    {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        ...(gmp.session.token ? {'X-YAFVS-Token': gmp.session.token} : {}),
+        ...(gmp.session.jwt
+          ? {Authorization: `Bearer ${gmp.session.jwt}`}
+          : {}),
+      },
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+};
+
 export const exportNativeCredentialMetadata = async (
   gmp: NativeApiGmp,
   id: string,

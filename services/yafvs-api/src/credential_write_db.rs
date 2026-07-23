@@ -14,6 +14,28 @@ pub(crate) struct CredentialWriteRecord {
     pub(crate) uuid: String,
 }
 
+pub(crate) async fn ensure_live_credential_not_in_use(
+    tx: &Transaction<'_>,
+    credential_internal_id: i32,
+    credential_uuid: &str,
+) -> Result<(), ApiError> {
+    let in_use: bool = tx
+        .query_one(
+            credential_live_in_use_sql(),
+            &[&credential_internal_id, &credential_uuid],
+        )
+        .await
+        .map_err(|error| map_credential_write_db_error(error, "check live credential usage"))?
+        .get(0);
+    if in_use {
+        Err(ApiError::Conflict(
+            "credential is still referenced by a live resource".to_string(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 pub(crate) async fn ensure_trash_credential_not_in_use(
     tx: &Transaction<'_>,
     trash_internal_id: i32,
@@ -53,6 +75,7 @@ pub(crate) struct CredentialWriteRecordWithInternalId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CredentialWriteState {
     pub(crate) internal_id: i32,
+    pub(crate) uuid: String,
     pub(crate) owner_id: Option<i32>,
 }
 
@@ -159,7 +182,8 @@ pub(crate) async fn load_credential_write_state(
         .map_err(|error| map_credential_write_db_error(error, "load credential write state"))?
         .map(|row| CredentialWriteState {
             internal_id: row.get(0),
-            owner_id: row.get(1),
+            uuid: row.get(1),
+            owner_id: row.get(2),
         })
         .ok_or(ApiError::NotFound)
 }

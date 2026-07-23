@@ -17,10 +17,38 @@ import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import Credential from 'gmp/models/credential';
 import type Filter from 'gmp/models/filter';
 import {
+  deleteNativeCredential,
   exportNativeCredentialsMetadata,
   fetchNativeCredentials,
   nativeCredentialsQueryFromFilter,
 } from 'gmp/native-api/credentials';
+
+export class NativeCredentialBulkDeleteError extends Error {
+  readonly deletedIds: string[];
+  readonly failedId: string;
+  readonly pendingIds: string[];
+
+  constructor(
+    deletedIds: string[],
+    failedId: string,
+    pendingIds: string[],
+    cause: unknown,
+  ) {
+    super(
+      `Native credential bulk delete stopped at ${failedId} after deleting ${deletedIds.length} credential(s).`,
+      {cause},
+    );
+    this.name = 'NativeCredentialBulkDeleteError';
+    this.deletedIds = deletedIds;
+    this.failedId = failedId;
+    this.pendingIds = pendingIds;
+  }
+}
+
+const credentialIds = (credentials: Credential[]) =>
+  credentials.flatMap(credential =>
+    credential.id === undefined ? [] : [credential.id],
+  );
 
 const shouldExportAllByFilter = (filter: Filter): boolean => {
   const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
@@ -83,9 +111,7 @@ class CredentialsCommand extends EntitiesCommand<Credential> {
 
   export(entities: Credential[]) {
     return this.exportByIds(
-      entities.flatMap(entity =>
-        entity.id === undefined ? [] : [entity.id],
-      ),
+      entities.flatMap(entity => (entity.id === undefined ? [] : [entity.id])),
     );
   }
 
@@ -115,10 +141,31 @@ class CredentialsCommand extends EntitiesCommand<Credential> {
 
     return exportNativeCredentialsMetadata(
       this.http,
-      credentials.flatMap(credential =>
-        credential.id === undefined ? [] : [credential.id],
-      ),
+      credentialIds(credentials),
     );
+  }
+
+  async delete(credentials: Credential[]) {
+    const response = await this.deleteByIds(credentialIds(credentials));
+    return response.setData(credentials);
+  }
+
+  async deleteByIds(ids: string[]) {
+    const deletedIds: string[] = [];
+    for (const [index, id] of ids.entries()) {
+      try {
+        await deleteNativeCredential(this.http, id);
+      } catch (cause) {
+        throw new NativeCredentialBulkDeleteError(
+          [...deletedIds],
+          id,
+          ids.slice(index),
+          cause,
+        );
+      }
+      deletedIds.push(id);
+    }
+    return new Response(deletedIds);
   }
 }
 

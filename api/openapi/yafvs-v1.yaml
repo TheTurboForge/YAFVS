@@ -1811,9 +1811,9 @@ paths:
       x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: credential-redacted-metadata-list-read
-      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
+      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-download
       summary: List redacted credential metadata
-      description: Read-only credential metadata backed by gvmd/PostgreSQL. Native write-control can create username/password and username/SSH-key credentials, clone human-owned credentials opaquely, patch name/comment metadata, restore trashed credentials losslessly, and permanently delete eligible trash rows without exposing secret values. Other credential types, secret updates, allow_insecure mutation, target/scanner link mutation, export/download behavior, moving live credentials to trash, and live deletion remain on inherited compatibility paths.
+      description: Read-only credential metadata backed by gvmd/PostgreSQL. Native write-control can create username/password and username/SSH-key credentials, clone human-owned credentials opaquely, patch name/comment metadata, move eligible live credentials to trash, restore trashed credentials losslessly, and permanently delete eligible trash rows without exposing secret values. Other credential types, secret updates, allow_insecure mutation, target/scanner link mutation, and secret download behavior remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1851,14 +1851,14 @@ paths:
       x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: credential-up-usk-create
-      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
+      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-download
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
       x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: credential-secret-control
       summary: Create a username/password or username/SSH-key credential
-      description: Creates one operator-owned username/password (`up`) or username/SSH-key (`usk`) credential through gvmd's authoritative ACL, key validation, encryption, and transaction path. Passwords, passphrases, and private keys are write-only and are never returned. Other credential types, secret updates, moving live credentials to trash, and live deletion remain inherited; clone, restore, and permanent trash deletion are native.
+      description: Creates one operator-owned username/password (`up`) or username/SSH-key (`usk`) credential through gvmd's authoritative ACL, key validation, encryption, and transaction path. Passwords, passphrases, and private keys are write-only and are never returned. Other credential types, secret updates, allow_insecure mutation, target/scanner link mutation, and secret download remain inherited; clone, live trash move, restore, and permanent trash deletion are native.
       requestBody:
         required: true
         content:
@@ -1896,9 +1896,9 @@ paths:
       x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: credential-redacted-metadata-detail-read
-      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
+      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-download
       summary: Read one redacted credential metadata record
-      description: Read-only credential metadata backed by gvmd/PostgreSQL. Detail includes target and scanner backlinks by id/name/use type only. Native write-control can create username/password and username/SSH-key credentials, clone human-owned credentials opaquely, patch name/comment metadata, restore trashed credentials losslessly, and permanently delete eligible trash rows without exposing secret values. Other credential types, secret updates, allow_insecure mutation, target/scanner link mutation, export/download behavior, moving live credentials to trash, and live deletion remain inherited.
+      description: Read-only credential metadata backed by gvmd/PostgreSQL. Detail includes target and scanner backlinks by id/name/use type only. Native write-control can create username/password and username/SSH-key credentials, clone human-owned credentials opaquely, patch name/comment metadata, move eligible live credentials to trash, restore trashed credentials losslessly, and permanently delete eligible trash rows without exposing secret values. Other credential types, secret updates, allow_insecure mutation, target/scanner link mutation, and secret download behavior remain inherited.
       parameters:
         - $ref: '#/components/parameters/CredentialId'
       responses:
@@ -1929,14 +1929,14 @@ paths:
       x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: credential-metadata-modify
-      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
+      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-download
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Update credential metadata
-      description: Direct write-control endpoint for updating the name and comment of any human-owned credential. Any authenticated stack operator may continue this work; the credential's existing owner remains attribution. Ownerless credentials remain protected. Secret updates, allow_insecure mutation, credential type changes, target/scanner link mutation, export, download, moving live credentials to trash, and live deletion remain on inherited compatibility paths; clone, restore, and permanent trash deletion are separately native.
+      description: Direct write-control endpoint for updating the name and comment of any human-owned credential. Any authenticated stack operator may continue this work; the credential's existing owner remains attribution. Ownerless credentials remain protected. Secret updates, allow_insecure mutation, credential type changes, target/scanner link mutation, and secret download remain on inherited compatibility paths; clone, live trash move, restore, and permanent trash deletion are separately native.
       parameters:
         - $ref: '#/components/parameters/CredentialId'
       requestBody:
@@ -1970,6 +1970,44 @@ paths:
           $ref: '#/components/responses/InternalError'
         '502':
           $ref: '#/components/responses/BadGateway'
+    delete:
+      operationId: deleteCredentialsByCredentialId
+      x-yafvs-direct: true
+      x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
+      x-yafvs-maturity: live-write
+      x-yafvs-replaces: credential-live-move-to-trash
+      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-download
+      x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
+      x-yafvs-safety-contract: write-control-v1
+      x-yafvs-side-effect: secret-opaque-trash-move
+      summary: Move a credential to trash
+      description: Direct write-control endpoint for atomically moving one human-owned live credential to trash. The operation fails closed while a live target, scanner, or alert delivery setting references the credential. It preserves UUID, ownership, metadata, type, timestamps, allow-insecure state, opaque encrypted secret-data rows, trash-side target and scanner references, and tag locations without selecting, returning, or logging secret values. Ownerless credentials remain protected, and permanent deletion requires the explicit trash hard-delete endpoint.
+      parameters:
+        - $ref: '#/components/parameters/CredentialId'
+      responses:
+        '204':
+          description: Credential moved to trash
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /credentials/{credential_id}/clone:
     post:
       operationId: postCredentialsByCredentialIdClone
@@ -1978,7 +2016,7 @@ paths:
       x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: credential-clone
-      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-live-delete
+      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-download
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
       x-yafvs-team-authority: authenticated-stack-operator
@@ -2023,14 +2061,14 @@ paths:
       x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: credential-trash-restore
-      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
+      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-download
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: credential-secret-control
       summary: Restore a trashed credential
-      description: Restores one human-owned credential, its opaque secret-data rows, trash target/scanner references, and live/trash tag links in one PostgreSQL transaction. UUID/name conflicts and ownerless credentials fail closed. Secret values never enter Rust payloads or responses; the response is the ordinary redacted credential metadata record. Inherited row-level permission mutations remain retired. Secret mutation, download semantics, moving live credentials to trash, and live deletion remain inherited; clone and permanent trash deletion are separately native.
+      description: Restores one human-owned credential, its opaque secret-data rows, trash target/scanner references, and live/trash tag links in one PostgreSQL transaction. UUID/name conflicts and ownerless credentials fail closed. Secret values never enter Rust payloads or responses; the response is the ordinary redacted credential metadata record. Inherited row-level permission mutations remain retired. Secret mutation and download semantics remain inherited; clone, live trash move, and permanent trash deletion are separately native.
       parameters:
         - $ref: '#/components/parameters/CredentialId'
       responses:
@@ -2066,7 +2104,7 @@ paths:
       x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: credential-trash-hard-delete
-      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
+      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-download
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-team-authority: authenticated-stack-operator
@@ -2105,9 +2143,9 @@ paths:
       x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: credential-redacted-metadata-export-read
-      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
+      x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-download
       summary: Export redacted credential metadata
-      description: Direct native JSON metadata export for one credential backed by the same redacted credential detail payload. This export includes credential identity, type label, owner, timestamps, allow-insecure flag, and target/scanner backlinks, but never credential secrets, credential secret values, private keys, passwords, certificates, downloads, moving live credentials to trash, live deletion, or inherited secret export semantics. Clone, restore, and permanent trash deletion are separate native write routes.
+      description: Direct native JSON metadata export for one credential backed by the same redacted credential detail payload. This export includes credential identity, type label, owner, timestamps, allow-insecure flag, and target/scanner backlinks, but never credential secrets, credential secret values, private keys, passwords, certificates, downloads, or inherited secret export semantics. Clone, live trash move, restore, and permanent trash deletion are separate native write routes.
       parameters:
         - $ref: '#/components/parameters/CredentialId'
       responses:

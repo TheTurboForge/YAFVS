@@ -70,11 +70,93 @@ pub(crate) fn credential_trash_in_use_sql() -> &'static str {
        )::boolean;"
 }
 
+pub(crate) fn credential_live_in_use_sql() -> &'static str {
+    "SELECT (
+         EXISTS (
+           SELECT 1 FROM targets_login_data
+            WHERE credential = $1
+         )
+         OR EXISTS (
+           SELECT 1 FROM scanners
+            WHERE credential = $1
+         )
+         OR EXISTS (
+           SELECT 1 FROM alert_method_data
+            WHERE name IN (
+              'recipient_credential', 'scp_credential',
+              'smb_credential', 'pkcs12_credential'
+            )
+              AND data = $2
+         )
+       )::boolean;"
+}
+
 pub(crate) fn credential_write_state_sql() -> &'static str {
     "SELECT id::integer,
+            uuid::text,
             owner::integer
        FROM credentials
       WHERE uuid = $1;"
+}
+
+pub(crate) fn credential_trash_insert_sql() -> &'static str {
+    "INSERT INTO credentials_trash
+        (uuid, owner, name, comment, creation_time, modification_time, type,
+         allow_insecure)
+     SELECT uuid, owner, name, comment, creation_time, modification_time, type,
+            allow_insecure
+       FROM credentials
+      WHERE id = $1
+      RETURNING id::integer, uuid::text;"
+}
+
+pub(crate) fn credential_trash_data_insert_sql() -> &'static str {
+    "INSERT INTO credentials_trash_data (credential, type, value)
+     SELECT $2, type, value
+       FROM credentials_data
+      WHERE credential = $1;"
+}
+
+pub(crate) fn credential_trash_target_references_sql() -> &'static str {
+    "UPDATE targets_trash_login_data
+        SET credential_location = 1,
+            credential = $2
+      WHERE credential = $1
+        AND credential_location = 0;"
+}
+
+pub(crate) fn credential_trash_scanner_references_sql() -> &'static str {
+    "UPDATE scanners_trash
+        SET credential_location = 1,
+            credential = $2
+      WHERE credential = $1
+        AND credential_location = 0;"
+}
+
+pub(crate) fn credential_tag_locations_to_trash_sql() -> &'static str {
+    "UPDATE tag_resources
+        SET resource_location = 1,
+            resource = $2
+      WHERE resource_type = 'credential'
+        AND resource = $1
+        AND resource_location = 0;"
+}
+
+pub(crate) fn credential_trash_tag_locations_to_trash_sql() -> &'static str {
+    "UPDATE tag_resources_trash
+        SET resource_location = 1,
+            resource = $2
+      WHERE resource_type = 'credential'
+        AND resource = $1
+        AND resource_location = 0;"
+}
+
+pub(crate) fn credential_delete_live_data_sql() -> &'static str {
+    "DELETE FROM credentials_data WHERE credential = $1;"
+}
+
+pub(crate) fn credential_delete_live_metadata_sql() -> &'static str {
+    "DELETE FROM credentials WHERE id = $1;"
 }
 
 pub(crate) fn credential_restore_metadata_sql() -> &'static str {

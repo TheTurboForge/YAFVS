@@ -22,8 +22,8 @@ use crate::{
     credential_payloads::CredentialAssetItem,
     credential_write_validation::{CredentialCreateRequest, CredentialPatchRequest},
     credential_writes::{
-        clone_credential, create_credential, hard_delete_credential, patch_credential,
-        restore_credential,
+        clone_credential, create_credential, delete_credential, hard_delete_credential,
+        patch_credential, restore_credential,
     },
     errors::ApiError,
     override_payloads::OverrideAssetItem,
@@ -95,6 +95,16 @@ pub(crate) async fn browser_proxy_hard_delete_credential(
 ) -> Result<StatusCode, ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     hard_delete_credential(State(state), Path(credential_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_delete_credential(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(credential_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_credential(State(state), Path(credential_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_restore_task(

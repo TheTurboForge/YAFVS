@@ -14,7 +14,8 @@ use crate::{
 };
 
 const YAFVSCTL: &str = include_str!("../../../tools/yafvsctl");
-const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
+const RETIRED_GVMD_CREDENTIAL_DELETE_CONTRACT: &str =
+    include_str!("characterization/gvmd_credential_delete_contract.md");
 const RETIRED_GVMD_RESTORE_CONTRACT: &str =
     include_str!("characterization/gvmd_restore_contract.md");
 
@@ -96,19 +97,19 @@ fn credential_clone_is_operator_owned_atomic_and_secret_opaque() {
 
 #[test]
 fn credential_hard_delete_is_guarded_reference_safe_and_secret_opaque() {
-    let inherited = GVMD_MANAGE_SQL
-        .split_once("int\ndelete_credential (const char *credential_id, int ultimate)")
-        .expect("imported credential delete authority")
+    let inherited = RETIRED_GVMD_CREDENTIAL_DELETE_CONTRACT
+        .split_once("## Trashed Credential Permanent Deletion")
+        .expect("imported credential hard-delete authority")
         .1
-        .split_once("int\ncredential_count")
-        .expect("imported credential delete authority end")
+        .split_once("## Retired Transport")
+        .expect("imported credential hard-delete authority end")
         .0;
     for required in [
-        "trash_credential_in_use (credential)",
-        "permissions_set_orphans (\"credential\"",
+        "trash target/scanner references",
+        "trash alert credential keys",
         "tags_remove_resource (\"credential\"",
-        "DELETE FROM credentials_trash_data",
-        "DELETE FROM credentials_trash",
+        "credentials_trash_data",
+        "credentials_trash",
     ] {
         assert!(
             inherited.contains(required),
@@ -564,6 +565,7 @@ fn credential_patch_state_and_uniqueness_are_live_metadata_only() {
     let state = credential_write_state_sql();
     assert!(state.contains("FROM credentials"));
     assert!(state.contains("WHERE uuid = $1"));
+    assert!(state.contains("uuid::text"));
     assert!(state.contains("owner::integer"));
     assert!(!state.contains("credentials_data"));
     assert!(!state.contains("credentials_trash"));
@@ -575,4 +577,157 @@ fn credential_patch_state_and_uniqueness_are_live_metadata_only() {
     assert!(unique.contains("owner = $3"));
     assert!(!unique.contains("credentials_data"));
     assert!(!unique.contains("credentials_trash"));
+}
+
+#[test]
+fn credential_delete_moves_live_state_to_trash_atomically_and_opaquely() {
+    let inherited = RETIRED_GVMD_CREDENTIAL_DELETE_CONTRACT
+        .split_once("## Live Credential Move To Trash")
+        .expect("imported credential soft-delete authority")
+        .1
+        .split_once("## Trashed Credential Permanent Deletion")
+        .expect("imported credential soft-delete authority end")
+        .0;
+    for required in [
+        "targets_login_data",
+        "scanners",
+        "alert_method_data",
+        "credentials_trash",
+        "credentials_trash_data",
+        "targets_trash_login_data",
+        "scanners_trash",
+        "tags_set_locations",
+        "deletes `credentials_data` before `credentials`",
+    ] {
+        assert!(
+            inherited.contains(required),
+            "imported credential soft-delete authority missing {required}"
+        );
+    }
+    assert!(
+        inherited.contains("omitted the existing `allow_insecure` column"),
+        "the deliberate native divergence must remain explicit"
+    );
+
+    let in_use = credential_live_in_use_sql();
+    for required in [
+        "targets_login_data",
+        "scanners",
+        "alert_method_data",
+        "recipient_credential",
+        "scp_credential",
+        "smb_credential",
+        "pkcs12_credential",
+        "data = $2",
+        ")::boolean",
+    ] {
+        assert!(
+            in_use.contains(required),
+            "live credential usage guard missing {required}"
+        );
+    }
+    assert!(!in_use.contains("credentials_data"));
+    let db = include_str!("credential_write_db.rs");
+    assert!(db.contains("credential_live_in_use_sql()"));
+    assert!(db.contains("credential is still referenced by a live resource"));
+
+    let metadata = credential_trash_insert_sql();
+    for required in [
+        "INSERT INTO credentials_trash",
+        "uuid, owner, name, comment, creation_time, modification_time, type",
+        "allow_insecure",
+        "FROM credentials",
+        "RETURNING id::integer, uuid::text",
+    ] {
+        assert!(
+            metadata.contains(required),
+            "credential trash metadata missing {required}"
+        );
+    }
+
+    let data = credential_trash_data_insert_sql();
+    assert!(data.contains("INSERT INTO credentials_trash_data (credential, type, value)"));
+    assert!(data.contains("SELECT $2, type, value"));
+    assert!(data.contains("FROM credentials_data"));
+    assert!(!data.contains("RETURNING"));
+
+    for sql in [
+        credential_trash_target_references_sql(),
+        credential_trash_scanner_references_sql(),
+    ] {
+        assert!(sql.contains("credential_location = 1"));
+        assert!(sql.contains("credential = $2"));
+        assert!(sql.contains("credential = $1"));
+        assert!(sql.contains("credential_location = 0"));
+    }
+    for sql in [
+        credential_tag_locations_to_trash_sql(),
+        credential_trash_tag_locations_to_trash_sql(),
+    ] {
+        assert!(sql.contains("resource_type = 'credential'"));
+        assert!(sql.contains("resource_location = 1"));
+        assert!(sql.contains("SET resource_location = 1,\n            resource = $2"));
+        assert!(sql.contains("AND resource = $1"));
+        assert!(sql.contains("resource_location = 0"));
+    }
+    assert!(credential_delete_live_data_sql().contains("DELETE FROM credentials_data"));
+    assert!(credential_delete_live_metadata_sql().contains("DELETE FROM credentials"));
+
+    let handler_source = include_str!("credential_writes.rs");
+    let handler = handler_source
+        .split_once("pub(crate) async fn delete_credential")
+        .expect("credential delete handler")
+        .1
+        .split_once("pub(crate) async fn restore_credential")
+        .expect("credential delete handler end")
+        .0;
+    for required in [
+        "require_credential_write_operator(operator)?",
+        "resolve_credential_write_operator_owner(&tx, &operator).await?",
+        "load_credential_write_state",
+        "ensure_credential_is_human_owned(credential.owner_id)?",
+        "ensure_live_credential_not_in_use(&tx, credential.internal_id, &credential.uuid)",
+        "execute_credential_trash_transaction",
+        "tx.commit()",
+        "StatusCode::NO_CONTENT",
+    ] {
+        assert!(
+            handler.contains(required),
+            "credential delete missing {required}"
+        );
+    }
+    let lock = "LOCK TABLE credentials, credentials_trash, credentials_data, credentials_trash_data, targets_login_data, targets_trash_login_data, scanners, scanners_trash, alert_method_data, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;";
+    assert!(handler.contains(lock));
+    assert!(!handler.contains("credentials_data.value"));
+
+    let transaction = include_str!("credential_write_transactions.rs")
+        .split_once("pub(crate) async fn execute_credential_trash_transaction")
+        .expect("credential trash transaction")
+        .1
+        .split_once("pub(crate) async fn execute_credential_hard_delete_transaction")
+        .expect("credential trash transaction end")
+        .0;
+    for ordered in [
+        "credential_trash_insert_sql",
+        "credential_trash_data_insert_sql",
+        "credential_trash_target_references_sql",
+        "credential_trash_scanner_references_sql",
+        "credential_tag_locations_to_trash_sql",
+        "credential_trash_tag_locations_to_trash_sql",
+        "credential_delete_live_data_sql",
+        "credential_delete_live_metadata_sql",
+    ] {
+        assert!(
+            transaction.contains(ordered),
+            "credential trash transaction missing {ordered}"
+        );
+    }
+    assert!(
+        transaction.find("credential_delete_live_data_sql").unwrap()
+            < transaction
+                .find("credential_delete_live_metadata_sql")
+                .unwrap()
+    );
+    assert!(!transaction.contains("permissions"));
+    assert!(!transaction.contains("credentials_data.value"));
 }

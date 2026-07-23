@@ -32,7 +32,8 @@ use crate::{
         browser_proxy_clone_scanner, browser_proxy_clone_task, browser_proxy_create_alert,
         browser_proxy_create_credential, browser_proxy_create_override,
         browser_proxy_create_scanner, browser_proxy_create_task, browser_proxy_delete_alert,
-        browser_proxy_delete_override, browser_proxy_delete_scanner, browser_proxy_delete_task,
+        browser_proxy_delete_credential, browser_proxy_delete_override,
+        browser_proxy_delete_scanner, browser_proxy_delete_task,
         browser_proxy_delete_tls_certificate, browser_proxy_deliver_alert_report,
         browser_proxy_hard_delete_alert, browser_proxy_hard_delete_credential,
         browser_proxy_hard_delete_override, browser_proxy_hard_delete_scanner,
@@ -175,6 +176,10 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/credentials/:credential_id",
             patch(browser_proxy_patch_credential),
+        )
+        .route(
+            "/api/v1/credentials/:credential_id",
+            delete(browser_proxy_delete_credential),
         )
         .route(
             "/api/v1/credentials/:credential_id/clone",

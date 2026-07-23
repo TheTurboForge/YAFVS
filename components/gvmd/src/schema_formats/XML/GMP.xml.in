@@ -4202,58 +4202,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     </example>
   </command>
   <command>
-    <name>delete_credential</name>
-    <summary>Delete a credential</summary>
-    <description>
-      <p>
-        The client uses the delete_credential command to delete an
-        existing credential.
-      </p>
-      <p>
-        Since this is a destructive command, the client is advised to ask
-        for confirmation from the user before sending this command to the
-        Manager.
-      </p>
-    </description>
-    <pattern>
-      <attrib>
-        <name>credential_id</name>
-        <type>uuid</type>
-        <required>1</required>
-      </attrib>
-      <attrib>
-        <name>ultimate</name>
-        <summary>Whether to remove entirely, or to the trashcan</summary>
-        <type>boolean</type>
-        <required>1</required>
-      </attrib>
-    </pattern>
-    <response>
-      <pattern>
-        <attrib>
-          <name>status</name>
-          <type>status</type>
-          <required>1</required>
-        </attrib>
-        <attrib>
-          <name>status_text</name>
-          <type>text</type>
-          <required>1</required>
-        </attrib>
-      </pattern>
-    </response>
-    <example>
-      <summary>Delete a credential</summary>
-      <request>
-        <delete_credential credential_id="267a3405-e84a-47da-97b2-5fa0d2e8995e">
-        </delete_credential>
-      </request>
-      <response>
-        <delete_credential_response status="200" status_text="OK"/>
-      </response>
-    </example>
-  </command>
-  <command>
     <name>delete_report</name>
     <summary>Delete a report</summary>
     <description>

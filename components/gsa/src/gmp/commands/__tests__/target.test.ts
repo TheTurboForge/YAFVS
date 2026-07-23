@@ -6,17 +6,12 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import TargetCommand from 'gmp/commands/target';
-import {
-  createActionResultResponse,
-  createEntityResponse,
-  createHttp,
-  createResponse,
-} from 'gmp/commands/testing';
+import {createActionResultResponse, createHttp} from 'gmp/commands/testing';
 import type Http from 'gmp/http/http';
 import {ResponseRejection} from 'gmp/http/rejection';
-import {createSession} from 'gmp/testing';
 import {SCAN_CONFIG_DEFAULT} from 'gmp/models/target';
 import {NO_VALUE, YES_VALUE} from 'gmp/parser';
+import {createSession} from 'gmp/testing';
 import {UNSET_VALUE} from 'web/utils/Render';
 
 afterEach(() => {
@@ -24,20 +19,14 @@ afterEach(() => {
 });
 
 describe('TargetCommand tests', () => {
-  test('should return single target through GMP when native API is unavailable', async () => {
-    const response = createEntityResponse('target', {_id: 'target-id'});
-    const fakeHttp = createHttp(response);
+  test('should refuse target detail locally when native API is unavailable', async () => {
+    const fakeHttp = createHttp(undefined);
     const cmd = new TargetCommand(fakeHttp);
 
-    const result = await cmd.get({id: 'target-id'});
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_target',
-        target_id: 'target-id',
-      },
-    });
-    expect(result.data.id).toEqual('target-id');
+    await expect(cmd.get({id: 'target-id'})).rejects.toThrow(
+      'Native target API is required for target command',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should fetch single target through native API when available', async () => {

@@ -30,6 +30,25 @@ const createNativeHttp = () => {
 };
 
 describe('TargetsCommand tests', () => {
+  test('should refuse target lists locally when native API is unavailable', async () => {
+    const fakeHttp = createHttp(undefined);
+    const cmd = new TargetsCommand(fakeHttp);
+
+    await expect(cmd.get()).rejects.toThrow(
+      'Native target API is required for targets command',
+    );
+    await expect(cmd.getAll()).rejects.toThrow(
+      'Native target API is required for targets command',
+    );
+    expect(() => cmd.exportByIds(['target-id'])).toThrow(
+      'Native target API is required for targets command',
+    );
+    await expect(
+      cmd.exportByFilter(Filter.fromString('first=1 rows=10')),
+    ).rejects.toThrow('Native target API is required for targets command');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should fetch targets through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

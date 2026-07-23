@@ -1154,6 +1154,17 @@ class YAFVSCtlTests(unittest.TestCase):
             with self.subTest(transition=transition):
                 self.assertIn(transition, start_handler)
 
+    def test_get_targets_is_native_only_acl_not_public_gmp(self):
+        repo_root = Path(__file__).resolve().parents[2]
+        gmp_source = (repo_root / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")
+        commands = (repo_root / "components" / "gvmd" / "src" / "manage_commands.c").read_text(encoding="utf-8")
+        schema = (repo_root / "components" / "gvmd" / "src" / "schema_formats" / "XML" / "GMP.xml.in").read_text(encoding="utf-8")
+        self.assertNotIn("CLIENT_GET_TARGETS", gmp_source)
+        self.assertNotIn('{"GET_TARGETS", "Get all targets."}', commands)
+        self.assertIn('"GET_TARGETS",', commands)
+        self.assertNotIn("<name>get_targets</name>", schema)
+        self.assertIn("<command>GET_TARGETS</command>", schema)
+
     def test_gvmd_task_parser_consumes_task_elements(self):
         gmp_source = (Path(__file__).resolve().parents[2] / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")
         start_handler = gmp_source[

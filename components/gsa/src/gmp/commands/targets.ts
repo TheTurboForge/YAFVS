@@ -7,13 +7,13 @@
 import EntitiesCommand from 'gmp/commands/entities';
 import type {HttpCommandInputParams} from 'gmp/commands/http';
 import {
+  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
 } from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import {type Element} from 'gmp/models/model';
 import Target from 'gmp/models/target';
 import {
   exportNativeTargetsMetadata,
@@ -26,17 +26,23 @@ const shouldExportAllByFilter = filter => {
   return Number.isFinite(rows) && rows < 0;
 };
 
+const requireNativeTargetApi = (http: Http) => {
+  if (!canUseNativeApi(http)) {
+    throw new Error('Native target API is required for targets command');
+  }
+};
+
 class TargetsCommand extends EntitiesCommand<Target> {
   constructor(http: Http) {
     super(http, 'target', Target);
   }
 
-  getEntitiesResponse(root: Element): Element {
-    // @ts-expect-error
-    return root.get_targets.get_targets_response;
+  protected getEntitiesResponse(): never {
+    throw new Error('Target XML collection parsing has been retired');
   }
 
   async get(params: HttpCommandInputParams = {}) {
+    requireNativeTargetApi(this.http);
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeTargets(
       this.http,
@@ -49,6 +55,7 @@ class TargetsCommand extends EntitiesCommand<Target> {
   }
 
   async getAll(params: HttpCommandInputParams = {}) {
+    requireNativeTargetApi(this.http);
     const filter = filterFromCommandParams(params).all();
     const targets: Target[] = [];
     let total = Number.POSITIVE_INFINITY;
@@ -68,27 +75,23 @@ class TargetsCommand extends EntitiesCommand<Target> {
 
     return new Response(
       targets,
-      nativeCollectionMeta(
-        filter,
-        targets,
-        Number.isFinite(total) ? total : 0,
-      ),
+      nativeCollectionMeta(filter, targets, Number.isFinite(total) ? total : 0),
     );
   }
 
   exportByIds(ids: string[]) {
+    requireNativeTargetApi(this.http);
     return exportNativeTargetsMetadata(this.http, ids);
   }
 
   export(entities: Target[]) {
     return this.exportByIds(
-      entities.flatMap(entity =>
-        entity.id === undefined ? [] : [entity.id],
-      ),
+      entities.flatMap(entity => (entity.id === undefined ? [] : [entity.id])),
     );
   }
 
   async exportByFilter(filter) {
+    requireNativeTargetApi(this.http);
     const targets: Target[] = [];
     if (shouldExportAllByFilter(filter)) {
       let total = Number.POSITIVE_INFINITY;
@@ -114,9 +117,7 @@ class TargetsCommand extends EntitiesCommand<Target> {
 
     return exportNativeTargetsMetadata(
       this.http,
-      targets.flatMap(target =>
-        target.id === undefined ? [] : [target.id],
-      ),
+      targets.flatMap(target => (target.id === undefined ? [] : [target.id])),
     );
   }
 }

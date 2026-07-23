@@ -558,11 +558,13 @@ class TargetCommand extends EntityCommand<Target> {
   }
 
   async get({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      const nativeResponse = await fetchNativeTarget(this.http, id);
-      return new Response(nativeResponse.target);
-    }
-    return super.get({id});
+    requireNativeTargetApi(this.http);
+    const nativeResponse = await fetchNativeTarget(this.http, id);
+    return new Response(nativeResponse.target);
+  }
+
+  protected getElementFromRoot(): never {
+    throw new Error('Target XML response parsing has been retired');
   }
 
   async export({id}: EntityCommandParams) {
@@ -756,10 +758,6 @@ class TargetCommand extends EntityCommand<Target> {
       // never reached because feedStatusRejection always throws. just to satisfy TS
       throw rejection;
     }
-  }
-
-  getElementFromRoot(root) {
-    return root.get_target.get_targets_response.target;
   }
 }
 

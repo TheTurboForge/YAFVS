@@ -97,7 +97,6 @@ fn trashcan_inventory_is_native_only_and_has_no_gmp_fallback() {
     for (data, resource_type) in [
         ("get_configs_data", "config"),
         ("get_credentials_data", "credential"),
-        ("get_targets_data", "target"),
         ("get_tasks_data", "task"),
     ] {
         let parser = format!(
@@ -108,6 +107,8 @@ fn trashcan_inventory_is_native_only_and_has_no_gmp_fallback() {
             "raw manager trash compatibility lost {resource_type} attribute parsing"
         );
     }
+    assert!(!GVMD_GMP.contains("get_targets_data"));
+    assert!(!GVMD_GMP.contains("CLIENT_GET_TARGETS"));
     assert!(
         !GVMD_GMP.contains("get_alerts_data"),
         "retired public GET_ALERTS parser data must stay absent"

@@ -59,9 +59,6 @@ interface ReportTargetRef {
 
 const log = logger.getLogger('web.pages.reports.DetailsPage');
 
-const canUseNativeApi = (gmp: {buildUrl?: unknown}) =>
-  typeof gmp?.buildUrl === 'function';
-
 const DEFAULT_FILTER = Filter.fromString(
   'levels=chml rows=100 min_qod=70 first=1 sort-reverse=severity result_hosts_only=0',
 );
@@ -317,12 +314,8 @@ const ReportDetailsPage = () => {
     const target = getTarget(entity);
     if (!isDefined(target?.id)) return;
 
-    if (canUseNativeApi(gmp)) {
-      const response = await fetchNativeTarget(gmp, target.id);
-      return {data: response.target};
-    }
-
-    return gmp.target.get({id: target.id});
+    const response = await fetchNativeTarget(gmp, target.id);
+    return {data: response.target};
   }, [entity, gmp]);
 
   return (

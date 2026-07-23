@@ -117,11 +117,13 @@ fn retired_public_commands_keep_only_live_native_authority_keys() {
         "TEST_ALERT",
         "DELETE_SCHEDULE",
         "GET_SCHEDULES",
+        "GET_TARGETS",
     ];
 
     for command in [
         "DELETE_SCHEDULE",
         "GET_SCHEDULES",
+        "GET_TARGETS",
         "CREATE_FILTER",
         "CREATE_PORT_LIST",
         "CREATE_PORT_RANGE",
@@ -187,6 +189,16 @@ fn retired_public_commands_keep_only_live_native_authority_keys() {
     assert!(MANAGE_ALERTS.contains("\"test_alert\""));
     assert!(MANAGE_SQL.contains("\"get_alerts\""));
     assert!(GMP_SCHEMA.contains("<command>GET_ALERTS</command>"));
+}
+
+#[test]
+fn get_targets_is_a_native_only_acl_key_not_public_transport() {
+    assert!(!advertised_commands().contains("GET_TARGETS"));
+    assert!(!authenticated_parser_commands().contains("GET_TARGETS"));
+    assert!(native_acl_operations().contains("GET_TARGETS"));
+    assert!(!GMP.contains("CLIENT_GET_TARGETS"));
+    assert!(!GMP_SCHEMA.contains("<name>get_targets</name>"));
+    assert!(GMP_SCHEMA.contains("<command>GET_TARGETS</command>"));
 }
 
 #[test]

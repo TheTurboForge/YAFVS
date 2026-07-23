@@ -161,11 +161,6 @@ static char *
 get_config_family (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 
-
-static char *
-get_target (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
-            gsad_command_response_data_t *);
-
 static int
 gmp_success (entity_t entity);
 
@@ -3439,66 +3434,6 @@ delete_target_gmp (gvm_connection_t *connection,
  *         on error.
  */
 /**
- * @brief Get one target, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[in]  extra_xml    Extra XML to insert inside page element.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-static char *
-get_target (gvm_connection_t *connection, gsad_credentials_t *credentials,
-            params_t *params, const char *extra_xml,
-            gsad_command_response_data_t *response_data)
-{
-  gmp_arguments_t *arguments;
-  arguments = gmp_arguments_new ();
-
-  gmp_arguments_add (arguments, "tasks", "1");
-
-  return get_one (connection, "target", credentials, params, extra_xml,
-                  arguments, response_data);
-}
-
-/**
- * @brief Get one target, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_target_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_target (connection, credentials, params, NULL, response_data);
-}
-
-/**
- * @brief Get all targets, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_targets_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                 params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_many (connection, "targets", credentials, params, NULL,
-                   response_data);
-}
-
-/**
  * @brief Modify a target, get all targets, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -3758,45 +3693,6 @@ save_target_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 
   free_entity (entity);
   return html;
-}
-
-/**
- * @brief Export a target.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Target XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_target_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "target", credentials, params,
-                          response_data);
-}
-
-/**
- * @brief Export a list of targets.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Targets XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_targets_gmp (gvm_connection_t *connection,
-                    gsad_credentials_t *credentials, params_t *params,
-                    gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "target", credentials, params, response_data);
 }
 
 /**
@@ -5755,6 +5651,18 @@ bulk_export_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (type, "Bulk Export")
   CHECK_VARIABLE_INVALID (bulk_select, "Bulk Export")
 
+  if (g_ascii_strcasecmp (type, "target") == 0)
+    {
+      gsad_command_response_data_set_status_code (response_data,
+                                                  MHD_HTTP_BAD_REQUEST);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "Target XML bulk export is no longer supported. Use the native JSON "
+        "target list and /api/v1/targets/{target_id}/export metadata "
+        "endpoints instead.",
+        response_data);
+    }
+
   if (g_ascii_strcasecmp (type, "filter") == 0
       || g_ascii_strcasecmp (type, "override") == 0
       || g_ascii_strcasecmp (type, "port_list") == 0
@@ -6587,8 +6495,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (export_preference_file)
   ELSE (export_result)
   ELSE (export_results)
-  ELSE (export_target)
-  ELSE (export_targets)
   ELSE (export_task)
   ELSE (export_tasks)
   ELSE (get_asset)
@@ -6603,8 +6509,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_resource_names)
   ELSE (get_setting)
   ELSE (get_settings)
-  ELSE (get_target)
-  ELSE (get_targets)
   ELSE (get_task)
   ELSE (get_tasks)
   else if (!strcmp (cmd, "download_ssl_cert"))

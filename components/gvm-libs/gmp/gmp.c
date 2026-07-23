@@ -1243,44 +1243,6 @@ gmp_delete_task (gnutls_session_t *session, const char *id)
 }
 
 /**
- * @brief Get a target.
- *
- * @param[in]  session         Pointer to GNUTLS session.
- * @param[in]  id              ID of target or NULL for all targets.
- * @param[in]  tasks           Whether to include tasks that use the target.
- * @param[in]  include_rcfile  Not used.
- * @param[out] target          Target return.  On success contains GET_TARGETS
- *                             response.
- *
- * @return 0 on success, -1 or GMP response code on error.
- */
-int
-gmp_get_targets (gnutls_session_t *session, const char *id, int tasks,
-                 int include_rcfile, entity_t *target)
-{
-  (void) include_rcfile;
-  if (id == NULL)
-    {
-      if (gvm_server_sendf (session, "<get_targets tasks=\"%i\"/>", tasks)
-          == -1)
-        return -1;
-    }
-  else
-    {
-      if (gvm_server_sendf (session,
-                            "<get_targets"
-                            " target_id=\"%s\""
-                            " tasks=\"%i\"/>",
-                            id, tasks)
-          == -1)
-        return -1;
-    }
-
-  /* Read the response. */
-  return gmp_check_response (session, target);
-}
-
-/**
  * @brief Get a report (generic version).
  *
  * FIXME: Using the according opts it should be possible to generate

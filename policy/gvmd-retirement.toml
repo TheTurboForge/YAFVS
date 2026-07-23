@@ -287,10 +287,13 @@ id = "runtime-initialization-health"
 target_owner = "manager-worker"
 status = "characterized"
 weight = 3
-evidence = ["tools/yafvsctl-rs/src/commands/runtime_manager_init.rs::command_runtime_manager_init"]
+evidence = [
+  "tools/yafvsctl-rs/src/commands/runtime_manager_init.rs::command_runtime_manager_init",
+  "tools/yafvsctl-rs/src/commands/feed_generation/manager_init.rs::const ADMIN_UUID_SQL",
+]
 independent_authority = ["components/gvmd/src/manage_sql.c::check_db_versions"]
 dependencies = ["schema-migrations", "database-bootstrap-functions"]
-notes = "Replace pinned gvmd migration/init probes with native startup, migration, recovery, and health contracts."
+notes = "Administrator UUID discovery is now a strict fail-closed database attestation and the inherited gvmd user-listing CLI is deleted. Migration, empty-database administrator creation, password updates, and feed-owner mutation still use pinned gvmd operations, so native runtime initialization remains characterized rather than terminal."
 
 [[callers]]
 id = "gsa-legacy-command-transport"
@@ -359,6 +362,28 @@ evidence = [
 ]
 replacement = ["scanner-registry-capability"]
 notes = "Rust now atomically ensures the fixed ownerless built-in scanner row, confirms it through the native API, and uses the bounded native verification route. Application smoke reads the same native collection; the gvmd CLI helper and GMP prerequisite are deleted."
+
+[[callers]]
+id = "runtime-manager-init-gvmd-get-users"
+kind = "tooling"
+status = "retired"
+evidence = [
+  "tools/yafvsctl-rs/src/commands/feed_generation/manager_init.rs::const ADMIN_UUID_SQL",
+  "tools/yafvsctl-rs/src/commands/feed_generation/manager_init.rs::rejects_invalid_admin_database_attestation_without_creating_a_user",
+]
+replacement = ["runtime-initialization-health"]
+notes = "Rust manager initialization now discovers the development administrator UUID through a strict scalar database attestation before and after retained empty-database creation. Query failure or malformed output fails closed; the gvmd --get-users call is deleted."
+
+[[callers]]
+id = "runtime-direct-smoke-gvmd-get-users"
+kind = "tooling"
+status = "retired"
+evidence = [
+  "tools/tests/test_yafvsctl.py::test_direct_admin_operator_uuid_uses_database_attestation",
+  "tools/tests/test_yafvsctl.py::test_direct_admin_operator_uuid_rejects_non_uuid_database_output",
+]
+replacement = ["runtime-initialization-health", "crud-query-api-surface"]
+notes = "The development direct-write smoke obtains only the administrator UUID through a fixed read-only database query and strict UUID validation. It no longer starts a gvmd one-off user-listing command or depends on prepared gvmd image identity for this lookup."
 
 [[callers]]
 id = "compose-gvmd-service-socket-dependencies"

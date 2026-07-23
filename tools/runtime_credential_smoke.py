@@ -8,10 +8,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import secrets
 import shutil
 import signal
 import subprocess
 import tempfile
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -28,6 +31,13 @@ function retainOwnedFixture(fixtures, fixture) {
     .concat([fixture]);
 }
 
+function fixturesForBaseUrl(fixtures, baseUrl, urlIndex) {
+  return fixtures.filter(fixture =>
+    fixture.baseUrl
+      ? fixture.baseUrl === baseUrl
+      : urlIndex === 0);
+}
+
 function releaseOwnedFixture(fixtures, fixture) {
   return fixtures.filter(existing =>
     existing.id !== fixture.id || existing.baseUrl !== fixture.baseUrl);
@@ -35,6 +45,7 @@ function releaseOwnedFixture(fixtures, fixture) {
 
 function credentialCleanupDecision(fixture, trashItems, liveResult) {
   if (!fixture || typeof fixture.id !== 'string' || typeof fixture.name !== 'string'
+      || typeof fixture.ownershipMarker !== 'string'
       || !Array.isArray(trashItems)) {
     return {action: 'identity-mismatch', owned: []};
   }
@@ -57,7 +68,8 @@ function credentialCleanupDecision(fixture, trashItems, liveResult) {
   }
   if (trashItems.length !== 1
       || owned.length !== 1
-      || owned[0].name !== fixture.name) {
+      || owned[0].name !== fixture.name
+      || owned[0].comment !== fixture.ownershipMarker) {
     return {action: 'identity-mismatch', owned};
   }
   return {action: 'purge', owned};
@@ -83,6 +95,7 @@ const statePath = artifactPath('credential-smoke-state.json');
 let ownedFixtures = Array.isArray(config.cleanupFixtures)
   ? config.cleanupFixtures.filter(fixture => fixture && fixture.name && fixture.kind)
   : [];
+const recoveryFixtures = [...ownedFixtures];
 const DOWNLOAD_CONTRACTS = {
   key: {
     title: 'Download Public Key',
@@ -119,7 +132,12 @@ function artifactPath(name) {
 }
 
 function persistOwnedFixtures() {
-  fs.writeFileSync(statePath, JSON.stringify({fixtures: ownedFixtures}, null, 2) + '\n');
+  fs.writeFileSync(
+    statePath,
+    JSON.stringify({fixtures: ownedFixtures}, null, 2) + '\n',
+    {mode: 0o600},
+  );
+  fs.chmodSync(statePath, 0o600);
   if (!artifacts.includes(statePath)) artifacts.push(statePath);
 }
 
@@ -471,6 +489,7 @@ async function createCredential(page, fixture) {
     if (!selected) return null;
   }
   await page.locator('input[name="name"]').first().fill(fixture.name);
+  await page.locator('input[name="comment"]').first().fill(config.ownershipMarker);
   await page.locator('input[name="credentialLogin"]').first().fill(config.credentialLogin);
   if (fixture.kind === 'up') {
     await page.locator('input[name="password"]').first().fill(credentialPassword);
@@ -508,6 +527,7 @@ async function createCredential(page, fixture) {
     name: fixture.name,
     id,
     baseUrl: safeStoredUrl(config.baseUrl),
+    ownershipMarker: config.ownershipMarker,
   };
   recordOwnedFixture(owned);
   return owned;
@@ -628,6 +648,10 @@ async function purgeCredentialFromTrash(page, fixture) {
     add('fail', `credential-smoke.${fixture.kind}.cleanup-live-inventory`, 'The exact owned credential UUID was absent from Trashcan but its live state could not be verified.', {credentialName: fixture.name, credentialId: fixture.id});
     return false;
   }
+  if (live.item.comment !== fixture.ownershipMarker) {
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-authority`, 'Refusing to delete a credential because its server-side ownership marker does not match the retained fixture authority.', {credentialName: fixture.name, credentialId: fixture.id});
+    return false;
+  }
   if (decision.action === 'live-present') {
     add('fail', `credential-smoke.${fixture.kind}.cleanup-live-present`, 'Refusing to discard ownership because the exact credential UUID is still present in the live inventory.', {credentialName: fixture.name, credentialId: fixture.id});
     return false;
@@ -694,17 +718,30 @@ async function runForBaseUrl(baseUrl, urlIndex) {
     await login(page);
     if (config.cleanupOnly) {
       let cleaned = true;
-      const currentBaseUrl = safeStoredUrl(baseUrl);
-      const applicableFixtures = ownedFixtures.filter(fixture =>
-        fixture.baseUrl
-          ? fixture.baseUrl === currentBaseUrl
-          : urlIndex === 0);
+      const applicableFixtures = fixturesForBaseUrl(
+        ownedFixtures,
+        baseUrl,
+        urlIndex,
+      );
       for (const fixture of [...applicableFixtures].reverse()) {
         cleaned = await deleteCredential(page, fixture) && cleaned;
       }
       add(cleaned ? 'pass' : 'fail', 'credential-smoke.timeout-cleanup', cleaned ? 'Owned timeout fixtures were cleaned.' : 'One or more owned timeout fixtures could not be cleaned.', {baseUrl: safeStoredUrl(baseUrl)});
       return;
     }
+    const pendingRecovery = fixturesForBaseUrl(
+      recoveryFixtures,
+      baseUrl,
+      urlIndex,
+    );
+    let recovered = true;
+    for (const fixture of [...pendingRecovery].reverse()) {
+      recovered = await deleteCredential(page, fixture) && recovered;
+    }
+    if (pendingRecovery.length > 0) {
+      add(recovered ? 'pass' : 'fail', 'credential-smoke.retry-cleanup', recovered ? 'Recovered and cleaned all exact owned fixtures retained from a prior invocation.' : 'One or more exact owned fixtures from a prior invocation remain unresolved.', {baseUrl: safeStoredUrl(baseUrl), fixtureCount: pendingRecovery.length});
+    }
+    if (!recovered) return;
     let upFixture = null;
     let sshFixture = null;
     let downloadsOk = false;
@@ -819,11 +856,85 @@ def redact_value(value: Any, secrets: list[str]) -> Any:
 
 def sanitized_base_url(value: str) -> str:
     parsed = urlsplit(value)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+    scheme = parsed.scheme.lower()
+    if scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError("base URL must be an absolute HTTP(S) URL")
     if parsed.username or parsed.password:
         raise ValueError("base URL must not contain user information")
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", "", ""))
+    try:
+        port = parsed.port
+    except ValueError as error:
+        raise ValueError("base URL port is invalid") from error
+    if (scheme == "http" and port == 80) or (scheme == "https" and port == 443):
+        port = None
+    hostname = parsed.hostname.lower()
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    netloc = f"{host}:{port}" if port is not None else host
+    return urlunsplit((scheme, netloc, parsed.path or "/", "", ""))
+
+
+FIXTURE_NAME_PATTERN = re.compile(
+    r"^yafvs-credential-smoke-[0-9a-f]{8}(?:-ssh)?$"
+)
+OWNERSHIP_MARKER_PATTERN = re.compile(
+    r"^yafvs-smoke:[A-Za-z0-9_-]{43}$"
+)
+
+
+def load_owned_fixtures(
+    artifact_dir: Path, configured_base_urls: set[str]
+) -> list[dict[str, str]]:
+    state_path = artifact_dir / "credential-smoke-state.json"
+    try:
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return []
+    fixtures = payload.get("fixtures") if isinstance(payload, dict) else None
+    if not isinstance(fixtures, list):
+        raise ValueError("credential smoke state has no fixture list")
+    retained: list[dict[str, str]] = []
+    for fixture in fixtures:
+        if not isinstance(fixture, dict):
+            raise ValueError("credential smoke state contains a malformed fixture")
+        kind = fixture.get("kind")
+        name = fixture.get("name")
+        credential_id = fixture.get("id")
+        ownership_marker = fixture.get("ownershipMarker")
+        if (
+            kind not in {"up", "usk"}
+            or not isinstance(name, str)
+            or FIXTURE_NAME_PATTERN.fullmatch(name) is None
+            or not isinstance(credential_id, str)
+            or not isinstance(ownership_marker, str)
+            or OWNERSHIP_MARKER_PATTERN.fullmatch(ownership_marker) is None
+        ):
+            raise ValueError("credential smoke state contains invalid fixture authority")
+        if (kind == "usk") != name.endswith("-ssh"):
+            raise ValueError("credential smoke fixture kind and name disagree")
+        try:
+            canonical_id = str(uuid.UUID(credential_id))
+        except ValueError as error:
+            raise ValueError("credential smoke fixture ID is invalid") from error
+        if canonical_id != credential_id.lower():
+            raise ValueError("credential smoke fixture ID is not canonical")
+        retained_fixture = {
+            "kind": kind,
+            "name": name,
+            "id": canonical_id,
+            "ownershipMarker": ownership_marker,
+        }
+        base_url = fixture.get("baseUrl")
+        if not isinstance(base_url, str):
+            raise ValueError("credential smoke fixture has no scoped base URL")
+        try:
+            canonical_base_url = sanitized_base_url(base_url)
+        except ValueError as error:
+            raise ValueError("credential smoke fixture base URL is invalid") from error
+        if canonical_base_url not in configured_base_urls:
+            raise ValueError("credential smoke fixture belongs to an unconfigured base URL")
+        retained_fixture["baseUrl"] = canonical_base_url
+        retained.append(retained_fixture)
+    return retained
 
 
 def run_node_process(
@@ -934,6 +1045,7 @@ def timeout_cleanup(
 def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
     artifact_dir = Path(args.artifact_dir).expanduser().resolve()
     artifact_dir.mkdir(parents=True, exist_ok=True)
+    base_urls = [sanitized_base_url(url) for url in args.base_url]
     login_password = Path(args.password_file).read_text(encoding="utf-8").strip()
     credential_password = os.environ.get("YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD")
     if not credential_password:
@@ -956,6 +1068,23 @@ def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
 
     script_path = artifact_dir / "credential-smoke.cjs"
     config_path = artifact_dir / "credential-smoke-config.json"
+    try:
+        cleanup_fixtures = load_owned_fixtures(artifact_dir, set(base_urls))
+    except ValueError as error:
+        failed = payload(
+            "fail",
+            "Credential smoke state could not be trusted for destructive recovery.",
+        )
+        failed["findings"] = [
+            {
+                "status": "fail",
+                "check": "credential-smoke.recovery-authority",
+                "message": str(error),
+            }
+        ]
+        failed["artifacts"] = [str(artifact_dir / "credential-smoke-state.json")]
+        return failed
+    ownership_marker = f"yafvs-smoke:{secrets.token_urlsafe(32)}"
     script_path.write_text(BROWSER_SCRIPT, encoding="utf-8")
     with tempfile.TemporaryDirectory(prefix="yafvs-credential-smoke-") as key_dir:
         private_key_path = Path(key_dir) / "id_ed25519"
@@ -999,13 +1128,15 @@ def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
             json.dumps(
                 {
                     "artifactDir": str(artifact_dir),
-                    "baseUrls": [sanitized_base_url(url) for url in args.base_url],
+                    "baseUrls": base_urls,
+                    "cleanupFixtures": cleanup_fixtures,
                     "credentialLogin": args.credential_login,
                     "credentialName": args.credential_name,
                     "sshCredentialName": f"{args.credential_name}-ssh",
                     "sshPrivateKeyPath": str(private_key_path),
                     "timeoutMs": args.timeout_ms,
                     "username": args.username,
+                    "ownershipMarker": ownership_marker,
                 },
                 indent=2,
                 sort_keys=True,
@@ -1013,6 +1144,7 @@ def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
             + "\n",
             encoding="utf-8",
         )
+        config_path.chmod(0o600)
 
         env = dict(os.environ)
         env["NODE_PATH"] = os.pathsep.join([*node_paths, env.get("NODE_PATH", "")]).rstrip(os.pathsep)

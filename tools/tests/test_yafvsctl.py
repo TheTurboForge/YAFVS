@@ -8413,6 +8413,7 @@ class YAFVSCtlTests(unittest.TestCase):
         for contract_anchor in (
             "Username + SSH Key",
             "input[name=\"privateKey\"]",
+            "input[name=\"comment\"]",
             "setInputFiles(config.sshPrivateKeyPath)",
             "page.waitForResponse",
             "headers['content-type']",
@@ -8455,7 +8456,11 @@ class YAFVSCtlTests(unittest.TestCase):
             "exact owned credential UUID was permanently deleted",
             "retainOwnedFixture",
             "releaseOwnedFixture",
-            "fixture.baseUrl === currentBaseUrl",
+            "fixture.baseUrl === baseUrl",
+            "fixturesForBaseUrl",
+            "credential-smoke.retry-cleanup",
+            "fixture.ownershipMarker",
+            "live.item.comment !== fixture.ownershipMarker",
             "exact owned credential UUID was moved to Trashcan",
             "safeStoredUrl",
         ):
@@ -8474,6 +8479,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "os.killpg",
             "def timeout_cleanup(",
             "def sanitized_base_url(",
+            "credential-smoke.recovery-authority",
         ):
             self.assertIn(process_anchor, helper_source)
         self.assertNotIn(
@@ -8490,6 +8496,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "kind": "up",
             "name": "owned",
             "id": "00000000-0000-4000-8000-000000000001",
+            "ownershipMarker": "yafvs-smoke:" + "a" * 43,
         }
         cases = [
             {"trash": []},
@@ -8502,6 +8509,7 @@ class YAFVSCtlTests(unittest.TestCase):
                         "entity_type": "credential",
                         "name": "other",
                         "id": fixture["id"],
+                        "comment": fixture["ownershipMarker"],
                     }
                 ]
             },
@@ -8511,6 +8519,7 @@ class YAFVSCtlTests(unittest.TestCase):
                         "entity_type": "credential",
                         "name": fixture["name"],
                         "id": fixture["id"],
+                        "comment": fixture["ownershipMarker"],
                     }
                 ]
             },
@@ -8551,18 +8560,21 @@ class YAFVSCtlTests(unittest.TestCase):
                 "name": "same-name",
                 "id": "00000000-0000-4000-8000-000000000001",
                 "baseUrl": "https://one.example/",
+                "ownershipMarker": "yafvs-smoke:" + "a" * 43,
             },
             {
                 "kind": "up",
                 "name": "same-name",
                 "id": "00000000-0000-4000-8000-000000000002",
                 "baseUrl": "https://two.example/",
+                "ownershipMarker": "yafvs-smoke:" + "b" * 43,
             },
             {
                 "kind": "up",
                 "name": "same-name",
                 "id": "00000000-0000-4000-8000-000000000003",
                 "baseUrl": "https://one.example/",
+                "ownershipMarker": "yafvs-smoke:" + "c" * 43,
             },
         ]
         script = (
@@ -8573,7 +8585,8 @@ class YAFVSCtlTests(unittest.TestCase):
             + "\nfor (const fixture of additions) owned = retainOwnedFixture(owned, fixture);"
             + "\nconst retained = owned.length;"
             + "\nowned = releaseOwnedFixture(owned, additions[0]);"
-            + "\nconsole.log(JSON.stringify({retained, remaining: owned.map(item => item.id)}));\n"
+            + "\nconst firstBase = fixturesForBaseUrl(owned, 'https://one.example/', 0);"
+            + "\nconsole.log(JSON.stringify({retained, remaining: owned.map(item => item.id), firstBase: firstBase.map(item => item.id)}));\n"
         )
         completed = subprocess.run(
             ["node", "-e", script],
@@ -8589,6 +8602,66 @@ class YAFVSCtlTests(unittest.TestCase):
             result["remaining"],
             [fixtures[1]["id"], fixtures[2]["id"]],
         )
+        self.assertEqual(result["firstBase"], [fixtures[2]["id"]])
+
+    def test_runtime_credential_smoke_recovers_valid_prior_owned_fixtures(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifact_dir = Path(tmp)
+            state_path = artifact_dir / "credential-smoke-state.json"
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "fixtures": [
+                            {
+                                "kind": "up",
+                                "name": "yafvs-credential-smoke-001122aa",
+                                "id": "00000000-0000-4000-8000-000000000001",
+                                "baseUrl": "https://ONE.EXAMPLE:443/?ignored=yes",
+                                "ownershipMarker": "yafvs-smoke:" + "a" * 43,
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                runtime_credential_smoke.load_owned_fixtures(
+                    artifact_dir, {"https://one.example/"}
+                ),
+                [
+                    {
+                        "kind": "up",
+                        "name": "yafvs-credential-smoke-001122aa",
+                        "id": "00000000-0000-4000-8000-000000000001",
+                        "baseUrl": "https://one.example/",
+                        "ownershipMarker": "yafvs-smoke:" + "a" * 43,
+                    }
+                ],
+            )
+
+    def test_runtime_credential_smoke_rejects_untrusted_prior_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifact_dir = Path(tmp)
+            (artifact_dir / "credential-smoke-state.json").write_text(
+                json.dumps(
+                    {
+                        "fixtures": [
+                            {
+                                "kind": "up",
+                                "name": "unrelated",
+                                "id": "00000000-0000-4000-8000-000000000001",
+                                "baseUrl": "https://other.example/",
+                                "ownershipMarker": "forged",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                runtime_credential_smoke.load_owned_fixtures(
+                    artifact_dir, {"https://one.example/"}
+                )
 
     def test_runtime_credential_smoke_uses_environment_password_and_redacts_artifact(self):
         with tempfile.TemporaryDirectory() as tmp:

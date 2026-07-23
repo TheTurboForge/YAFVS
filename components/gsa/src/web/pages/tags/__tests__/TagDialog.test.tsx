@@ -17,15 +17,21 @@ import TagDialog, {SELECT_MAX_RESOURCES} from 'web/pages/tags/TagDialog';
 
 interface CreateGmpOptions {
   buildUrl?: (path: string, params?: unknown) => string;
+  getResourceNames?: (...args: unknown[]) => unknown;
   session?: {
     jwt?: string;
     token?: string;
   };
 }
 
-const createGmp = ({buildUrl, session}: CreateGmpOptions = {}) => ({
+const createGmp = ({
+  buildUrl,
+  getResourceNames,
+  session,
+}: CreateGmpOptions = {}) => ({
   settings: {},
   ...(buildUrl === undefined ? {} : {buildUrl}),
+  ...(getResourceNames === undefined ? {} : {getResourceNames}),
   ...(session === undefined ? {} : {session}),
 });
 
@@ -241,7 +247,7 @@ describe('TagDialog tests', () => {
     });
   });
 
-  test('should use native resource-name lookup for supported resource types', async () => {
+  test('should use the same-origin native resource-name route without a GMP fallback', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         page: {page: 1, page_size: 200, total: 1, sort: 'name', filter: ''},
@@ -251,12 +257,12 @@ describe('TagDialog tests', () => {
       status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
-    const buildUrl = testing.fn(
-      (path: string) => `https://yafvs.example/${path}`,
-    );
+    const buildUrl = testing.fn((path: string) => `/${path}`);
+    const getResourceNames = testing.fn();
     const {render} = rendererWith({
       gmp: createGmp({
         buildUrl,
+        getResourceNames,
         session: {jwt: 'jwt-token', token: 'test-token'},
       }),
     });
@@ -272,6 +278,17 @@ describe('TagDialog tests', () => {
       sort: 'name',
       filter: '',
     });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/tags/resource-names/alert',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(getResourceNames).not.toHaveBeenCalled();
   });
 
   test('should use native resource-name lookup for scanner and schedule names', async () => {

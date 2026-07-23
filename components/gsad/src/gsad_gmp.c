@@ -4986,37 +4986,6 @@ get_result_id_from_params (params_t *params)
   return result_id;
 }
 
-/**
- * @brief Get resource names, envelope the result.
- *
- * @param[in]  connection   Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_resource_names_gmp (gvm_connection_t *connection,
-                        gsad_credentials_t *credentials, params_t *params,
-                        gsad_command_response_data_t *response_data)
-{
-  const gchar *type;
-  gmp_arguments_t *arguments;
-
-  type = params_value (params, "resource_type");
-
-  CHECK_VARIABLE_INVALID (type, "Get Resource Names");
-
-  arguments = gmp_arguments_new ();
-
-  gmp_arguments_add (arguments, "type", type);
-
-  return get_many (connection, "resource_names", credentials, params, arguments,
-                   response_data);
-}
-
-
 /* Port lists. */
 
 /**
@@ -6288,7 +6257,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_config_family)
   ELSE (get_report)
   ELSE (get_reports)
-  ELSE (get_resource_names)
   ELSE (get_setting)
   ELSE (get_settings)
   ELSE (get_task)

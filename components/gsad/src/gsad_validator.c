@@ -47,7 +47,6 @@ gsad_init_validator ()
                      "|(get_configs)"
                      "|(get_report)"
                      "|(get_reports)"
-                     "|(get_resource_names)"
                      "|(get_setting)"
                      "|(get_settings)"
                      "|(get_task)"

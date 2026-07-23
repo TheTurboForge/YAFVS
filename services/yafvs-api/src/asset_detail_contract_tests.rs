@@ -194,7 +194,7 @@ fn asset_reads_and_exports_are_native_only_while_asset_lifecycle_data_stays_owne
     assert!(!GVMD_GMP_SCHEMA.contains("<name>get_assets</name>"));
     assert!(GVMD_GMP_SCHEMA.contains("instead use the GET_ASSETS command"));
     assert!(GVMD_GMP_SCHEMA.contains("GET_ASSETS should be used instead"));
-    assert!(GVMD_GMP.contains("acl_user_may (\"get_assets\")"));
+    assert!(GVMD_MANAGE_SQL.contains("permission = \"get_assets\""));
 
     for helper in [
         "init_host_identifier_iterator",

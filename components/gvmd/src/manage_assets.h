@@ -111,12 +111,6 @@ const char*
 os_host_iterator_severity (iterator_t *);
 
 int
-init_resource_names_host_iterator (iterator_t *, get_data_t *);
-
-int
-init_resource_names_os_iterator (iterator_t *, get_data_t *);
-
-int
 asset_iterator_writable (iterator_t *);
 
 int

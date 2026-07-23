@@ -214,8 +214,6 @@ const allowedSnakeCase = [
   'get_info',
   'get_info_response',
   'get_nvts_response',
-  'get_resource_names',
-  'get_resource_names_response',
   'get_scanner',
   'get_settings',
   'get_settings_response',

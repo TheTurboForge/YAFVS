@@ -10,6 +10,10 @@ const MANAGE_COMMANDS: &str = include_str!("../../../components/gvmd/src/manage_
 const MANAGE_ALERTS: &str = include_str!("../../../components/gvmd/src/manage_alerts.c");
 const MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
 const MANAGE_SQL_ALERTS: &str = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
+const MANAGE_SQL_ASSETS: &str = include_str!("../../../components/gvmd/src/manage_sql_assets.c");
+const MANAGE_ASSETS_HEADER: &str = include_str!("../../../components/gvmd/src/manage_assets.h");
+const MANAGE_SQL_TAGS: &str = include_str!("../../../components/gvmd/src/manage_sql_tags.c");
+const MANAGE_TAGS_HEADER: &str = include_str!("../../../components/gvmd/src/manage_tags.h");
 const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
@@ -20,6 +24,9 @@ const GSA_INFO_ENTITIES: &str =
     include_str!("../../../components/gsa/src/gmp/commands/info-entities.ts");
 const GSA_ENTITIES: &str = include_str!("../../../components/gsa/src/gmp/commands/entities.ts");
 const GSA_OMP: &str = include_str!("../../../components/gsa/src/web/pages/Omp.jsx");
+const GSA_TAGS: &str = include_str!("../../../components/gsa/src/gmp/native-api/tags.ts");
+const GSA_TAG_DIALOG: &str =
+    include_str!("../../../components/gsa/src/web/pages/tags/TagDialog.tsx");
 const GSA_DETAIL_COMMANDS: [&str; 5] = [
     include_str!("../../../components/gsa/src/gmp/commands/cpe.ts"),
     include_str!("../../../components/gsa/src/gmp/commands/cve.ts"),
@@ -35,6 +42,9 @@ const GSA_LIST_COMMANDS: [&str; 5] = [
     include_str!("../../../components/gsa/src/gmp/commands/dfn-cert-advisories.ts"),
 ];
 const READ_API_ROUTES: &str = include_str!("read_api_routes.rs");
+const TAGS: &str = include_str!("tags.rs");
+const TAG_PAYLOADS: &str = include_str!("tag_payloads.rs");
+const TAG_RESOURCE_HELPERS: &str = include_str!("tag_resource_helpers.rs");
 const MANAGE: &str = include_str!("../../../components/gvmd/src/manage.c");
 const MANAGE_SQL_SECINFO: &str = include_str!("../../../components/gvmd/src/manage_sql_secinfo.c");
 const MANAGE_SQL_NVTS: &str = include_str!("../../../components/gvmd/src/manage_sql_nvts.c");
@@ -57,6 +67,123 @@ fn advertised_commands() -> BTreeSet<String> {
             Some(tail[..end].to_string())
         })
         .collect()
+}
+
+#[test]
+fn get_resource_names_raw_transport_is_retired_but_native_tag_lookup_remains() {
+    assert!(!advertised_commands().contains("GET_RESOURCE_NAMES"));
+    assert!(!authenticated_parser_commands().contains("GET_RESOURCE_NAMES"));
+    for retired in [
+        "CLIENT_GET_RESOURCE_NAMES",
+        "get_resource_names_data",
+        "handle_get_resource_names",
+        "select_resource_iterator",
+        "strcasecmp (\"GET_RESOURCE_NAMES\"",
+    ] {
+        assert!(
+            !GMP.contains(retired),
+            "retired gvmd surface remains: {retired}"
+        );
+    }
+    assert!(!GMP_SCHEMA.contains("<name>get_resource_names</name>"));
+    assert!(GMP_SCHEMA.contains("<command>GET_RESOURCE_NAMES</command>"));
+    for retired in ["get_resource_names_gmp", "ELSE (get_resource_names)"] {
+        assert!(
+            !GSAD_GMP.contains(retired),
+            "retired gsad surface remains: {retired}"
+        );
+        assert!(!GSAD_GMP_HEADER.contains(retired));
+    }
+    assert!(!GSAD_VALIDATOR.contains("|(get_resource_names)"));
+
+    assert!(READ_API_ROUTES.contains("/api/v1/tags/resource-names/:resource_type"));
+    assert!(READ_API_ROUTES.contains("get(tag_resource_names)"));
+    assert!(TAGS.contains("pub(crate) async fn tag_resource_names"));
+    assert!(TAGS.contains("tag_resource_name_collection_sql(&resource_type, &sort_sql)?"));
+    assert!(GSA_TAG_DIALOG.contains("fetchNativeTagResourceNames"));
+    assert!(GSA_TAG_DIALOG.contains("canUseNativeTagResourceNames"));
+    assert!(!GSA_TAG_DIALOG.contains("getResourceNames"));
+    assert!(!GSA_TAG_DIALOG.contains("get_resource_names"));
+    assert!(GSA_TAGS.contains("api/v1/tags/resource-names/${encodeURIComponent(type)}"));
+    assert!(GSA_TAGS.contains("credentials: 'include'"));
+
+    let native_types = GSA_TAGS
+        .split_once("const NATIVE_TAG_RESOURCE_NAME_TYPES = new Set([")
+        .expect("GSA native resource-name type whitelist must exist")
+        .1
+        .split_once("]);")
+        .expect("GSA native resource-name type whitelist must terminate")
+        .0;
+    for resource_type in [
+        "alert",
+        "cert_bund_adv",
+        "credential",
+        "cpe",
+        "cve",
+        "dfn_cert_adv",
+        "filter",
+        "host",
+        "nvt",
+        "os",
+        "override",
+        "port_list",
+        "report",
+        "report_format",
+        "result",
+        "scanner",
+        "schedule",
+        "config",
+        "target",
+        "task",
+        "tls_certificate",
+        "user",
+    ] {
+        assert!(native_types.contains(&format!("'{resource_type}'")));
+        assert!(
+            TAG_RESOURCE_HELPERS.contains(&format!("\"{resource_type}\" => Ok(")),
+            "native SQL whitelist lacks {resource_type}"
+        );
+    }
+    for unsupported_legacy_rbac_type in ["group", "note", "permission", "role"] {
+        assert!(!native_types.contains(&format!("'{unsupported_legacy_rbac_type}'")));
+        assert!(
+            !TAG_RESOURCE_HELPERS.contains(&format!("\"{unsupported_legacy_rbac_type}\" => Ok("))
+        );
+    }
+    assert!(TAG_RESOURCE_HELPERS.contains("_ => Err(ApiError::BadRequest"));
+    assert!(TAG_RESOURCE_HELPERS.contains("pub(crate) fn tag_resource_name_collection_sql"));
+    assert!(TAG_RESOURCE_HELPERS.contains("SELECT DISTINCT ({id_expr})::text AS id"));
+
+    let resource_item = TAG_PAYLOADS
+        .split_once("pub(crate) struct TagResourceItem {")
+        .expect("native tag resource-name payload must exist")
+        .1
+        .split_once("}\n")
+        .expect("native tag resource-name payload must terminate")
+        .0;
+    for metadata_field in ["id: String", "resource_type: String", "name: String"] {
+        assert!(resource_item.contains(metadata_field));
+    }
+    for forbidden_field in ["owner", "permissions", "comment", "value", "secret"] {
+        assert!(!resource_item.contains(forbidden_field));
+    }
+
+    for retired in [
+        "init_resource_names_host_iterator",
+        "init_resource_names_os_iterator",
+    ] {
+        assert!(!MANAGE_SQL_ASSETS.contains(retired));
+        assert!(!MANAGE_ASSETS_HEADER.contains(retired));
+    }
+    for retained in [
+        "init_resource_tag_iterator",
+        "resource_tag_iterator_uuid",
+        "resource_tag_iterator_name",
+    ] {
+        assert!(MANAGE_SQL_TAGS.contains(retained));
+        assert!(MANAGE_TAGS_HEADER.contains(retained));
+    }
+    assert!(GMP.contains("init_resource_tag_iterator"));
 }
 
 #[test]
@@ -202,8 +329,7 @@ fn catalog_redirect_routes_and_internal_semantics_remain() {
 
     assert!(GMP.contains("send_nvt ("));
     assert!(GMP.contains("result_iterator_nvt_oid"));
-    assert!(GMP.contains("handle_get_resource_names"));
-    assert!(GMP.contains("acl_user_may (\"get_info\")"));
+    assert!(!GMP.contains("handle_get_resource_names"));
     assert!(GMP.contains("init_resource_tag_iterator"));
 }
 
@@ -291,7 +417,7 @@ fn advertised_gmp_commands_match_the_authenticated_parser() {
     let advertised = advertised_commands();
     let mut accepted = authenticated_parser_commands();
 
-    for intentionally_unadvertised in ["GET_RESOURCE_NAMES", "LOGOUT"] {
+    for intentionally_unadvertised in ["LOGOUT"] {
         assert!(
             accepted.remove(intentionally_unadvertised),
             "documented internal parser command {intentionally_unadvertised} must remain accepted"

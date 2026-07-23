@@ -109,9 +109,7 @@ fn dedicated_get_filters_xml_transport_is_retired_without_losing_shared_filter_s
     }
     assert!(GVMD_GMP_GET.contains("buffer_get_filter_xml"));
 
-    let resource_names = inherited_function(GVMD_GMP, "select_resource_iterator");
-    assert!(resource_names.contains("g_strcmp0 (\"filter\", resource_names_data->type)"));
-    assert!(resource_names.contains("init_filter_iterator"));
+    assert!(!GVMD_GMP.contains("select_resource_iterator"));
     let select_columns = inherited_function(MANAGE_SQL, "type_select_columns");
     let filter_columns = inherited_function(MANAGE_SQL, "type_filter_columns");
     assert!(select_columns.contains("strcasecmp (type, \"FILTER\")"));

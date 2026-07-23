@@ -20,6 +20,7 @@ const GSA_CREDENTIALS_COMMAND: &str =
 const GSA_NATIVE_CREDENTIALS: &str =
     include_str!("../../../components/gsa/src/gmp/native-api/credentials.ts");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSAD_NATIVE_API_C: &str = include_str!("../../../components/gsad/src/gsad_native_api.c");
 const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GVMD_GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
@@ -90,6 +91,28 @@ fn credential_live_delete_is_native_only_but_secret_download_remains_inherited()
         .0;
     assert!(bulk_delete.contains("g_ascii_strcasecmp (type, \"credential\") == 0"));
     assert!(bulk_delete.contains("Credential deletion must use the native API"));
+    let browser_delete_allowlist = GSAD_NATIVE_API_C
+        .split_once("native_api_delete_path_is_allowed (")
+        .expect("browser DELETE allowlist must exist")
+        .1
+        .split_once("native_api_post_path_is_allowed (")
+        .expect("browser DELETE allowlist boundary must exist")
+        .0;
+    let credential_delete = browser_delete_allowlist
+        .split_once("g_str_has_prefix (path, credential_prefix)")
+        .expect("browser credential DELETE branch must exist")
+        .1
+        .split_once("g_str_has_prefix (path, scanner_prefix)")
+        .expect("browser credential DELETE branch boundary must exist")
+        .0;
+    assert!(
+        credential_delete.contains("is_uuid_segment (id, strlen (id))"),
+        "browser proxy must allow canonical live credential DELETE"
+    );
+    assert!(
+        credential_delete.contains("is_uuid_segment_with_suffix (id, trash_suffix)"),
+        "browser proxy must retain canonical trash credential DELETE"
+    );
 
     for retired in [
         "CLIENT_DELETE_CREDENTIAL",

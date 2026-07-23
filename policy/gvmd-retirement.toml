@@ -93,10 +93,11 @@ evidence = [
   "services/yafvs-api/src/alert_writes.rs::hard_delete_alert",
   "services/yafvs-api/src/alert_write_characterization_tests.rs::gsad_and_gsa_alert_definition_paths_are_native_only",
   "services/yafvs-api/src/user_account_contract_tests.rs::legacy_user_lifecycle_is_native_only_not_public_gmp_transport",
+  "services/yafvs-api/src/schedule_characterization_tests.rs::native_gsa_owns_schedule_commands_and_gmp_transport_is_retired",
 ]
 independent_authority = ["api/openapi/yafvs-v1.yaml::x-yafvs-inherited-still-owns"]
 dependencies = ["login-session-account-auth", "team-authority-permissions"]
-notes = "Native user and alert reads, exports, and retained lifecycle operations are authoritative, and their dedicated public GMP/XML transports are retired. Finish the remaining retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
+notes = "Native user, alert, and schedule reads, exports, and retained lifecycle operations are authoritative, and their dedicated public GMP/XML transports are retired. Schedule execution and task coupling remain separately inherited until the manager-worker owns them. Finish the remaining retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
 
 [[responsibilities]]
 id = "team-authority-permissions"
@@ -303,7 +304,7 @@ kind = "product"
 status = "inventoried"
 evidence = ["components/gsa/src/gmp/gmp.ts::class Gmp"]
 replacement = ["crud-query-api-surface", "login-session-account-auth"]
-notes = "Separate harmless internal module names from command methods that still issue legacy requests. User inventory and lifecycle, alert reads/exports/lifecycle, Trashcan inventory, and every retained per-resource lifecycle are native-only; their superseded public command aliases and bridges are retired."
+notes = "Separate harmless internal module names from command methods that still issue legacy requests. User inventory and lifecycle, alert reads/exports/lifecycle, schedule reads/exports/lifecycle, Trashcan inventory, and every retained per-resource lifecycle are native-only; their superseded public command aliases and bridges are retired."
 
 [[callers]]
 id = "gsad-gmp-route"
@@ -311,7 +312,7 @@ kind = "product"
 status = "inventoried"
 evidence = ["components/gsad/src/gsad_http_handler_functions.c::gsad_http_handle_gmp_get"]
 replacement = ["crud-query-api-surface"]
-notes = "The public user and alert inventory, export, and lifecycle bridges are retired. Remove the remaining live /gmp GET/POST bridge after GSA has no legacy request path."
+notes = "The public user, alert, and schedule inventory, export, and lifecycle bridges are retired. Remove the remaining live /gmp GET/POST bridge after GSA has no legacy request path."
 
 [[callers]]
 id = "gsad-manager-socket-auth"

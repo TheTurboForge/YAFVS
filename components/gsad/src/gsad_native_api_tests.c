@@ -96,6 +96,29 @@ Ensure (gsad_native_api, should_forward_typed_filters_for_collection_reads)
   g_free (target);
 }
 
+Ensure (gsad_native_api, should_forward_exact_id_only_for_trashcan_items)
+{
+  gchar *target = NULL;
+
+  assert_that (
+    gsad_native_api_test_request_target (
+      "/api/v1/trashcan/items", (params_t *) GINT_TO_POINTER (6), &target),
+    is_true);
+  assert_that (
+    target,
+    is_equal_to_string (
+      "/api/v1/trashcan/items"
+      "?id=12345678-1234-1234-1234-123456789abc"));
+  g_free (target);
+  target = NULL;
+
+  assert_that (gsad_native_api_test_request_target (
+                 "/api/v1/reports", (params_t *) GINT_TO_POINTER (6), &target),
+               is_true);
+  assert_that (target, is_equal_to_string ("/api/v1/reports"));
+  g_free (target);
+}
+
 Ensure (gsad_native_api, should_only_allow_canonical_credential_clone_posts)
 {
   const gchar *valid =
@@ -975,6 +998,12 @@ Ensure (gsad_native_api, should_only_allow_exact_user_management_paths)
 const gchar *
 params_value (params_t *params, const gchar *name)
 {
+  if (params == (params_t *) GINT_TO_POINTER (6))
+    {
+      if (g_strcmp0 (name, "id") == 0)
+        return "12345678-1234-1234-1234-123456789abc";
+      return NULL;
+    }
   if (params == (params_t *) GINT_TO_POINTER (5))
     {
       if (g_strcmp0 (name, "page") == 0)

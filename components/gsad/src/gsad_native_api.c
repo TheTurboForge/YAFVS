@@ -2091,6 +2091,8 @@ native_api_request_target (const gchar *path, params_t *params)
   append_query_param (target, params, "name");
   append_query_param (target, params, "predefined");
   append_query_param (target, params, "credential_type");
+  if (g_strcmp0 (path, "/api/v1/trashcan/items") == 0)
+    append_query_param (target, params, "id");
 
   return g_string_free (target, FALSE);
 }

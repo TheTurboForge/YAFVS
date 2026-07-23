@@ -9,6 +9,7 @@
 
 use super::common::{executable_path, metadata, output_tail, runtime_dir};
 use super::compose::{compose_command, runtime_environment};
+use super::runtime_init::{POSTGRES_EXTENSIONS, PostgresExtension};
 use super::runtime_lock::{RuntimeLockError, RuntimeLockStatus, inspect_runtime_lock};
 use super::runtime_probe::socket_readiness_finding;
 use super::runtime_setup::RUNTIME_DIRS;
@@ -731,13 +732,9 @@ fn postgres_findings(
             .with_details(json!({ "output_tail": output_tail(&membership.stdout, 20) })),
         );
     }
-    findings.push(pg_gvm_extension_finding(
-        runner,
-        repo_root,
-        environment,
-        &database,
-        strict,
-    ));
+    findings.extend(POSTGRES_EXTENSIONS.into_iter().map(|extension| {
+        postgres_extension_finding(runner, repo_root, environment, &database, strict, extension)
+    }));
     findings
 }
 
@@ -842,26 +839,28 @@ fn postgres_collation_findings(
         .collect()
 }
 
-pub(crate) fn pg_gvm_extension_finding(
+fn postgres_extension_finding(
     runner: &dyn CommandRunner,
     repo_root: &Path,
     environment: &BTreeMap<OsString, OsString>,
     database: &str,
     strict: bool,
+    extension: PostgresExtension,
 ) -> Finding {
     let result = psql(
         runner,
         repo_root,
         environment,
         database,
-        "SELECT COALESCE((SELECT extversion FROM pg_extension WHERE extname = 'pg-gvm'), 'missing');",
+        extension.status_sql,
     );
     if result.exit_code != Some(0) {
         return Finding::new(
             "fail",
-            "postgres.pg-gvm",
+            extension.check,
             format!(
-                "pg-gvm extension status query exit code {}.",
+                "{} extension status query failed (exit code {}); inspect PostgreSQL and run yafvsctl runtime-init.",
+                extension.name,
                 result.exit_code.unwrap_or(1)
             ),
         )
@@ -876,10 +875,34 @@ pub(crate) fn pg_gvm_extension_finding(
         } else {
             "warn"
         },
-        "postgres.pg-gvm",
-        format!("pg-gvm extension is {version}."),
+        extension.check,
+        if version.is_empty() || version == "missing" {
+            format!(
+                "{} extension is missing; run yafvsctl runtime-init.",
+                extension.name
+            )
+        } else {
+            format!("{} extension is {version}.", extension.name)
+        },
     )
     .with_details(json!({ "version": version }))
+}
+
+pub(crate) fn pg_gvm_extension_finding(
+    runner: &dyn CommandRunner,
+    repo_root: &Path,
+    environment: &BTreeMap<OsString, OsString>,
+    database: &str,
+    strict: bool,
+) -> Finding {
+    postgres_extension_finding(
+        runner,
+        repo_root,
+        environment,
+        database,
+        strict,
+        POSTGRES_EXTENSIONS[2],
+    )
 }
 
 fn psql(
@@ -1040,10 +1063,22 @@ mod tests {
         environment: BTreeMap<OsString, OsString>,
     }
 
-    #[derive(Default)]
     struct HealthyRunner {
         calls: Mutex<Vec<RecordedCall>>,
         broad_bindings: bool,
+        extension_output: &'static str,
+        extension_success: bool,
+    }
+
+    impl Default for HealthyRunner {
+        fn default() -> Self {
+            Self {
+                calls: Mutex::new(Vec::new()),
+                broad_bindings: false,
+                extension_output: "1.0\n",
+                extension_success: true,
+            }
+        }
     }
 
     impl HealthyRunner {
@@ -1121,8 +1156,13 @@ mod tests {
             if joined.contains("rolname = 'dba'") || joined.contains("pg_has_role") {
                 return Some(successful("t\n"));
             }
-            if joined.contains("extname = 'pg-gvm'") {
-                return Some(successful("1.0\n"));
+            if joined.contains("extversion FROM pg_extension") {
+                return Some(ProcessOutput {
+                    success: self.extension_success,
+                    exit_code: Some(if self.extension_success { 0 } else { 1 }),
+                    stdout: self.extension_output.into(),
+                    stderr: String::new(),
+                });
             }
             if joined.contains("redis-cli") {
                 return Some(successful("PONG\n"));
@@ -1188,7 +1228,7 @@ mod tests {
             .iter()
             .filter(|call| call.args.iter().any(|argument| argument == "psql"))
             .collect::<Vec<_>>();
-        assert_eq!(psql_calls.len(), 4);
+        assert_eq!(psql_calls.len(), 6);
         assert!(psql_calls.iter().all(|call| {
             !call
                 .args
@@ -1279,7 +1319,7 @@ mod tests {
             .iter()
             .filter(|call| call.args.iter().any(|argument| argument == "psql"))
             .collect::<Vec<_>>();
-        assert_eq!(psql_calls.len(), 6);
+        assert_eq!(psql_calls.len(), 8);
         assert!(psql_calls.iter().all(|call| {
             !call.args.iter().any(|argument| argument == "yafvs-dev")
                 && call
@@ -1287,12 +1327,37 @@ mod tests {
                     .get(&OsString::from("PGPASSWORD"))
                     .is_some_and(|value| value == "yafvs-dev")
         }));
+        let extension_findings = result
+            .findings
+            .iter()
+            .filter(|finding| {
+                ["postgres.uuid-ossp", "postgres.pgcrypto", "postgres.pg-gvm"]
+                    .contains(&finding.check.as_str())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(extension_findings.len(), 3);
         assert!(
-            result
-                .findings
+            extension_findings
                 .iter()
-                .any(|finding| finding.check == "postgres.pg-gvm" && finding.status == "pass")
+                .all(|finding| finding.status == "pass")
         );
+    }
+
+    #[test]
+    fn missing_extension_is_actionable_warning_in_status() {
+        let fixture = Fixture::new("missing-extension");
+        let runner = HealthyRunner {
+            extension_output: "missing\n",
+            ..HealthyRunner::default()
+        };
+        let result = command_runtime_status_with_runner(&fixture.repo, &runner, true);
+        for extension in POSTGRES_EXTENSIONS {
+            assert!(result.findings.iter().any(|finding| {
+                finding.check == extension.check
+                    && finding.status == "warn"
+                    && finding.message.contains("run yafvsctl runtime-init")
+            }));
+        }
     }
 
     #[test]

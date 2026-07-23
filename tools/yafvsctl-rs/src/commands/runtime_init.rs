@@ -22,7 +22,34 @@ use std::time::Duration;
 const POSTGRES_COLLATION_BASE_DATABASES: [&str; 2] = ["postgres", "template1"];
 const PG_GVM_CONTROL: &str = "pg-gvm.control";
 const PG_GVM_LIBRARY: &str = "libpg-gvm.so";
-const PG_GVM_EXTENSION: &str = "pg-gvm";
+#[derive(Clone, Copy)]
+pub(crate) struct PostgresExtension {
+    pub(crate) name: &'static str,
+    pub(crate) check: &'static str,
+    pub(crate) create_sql: &'static str,
+    pub(crate) status_sql: &'static str,
+}
+
+pub(crate) const POSTGRES_EXTENSIONS: [PostgresExtension; 3] = [
+    PostgresExtension {
+        name: "uuid-ossp",
+        check: "postgres.uuid-ossp",
+        create_sql: "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";",
+        status_sql: "SELECT COALESCE((SELECT extversion FROM pg_extension WHERE extname = 'uuid-ossp'), 'missing');",
+    },
+    PostgresExtension {
+        name: "pgcrypto",
+        check: "postgres.pgcrypto",
+        create_sql: "CREATE EXTENSION IF NOT EXISTS pgcrypto;",
+        status_sql: "SELECT COALESCE((SELECT extversion FROM pg_extension WHERE extname = 'pgcrypto'), 'missing');",
+    },
+    PostgresExtension {
+        name: "pg-gvm",
+        check: "postgres.pg-gvm",
+        create_sql: "CREATE EXTENSION IF NOT EXISTS \"pg-gvm\";",
+        status_sql: "SELECT COALESCE((SELECT extversion FROM pg_extension WHERE extname = 'pg-gvm'), 'missing');",
+    },
+];
 const READY_ATTEMPTS: usize = 30;
 const READY_INTERVAL: Duration = Duration::from_secs(2);
 
@@ -210,26 +237,44 @@ pub(crate) fn command_runtime_init_with(
         40,
         None,
     ));
-    let create_extension = psql(
-        repo_root,
-        runner,
-        &environment,
-        &database,
-        "CREATE EXTENSION IF NOT EXISTS \"pg-gvm\";",
-    );
-    findings.push(process_finding(
-        &create_extension,
-        "postgres.extension.pg-gvm",
-        "Create/verify pg-gvm extension",
-        80,
-        None,
-    ));
-    findings.push(pg_gvm_extension_status(
-        repo_root,
-        runner,
-        &environment,
-        &database,
-    ));
+    for extension in POSTGRES_EXTENSIONS {
+        let create_extension = psql(
+            repo_root,
+            runner,
+            &environment,
+            &database,
+            extension.create_sql,
+        );
+        findings.push(process_finding(
+            &create_extension,
+            &format!("postgres.extension.{}", extension.name),
+            &format!("Create/verify {} extension", extension.name),
+            80,
+            None,
+        ));
+        if !process_succeeded(&create_extension) {
+            return result(
+                repo_root,
+                runner,
+                "Runtime initialization stopped while creating PostgreSQL extensions.",
+                findings,
+            );
+        }
+    }
+    for extension in POSTGRES_EXTENSIONS {
+        let status =
+            postgres_extension_status(repo_root, runner, &environment, &database, extension);
+        let verification_failed = status.status == "fail";
+        findings.push(status);
+        if verification_failed {
+            return result(
+                repo_root,
+                runner,
+                "Runtime initialization stopped while verifying PostgreSQL extensions.",
+                findings,
+            );
+        }
+    }
     result(
         repo_root,
         runner,
@@ -789,27 +834,25 @@ fn copy_artifact(
     )
 }
 
-fn pg_gvm_extension_status(
+fn postgres_extension_status(
     repo_root: &Path,
     runner: &dyn CommandRunner,
     environment: &BTreeMap<OsString, OsString>,
     database: &str,
+    extension: PostgresExtension,
 ) -> Finding {
     let output = psql(
         repo_root,
         runner,
         environment,
         database,
-        &format!(
-            "SELECT COALESCE((SELECT extversion FROM pg_extension WHERE extname = '{}'), 'missing');",
-            PG_GVM_EXTENSION
-        ),
+        extension.status_sql,
     );
     if !process_succeeded(&output) {
         return process_finding(
             &output,
-            "postgres.pg-gvm",
-            "pg-gvm extension status query",
+            extension.check,
+            &format!("{} extension status query", extension.name),
             40,
             None,
         );
@@ -817,12 +860,19 @@ fn pg_gvm_extension_status(
     let version = psql_value(output.as_ref().map_or("", |output| &output.stdout));
     Finding::new(
         if version.is_empty() || version == "missing" {
-            "warn"
+            "fail"
         } else {
             "pass"
         },
-        "postgres.pg-gvm",
-        format!("pg-gvm extension is {version}."),
+        extension.check,
+        if version.is_empty() || version == "missing" {
+            format!(
+                "{} extension is missing; run yafvsctl runtime-init.",
+                extension.name
+            )
+        } else {
+            format!("{} extension is {version}.", extension.name)
+        },
     )
     .with_details(json!({ "version": version }))
 }
@@ -930,6 +980,9 @@ mod tests {
         ready: bool,
         collation: &'static str,
         relations: &'static str,
+        extension_create_success: bool,
+        extension_status_success: bool,
+        extension_version: &'static str,
     }
 
     impl Runner {
@@ -939,6 +992,9 @@ mod tests {
                 ready: true,
                 collation: "1|1\n",
                 relations: "0\n",
+                extension_create_success: true,
+                extension_status_success: true,
+                extension_version: "22.6\n",
             }
         }
 
@@ -953,8 +1009,14 @@ mod tests {
             if joined.contains("SELECT count(*) FROM pg_class") {
                 return output(0, self.relations);
             }
+            if joined.contains("CREATE EXTENSION IF NOT EXISTS") {
+                return output(if self.extension_create_success { 0 } else { 1 }, "");
+            }
             if joined.contains("extversion FROM pg_extension") {
-                return output(0, "22.6\n");
+                return output(
+                    if self.extension_status_success { 0 } else { 1 },
+                    self.extension_version,
+                );
             }
             output(0, "")
         }
@@ -1057,7 +1119,39 @@ mod tests {
             .iter()
             .position(|call| call.contains("CREATE ROLE dba"))
             .unwrap();
+        let uuid_create = joined
+            .iter()
+            .position(|call| call.contains("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"))
+            .unwrap();
+        let pgcrypto_create = joined
+            .iter()
+            .position(|call| call.contains("CREATE EXTENSION IF NOT EXISTS pgcrypto;"))
+            .unwrap();
+        let pg_gvm_create = joined
+            .iter()
+            .position(|call| call.contains("CREATE EXTENSION IF NOT EXISTS \"pg-gvm\";"))
+            .unwrap();
         assert!(config < up && up < ready && ready < copy && copy < role);
+        assert!(
+            role < uuid_create && uuid_create < pgcrypto_create && pgcrypto_create < pg_gvm_create
+        );
+        for extension in POSTGRES_EXTENSIONS {
+            assert!(
+                joined
+                    .iter()
+                    .any(|call| call.contains(extension.create_sql))
+            );
+            assert!(
+                joined
+                    .iter()
+                    .any(|call| call.contains(extension.status_sql))
+            );
+            assert!(
+                result.findings.iter().any(|finding| {
+                    finding.check == extension.check && finding.status == "pass"
+                })
+            );
+        }
         let streamed_copies = calls
             .iter()
             .filter(|call| {
@@ -1092,6 +1186,77 @@ mod tests {
                 Some(&OsString::from("yafvs-dev"))
             );
         }
+    }
+
+    #[test]
+    fn missing_extension_verification_fails_closed() {
+        let fixture = Fixture::new("missing-extension");
+        let runner = Runner {
+            extension_version: "missing\n",
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail", "{:?}", result.findings);
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped while verifying PostgreSQL extensions."
+        );
+        assert!(result.findings.iter().any(|finding| {
+            finding.check == "postgres.uuid-ossp"
+                && finding.status == "fail"
+                && finding.message.contains("run yafvsctl runtime-init")
+        }));
+    }
+
+    #[test]
+    fn extension_verification_query_failure_fails_closed() {
+        let fixture = Fixture::new("extension-status-failure");
+        let runner = Runner {
+            extension_status_success: false,
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail", "{:?}", result.findings);
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped while verifying PostgreSQL extensions."
+        );
+        assert!(
+            result.findings.iter().any(|finding| {
+                finding.check == "postgres.uuid-ossp" && finding.status == "fail"
+            })
+        );
+    }
+
+    #[test]
+    fn extension_creation_failure_stops_before_verification() {
+        let fixture = Fixture::new("extension-create-failure");
+        let runner = Runner {
+            extension_create_success: false,
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail", "{:?}", result.findings);
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped while creating PostgreSQL extensions."
+        );
+        let calls = runner.calls.lock().unwrap();
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|call| call
+                    .args
+                    .join(" ")
+                    .contains("CREATE EXTENSION IF NOT EXISTS"))
+                .count(),
+            1
+        );
+        assert!(
+            !calls
+                .iter()
+                .any(|call| call.args.join(" ").contains("extversion FROM pg_extension"))
+        );
     }
 
     #[test]

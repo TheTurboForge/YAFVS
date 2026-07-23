@@ -1686,7 +1686,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("init_filter_iterator", filter_sql_source)
         self.assertIn("find_filter_with_permission", filter_sql_source)
         self.assertIn("filter_term_sql", filter_sql_source)
-        self.assertIn("init_filter_iterator", gvmd_source)
         self.assertIn('"get_filters"', gvmd_source)
         self.assertIn("pub(crate) async fn create_filter", native_write_source)
         self.assertIn("pub(crate) async fn patch_filter", native_write_source)

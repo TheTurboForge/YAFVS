@@ -24,7 +24,8 @@ pub(crate) async fn credential_certificate(
 ) -> Result<Response<Body>, ApiError> {
     let credential_id = parse_uuid(&credential_id)?.to_string();
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
-    let max_certificate_bytes = MAX_SCANNER_CA_PUB_BYTES as i64;
+    let max_certificate_bytes =
+        i32::try_from(MAX_SCANNER_CA_PUB_BYTES).map_err(|_| ApiError::Config)?;
     let row = client
         .query_opt(
             credential_certificate_sql(),

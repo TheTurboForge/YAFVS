@@ -1,4 +1,5 @@
 /* Copyright (C) 2025 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -26,8 +27,6 @@ typedef struct
   char *ca_pub;             ///< CA Certificate of the scanner
   char *key_pub;            ///< Public key used to connect
   char *key_priv;           ///< Private key used to connect
-  gboolean use_relay_mapper;///< Whether to use the external relay mapper.
-                            ///< Does not indicate use of arelay from the DB.
 } osp_connect_data_t;
 
 void

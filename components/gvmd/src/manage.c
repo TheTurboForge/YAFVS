@@ -51,7 +51,6 @@
 #include "manage_openvasd.h"
 #include "manage_report_hosts.h"
 #include "manage_runtime_flags.h"
-#include "manage_scanner_relays.h"
 #include "manage_sql.h"
 #include "manage_sql_assets.h"
 #include "manage_sql_resources.h"
@@ -211,11 +210,6 @@ static int mem_wait_retries = 0;
  * @brief Minimum available memory in MiB for running a feed update.
  */
 static int min_mem_feed_update = 0;
-
-/**
- * @brief Path to the relay mapper executable, NULL to disable relays.
- */
-static gchar *relay_mapper_path = NULL;
 
 /**
  * @brief Number of minutes before overdue tasks timeout.
@@ -2408,211 +2402,6 @@ run_cve_task (task_t task)
 
 /* Tasks. */
 
-/**
- * @brief Gets the current path of the relay mapper executable.
- *
- * @return The current relay mapper path.
- */
-const char *
-get_relay_mapper_path ()
-{
-  return relay_mapper_path;
-}
-
-/**
- * @brief Gets the current path of the relay mapper executable.
- *
- * @param[in]  new_path  The new relay mapper path.
- */
-void
-set_relay_mapper_path (const char *new_path)
-{
-  g_free (relay_mapper_path);
-  relay_mapper_path = new_path ? g_strdup (new_path) : NULL;
-}
-
-/**
- * @brief Gets the info about a scanner relay as an XML entity_t.
- *
- * @param[in]  original_host    The original hostname or IP address.
- * @param[in]  original_port    The original port number.
- * @param[in]  protocol         The protocol to look for, e.g. "GMP" or "OSP".
- * @param[out] ret_entity       Return location for the parsed XML.
- *
- * @return 0: success, -1 error.
- */
-static int
-get_relay_info_entity (const char *original_host, int original_port,
-                       const char *protocol, entity_t *ret_entity)
-{
-  gchar **cmd, *stdout_str, *stderr_str;
-  int ret, exit_code;
-  GError *err;
-  entity_t relay_entity;
-
-  if (ret_entity == NULL)
-    return -1;
-
-  *ret_entity = NULL;
-  stdout_str = NULL;
-  stderr_str = NULL;
-  ret = -1;
-  exit_code = -1;
-  err = NULL;
-
-  cmd = (gchar **) g_malloc (8 * sizeof (gchar *));
-  cmd[0] = g_strdup (relay_mapper_path);
-  cmd[1] = g_strdup ("--host");
-  cmd[2] = g_strdup (original_host);
-  cmd[3] = g_strdup ("--port");
-  cmd[4] = g_strdup_printf ("%d", original_port);
-  cmd[5] = g_strdup ("--protocol");
-  cmd[6] = g_strdup (protocol);
-  cmd[7] = NULL;
-
-  if (g_spawn_sync (NULL,
-                    cmd,
-                    NULL,
-                    G_SPAWN_SEARCH_PATH,
-                    NULL,
-                    NULL,
-                    &stdout_str,
-                    &stderr_str,
-                    &exit_code,
-                    &err) == FALSE)
-    {
-      g_warning ("%s: g_spawn_sync failed: %s",
-                 __func__, err ? err->message : "");
-      g_strfreev (cmd);
-      g_free (stdout_str);
-      g_free (stderr_str);
-      return -1;
-    }
-  else if (exit_code)
-    {
-      g_warning ("%s: mapper exited with code %d",
-                 __func__, exit_code);
-      g_message ("%s: mapper stderr:\n%s", __func__, stderr_str);
-      g_debug ("%s: mapper stdout:\n%s", __func__, stdout_str);
-      g_strfreev (cmd);
-      g_free (stdout_str);
-      g_free (stderr_str);
-      return -1;
-    }
-
-  relay_entity = NULL;
-  if (parse_entity (stdout_str, &relay_entity))
-    {
-      g_warning ("%s: failed to parse mapper output",
-                 __func__);
-      g_message ("%s: mapper stdout:\n%s", __func__, stdout_str);
-      g_message ("%s: mapper stderr:\n%s", __func__, stderr_str);
-    }
-  else
-    {
-      ret = 0;
-      *ret_entity = relay_entity;
-    }
-
-  g_strfreev (cmd);
-  g_free (stdout_str);
-  g_free (stderr_str);
-
-  return ret;
-}
-
-/**
- * @brief Gets a relay hostname and port for a sensor scanner.
- *
- * If no mapper is available, a copy of the original host, port and
- *  CA certificate are returned.
- *
- * @param[in]  original_host    The original hostname or IP address.
- * @param[in]  original_port    The original port number.
- * @param[in]  original_ca_cert The original CA certificate.
- * @param[in]  protocol         The protocol to look for, e.g. "GMP" or "OSP".
- * @param[out] new_host         The hostname or IP address of the relay.
- * @param[out] new_port         The port number of the relay.
- * @param[out] new_ca_cert      The CA certificate of the relay.
- *
- * @return 0 success, 1 relay not found, -1 error.
- */
-int
-slave_get_relay (const char *original_host,
-                 int original_port,
-                 const char *original_ca_cert,
-                 const char *protocol,
-                 gchar **new_host,
-                 int *new_port,
-                 gchar **new_ca_cert)
-{
-  int ret = -1;
-
-  assert (new_host);
-  assert (new_port);
-  assert (new_ca_cert);
-
-  if (relay_mapper_path == NULL)
-    {
-      *new_host = original_host ? g_strdup (original_host) : NULL;
-      *new_port = original_port;
-      *new_ca_cert = original_ca_cert ? g_strdup (original_ca_cert) : NULL;
-
-      return 0;
-    }
-  else
-    {
-      entity_t relay_entity = NULL;
-
-      if (get_relay_info_entity (original_host, original_port,
-                                 protocol, &relay_entity) == 0)
-        {
-          entity_t host_entity, port_entity, ca_cert_entity;
-
-          host_entity = entity_child (relay_entity, "host");
-          port_entity = entity_child (relay_entity, "port");
-          ca_cert_entity = entity_child (relay_entity, "ca_cert");
-
-          if (host_entity && port_entity && ca_cert_entity)
-            {
-              if (entity_text (host_entity)
-                  && entity_text (port_entity)
-                  && strcmp (entity_text (host_entity), "")
-                  && strcmp (entity_text (port_entity), ""))
-                {
-                  *new_host = g_strdup (entity_text (host_entity));
-                  *new_port = atoi (entity_text (port_entity));
-
-                  if (entity_text (ca_cert_entity)
-                      && strcmp (entity_text (ca_cert_entity), ""))
-                    {
-                      *new_ca_cert = g_strdup (entity_text (ca_cert_entity));
-                    }
-                  else
-                    {
-                      *new_ca_cert = NULL;
-                    }
-                  ret = 0;
-                }
-              else
-                {
-                  // Consider relay not found if host or port is empty
-                  ret = 1;
-                }
-            }
-          else
-            {
-              g_warning ("%s: mapper output did not contain"
-                         " HOST, PORT and CA_CERT",
-                         __func__);
-            }
-          free_entity (relay_entity);
-        }
-    }
-
-  return ret;
-}
-
 #if ENABLE_OPENVASD
 /* Prototype */
 static int
@@ -3569,8 +3358,6 @@ manage_sync (sigset_t *sigmask_current,
 
   reinit_manage_process ();
   manage_session_init (current_credentials.uuid);
-
-  sync_scanner_relays ();
 
   if (feed_sync_required ())
     {

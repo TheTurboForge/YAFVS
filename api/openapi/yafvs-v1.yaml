@@ -1372,7 +1372,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-configuration-write
       summary: Create an operator-owned scanner
-      description: Creates one scanner configuration owned by the authenticated operator without contacting or verifying the scanner. Supported scanner types are 2, 5, 6, and 8; type 3 CVE scanners cannot be created. Network scanners require a valid host and port plus optional CA certificate and a human-owned certificate credential visible to the trusted operator team. Unix socket scanners store port 0 and clear CA and credential fields. Relay configuration is validated and stored as part of this request; omitting it creates no relay. Remote TLS/relay verification and external relay-file synchronization remain inherited.
+      description: Creates one scanner configuration owned by the authenticated operator without contacting or verifying the scanner. Supported scanner types are 2, 5, 6, and 8; type 3 CVE scanners cannot be created. Network scanners require a valid host and port plus optional CA certificate and a human-owned certificate credential visible to the trusted operator team. Unix socket scanners store port 0 and clear CA and credential fields. Relay configuration is validated and stored as part of this request; omitting it creates no relay. Remote TLS/relay verification remains inherited.
       requestBody:
         required: true
         content:
@@ -1419,7 +1419,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scanner-metadata-detail-info-tags-and-task-backlink-read
       summary: Read one scanner metadata record with safe backlinks
-      description: Scanner metadata backed by PostgreSQL. Detail includes active user tags, non-hidden task backlinks, and scanner CA public certificate text when present. Native direct write-control owns create, clone, full configuration replacement including relay configuration, metadata patch, trash, restore, hard-delete, and bounded verification. Credential secrets, credential certificate metadata, live status beyond verify, remote/TLS/relay verification, external relay-file synchronization, and inherited file export/download formats remain inherited.
+      description: Scanner metadata backed by PostgreSQL. Detail includes active user tags, non-hidden task backlinks, and scanner CA public certificate text when present. Native direct write-control owns create, clone, full configuration replacement including relay configuration, metadata patch, trash, restore, hard-delete, and bounded verification. Credential secrets, credential certificate metadata, live status beyond verify, remote/TLS/relay verification, and inherited file export/download formats remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:
@@ -1555,8 +1555,7 @@ paths:
         configurations store port 0 and clear CA and credential fields. Relay
         configuration is fully replaced: omitting, setting null, or sending a
         blank relay_host clears an existing relay and requires relay_port 0.
-        Remote TLS/relay verification and external relay-file synchronization
-        remain inherited.
+        Remote TLS/relay verification remains inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       requestBody:

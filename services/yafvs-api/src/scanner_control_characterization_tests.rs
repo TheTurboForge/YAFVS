@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use axum::http::Method;
+use std::path::{Path, PathBuf};
 
 use crate::direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed};
 
@@ -12,7 +13,11 @@ const MANAGE_SQL_C: &str = include_str!("../../../components/gvmd/src/manage_sql
 const MANAGE_SQL_CONFIGS_C: &str =
     include_str!("../../../components/gvmd/src/manage_sql_configs.c");
 const MANAGE_H: &str = include_str!("../../../components/gvmd/src/manage.h");
+const MANAGE_OSP_C: &str = include_str!("../../../components/gvmd/src/manage_osp.c");
+const MANAGE_OSP_H: &str = include_str!("../../../components/gvmd/src/manage_osp.h");
 const GVMD_C: &str = include_str!("../../../components/gvmd/src/gvmd.c");
+const GVMD_CMAKE: &str = include_str!("../../../components/gvmd/src/CMakeLists.txt");
+const GVMD_MANPAGE_XML: &str = include_str!("../../../components/gvmd/docs/gvmd.8.xml");
 const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
@@ -21,6 +26,14 @@ const GSA_CAPABILITIES_TS: &str =
     include_str!("../../../components/gsa/src/gmp/capabilities/capabilities.ts");
 const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
+const SCANNER_WRITE_SQL: &str = include_str!("scanner_write_sql.rs");
+const SCANNER_WRITE_VALIDATION: &str = include_str!("scanner_write_validation.rs");
+
+fn repository_path(relative: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(relative)
+}
 
 fn inherited_function(source: &str, name: &str) -> String {
     let marker = format!("\n{name} (");
@@ -30,6 +43,148 @@ fn inherited_function(source: &str, name: &str) -> String {
     let tail = &source[start..];
     let end = tail.find("\n/**").unwrap_or(tail.len());
     tail[..end].to_string()
+}
+
+#[test]
+fn automatic_scanner_relay_options_modules_and_subprocess_path_stay_deleted() {
+    for retired in [
+        "\"relay-mapper\"",
+        "\"relays-path\"",
+        "relay_mapper",
+        "relays_path",
+        "set_relays_path",
+    ] {
+        assert!(!GVMD_C.contains(retired), "gvmd still contains {retired}");
+    }
+
+    for retired in [
+        "relay_mapper_path",
+        "get_relay_mapper_path",
+        "set_relay_mapper_path",
+        "get_relay_info_entity",
+        "slave_get_relay",
+        "slave_relay_connection",
+        "sync_scanner_relays",
+        "scanner_relays_update_time",
+        "update_all_scanner_relays",
+    ] {
+        assert!(
+            !MANAGE_C.contains(retired)
+                && !MANAGE_H.contains(retired)
+                && !MANAGE_SQL_C.contains(retired),
+            "manager sources still contain {retired}"
+        );
+    }
+
+    for retired in [
+        "use_relay_mapper",
+        "osp_scanner_mapped_relay_connect",
+        "slave_get_relay",
+    ] {
+        assert!(
+            !MANAGE_OSP_C.contains(retired) && !MANAGE_OSP_H.contains(retired),
+            "OSP connection path still contains {retired}"
+        );
+    }
+
+    for module in [
+        "manage_scanner_relays",
+        "manage_sql_scanner_relays",
+        "manage-scanner-relays",
+    ] {
+        assert!(
+            !GVMD_CMAKE.contains(module),
+            "gvmd build still includes {module}"
+        );
+    }
+    for relative in [
+        "components/gvmd/src/manage_scanner_relays.c",
+        "components/gvmd/src/manage_scanner_relays.h",
+        "components/gvmd/src/manage_scanner_relays_tests.c",
+        "components/gvmd/src/manage_sql_scanner_relays.c",
+        "components/gvmd/src/manage_sql_scanner_relays.h",
+    ] {
+        assert!(
+            !repository_path(relative).exists(),
+            "deleted automatic-relay module returned: {relative}"
+        );
+    }
+    for retired in ["--relay-mapper", "--relays-path"] {
+        assert!(
+            !GVMD_MANPAGE_XML.contains(retired),
+            "gvmd manpage still advertises {retired}"
+        );
+    }
+    assert!(
+        !OPENAPI.contains("external relay-file synchronization"),
+        "OpenAPI still claims deleted relay-file synchronization is inherited"
+    );
+    assert!(
+        OPENAPI.contains("Remote TLS/relay verification remains inherited."),
+        "OpenAPI lost the retained remote verification boundary"
+    );
+}
+
+#[test]
+fn explicit_native_relay_fields_and_direct_osp_connections_remain() {
+    for required in [
+        "relay_host, relay_port",
+        "relay_host = $9",
+        "relay_port = $10",
+    ] {
+        assert!(
+            SCANNER_WRITE_SQL.contains(required),
+            "native scanner SQL missing {required}"
+        );
+    }
+    for required in [
+        "normalize_scanner_text_value(relay_host, \"relay_host\")",
+        "relay_port must be 0 when relay_host is empty",
+        "relay_port must be 0 for a Unix socket relay",
+        "relay_port must be between 1 and 65535 for a network relay",
+    ] {
+        assert!(
+            SCANNER_WRITE_VALIDATION.contains(required),
+            "native scanner relay validation missing {required}"
+        );
+    }
+
+    let has_relay = inherited_function(MANAGE_SQL_C, "scanner_has_relay");
+    assert!(has_relay.contains("coalesce (relay_host, '') != ''"));
+    let from_scanner = inherited_function(MANAGE_OSP_C, "osp_connect_data_from_scanner");
+    for required in [
+        "has_relay = scanner_has_relay (scanner)",
+        "scanner_host (scanner, has_relay)",
+        "scanner_port (scanner, has_relay)",
+        "conn_data->port = 0",
+        "conn_data->ca_pub = NULL",
+    ] {
+        assert!(
+            from_scanner.contains(required),
+            "scanner OSP connection data missing {required}"
+        );
+    }
+
+    let from_iterator = inherited_function(MANAGE_OSP_C, "osp_connect_data_from_scanner_iterator");
+    for required in [
+        "scanner_iterator_relay_host (iterator)",
+        "scanner_iterator_relay_port (iterator)",
+        "scanner_iterator_host (iterator)",
+        "scanner_iterator_port (iterator)",
+    ] {
+        assert!(
+            from_iterator.contains(required),
+            "scanner iterator connection data missing {required}"
+        );
+    }
+
+    let connect = inherited_function(MANAGE_OSP_C, "osp_connect_with_data");
+    let normalized_connect = connect.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(normalized_connect.contains(
+        "osp_connection_new (conn_data->host, conn_data->port, conn_data->ca_pub, conn_data->key_pub, conn_data->key_priv)"
+    ));
+    assert!(connect.contains("Could not connect to Scanner at %s"));
+    assert!(connect.contains("Could not connect to Scanner at %s:%d"));
 }
 
 #[test]
@@ -371,7 +526,6 @@ fn openapi_documents_complete_native_scanner_lifecycle_and_verify_boundary() {
     for residual in [
         "Credential secrets, credential certificate metadata",
         "remote/TLS/relay verification",
-        "external relay-file synchronization",
         "inherited file export/download formats remain inherited",
     ] {
         assert!(detail.contains(residual), "detail docs missing {residual}");

@@ -170,7 +170,6 @@ set(
   manage_pg.c
   manage_scan_handler.c
   manage_scan_queue.c
-  manage_scanner_relays.c
   manage_schedules.c
   manage_targets.c
   manage_users.c
@@ -199,7 +198,6 @@ set(
   manage_sql_report_operating_systems.c
   manage_sql_report_ports.c
   manage_sql_report_tls_certificates.c
-  manage_sql_scanner_relays.c
   manage_sql_schedules.c
   manage_sql_metrics.c
   manage_sql_scopes.c
@@ -412,7 +410,6 @@ set(
   $<TARGET_OBJECTS:all-misc-obj>
   $<TARGET_OBJECTS:all-sql-obj>
 )
-add_unit_test(manage-scanner-relays "${ALL_OBJECTS}" "${ALL_MANAGE_SRC}")
 
 set(
   ALL_OBJECTS

@@ -97,7 +97,6 @@
 #include "manage_nvts.h"
 #include "manage_runtime_flags.h"
 #include "manage_scan_queue.h"
-#include "manage_scanner_relays.h"
 #include "manage_settings.h"
 #include "manage_targets.h"
 #include "manage_users.h"
@@ -2243,8 +2242,6 @@ gvmd (int argc, char** argv, char *env[])
   static gchar *manager_port_string_2 = NULL;
   static gchar *modify_setting = NULL;
   static gchar *rc_name = NULL;
-  static gchar *relay_mapper = NULL;
-  static gchar *relays_path = NULL;
   static gboolean rebuild = FALSE;
   static gchar *rebuild_gvmd_data = NULL;
   static gboolean rebuild_scap = FALSE;
@@ -2547,20 +2544,6 @@ gvmd (int argc, char** argv, char *env[])
           &rebuild_scap,
           "Rebuild all SCAP data.",
           NULL },
-        { "relay-mapper", '\0', 0, G_OPTION_ARG_FILENAME,
-          &relay_mapper,
-          "Executable for automatically mapping scanner hosts to relays."
-          " If the option is empty or not given, automatic mapping"
-          " is disabled. This option is deprecated and relays should be"
-          " set explictly in the relay_... fields of scanners.",
-          "<file>" },
-        { "relays-path", '\0', 0, G_OPTION_ARG_FILENAME,
-          &relays_path,
-          "Path to an externally managed JSON file used to automatically"
-          " update the relays of scanners. These will overwrite any relays"
-          " set manually and remove the relays for scanners not listed"
-          " in the file.",
-          "<file>" },
         { "role", '\0', 0, G_OPTION_ARG_STRING,
           &role,
           "Role for --create-user.",
@@ -2889,30 +2872,6 @@ gvmd (int argc, char** argv, char *env[])
 
   /* Set minimum memory for feed updates */
   set_min_mem_feed_update (min_mem_feed_update);
-
-  /* Set relay mapper */
-  if (relay_mapper && strcmp (relay_mapper, ""))
-    {
-      if (gvm_file_exists (relay_mapper) == 0)
-        g_warning ("Relay mapper '%s' not found.", relay_mapper);
-      else if (gvm_file_is_readable (relay_mapper) == 0)
-        g_warning ("Relay mapper '%s' is not readable.", relay_mapper);
-      else if (gvm_file_is_executable (relay_mapper) == 0)
-        g_warning ("Relay mapper '%s' is not executable.", relay_mapper);
-      else
-        {
-          g_debug ("Using relay mapper '%s'.", relay_mapper);
-          set_relay_mapper_path (relay_mapper);
-        }
-    }
-  else
-    g_debug ("Relay mapper disabled.");
-
-  /* Set relays file path */
-  if (relays_path && strcmp (relays_path, ""))
-    {
-      set_relays_path (relays_path);
-    }
 
   /*
    * Set up scan queue

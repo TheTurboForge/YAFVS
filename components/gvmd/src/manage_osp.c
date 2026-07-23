@@ -43,7 +43,7 @@ osp_connect_data_free (osp_connect_data_t *conn_data)
  * @brief Get OSP connection data from a scanner.
  *
  * If a relay is defined in the scanners table, the struct will contain the
- *  relay host and port and .
+ * relay host and port.
  *
  * @param[in]  scanner  The scanner to get the data from.
  *
@@ -57,7 +57,6 @@ osp_connect_data_from_scanner (scanner_t scanner)
   osp_connect_data_t *conn_data = g_malloc0 (sizeof (osp_connect_data_t));
 
   has_relay = scanner_has_relay (scanner);
-  conn_data->use_relay_mapper = has_relay == FALSE;
   conn_data->host = scanner_host (scanner, has_relay);
 
   if (conn_data->host && *(conn_data->host) == '/')
@@ -96,7 +95,6 @@ osp_connect_data_from_scanner_iterator (iterator_t *iterator,
   assert (iterator);
 
   has_relay = strcmp (scanner_iterator_relay_host (iterator) ?: "", "");
-  conn_data->use_relay_mapper = (has_relay == FALSE);
   conn_data->host = has_relay ? (char*)(scanner_iterator_relay_host (iterator))
                               : (char*)(scanner_iterator_host (iterator));
 
@@ -119,69 +117,6 @@ osp_connect_data_from_scanner_iterator (iterator_t *iterator,
 }
 
 /**
- * @brief Create a new connection to an OSP scanner using the relay mapper.
- *
- * @param[in] conn_data Original data used to look up the relay and connect
- *                      to the scanner.
- *
- * @return New connection if success, NULL otherwise.
- */
-static osp_connection_t *
-osp_scanner_mapped_relay_connect (osp_connect_data_t *conn_data)
-{
-  int ret, new_port;
-  gchar *new_host, *new_ca_pub;
-  osp_connection_t *connection;
-
-  new_host = NULL;
-  new_ca_pub = NULL;
-  new_port = 0;
-
-  ret = slave_get_relay (conn_data->host,
-                         conn_data->port,
-                         conn_data->ca_pub,
-                         "OSP",
-                         &new_host,
-                         &new_port,
-                         &new_ca_pub);
-
-  switch (ret)
-    {
-      case 0:
-        break;
-      case 1:
-        g_warning ("No relay found for Scanner at %s:%d",
-                   conn_data->host, conn_data->port);
-        return NULL;
-      default:
-        g_warning ("%s: Error getting relay for Scanner at %s:%d",
-                   __func__, conn_data->host, conn_data->port);
-        return NULL;
-    }
-
-  connection
-    = osp_connection_new (new_host, new_port, new_ca_pub,
-                          conn_data->key_pub, conn_data->key_priv);
-
-  if (connection == NULL)
-    {
-      if (new_port)
-        g_warning ("Could not connect to relay at %s:%d"
-                    " for Scanner at %s:%d",
-                    new_host, new_port, conn_data->host, conn_data->port);
-      else
-        g_warning ("Could not connect to relay at %s"
-                    " for Scanner at %s:%d",
-                    new_host, conn_data->host, conn_data->port);
-    }
-
-  g_free (new_host);
-  g_free (new_ca_pub);
-
-  return connection;
-}
-
-/**
  * @brief Create a new connection to an OSP scanner using the scanner data.
  *
  * @param[in]  conn_data Data used to connect to the scanner.
@@ -194,30 +129,19 @@ osp_connect_with_data (osp_connect_data_t *conn_data)
   osp_connection_t *connection;
   int is_unix_socket = (conn_data->host && *(conn_data->host) == '/') ? 1 : 0;
 
-  if (is_unix_socket == 0
-      && conn_data->use_relay_mapper
-      && get_relay_mapper_path ())
-    {
-      connection
-        = osp_scanner_mapped_relay_connect (conn_data);
-    }
-  else
-    {
-      connection = osp_connection_new (conn_data->host,
-                                       conn_data->port,
-                                       conn_data->ca_pub,
-                                       conn_data->key_pub,
-                                       conn_data->key_priv);
+  connection = osp_connection_new (conn_data->host,
+                                   conn_data->port,
+                                   conn_data->ca_pub,
+                                   conn_data->key_pub,
+                                   conn_data->key_priv);
 
-      if (connection == NULL)
-        {
-          if (is_unix_socket)
-            g_warning ("Could not connect to Scanner at %s",
-                       conn_data->host);
-          else
-            g_warning ("Could not connect to Scanner at %s:%d",
-                       conn_data->host, conn_data->port);
-        }
+  if (connection == NULL)
+    {
+      if (is_unix_socket)
+        g_warning ("Could not connect to Scanner at %s", conn_data->host);
+      else
+        g_warning ("Could not connect to Scanner at %s:%d",
+                   conn_data->host, conn_data->port);
     }
   return connection;
 }

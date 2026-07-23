@@ -12356,11 +12356,6 @@ safelyDeleteCredential({}, fixture).then(result => {
     def test_sql_escaping_helpers(self):
         self.assertEqual(yafvsctl.sql_literal("a'b"), "'a''b'")
 
-    def test_gmp_smoke_parse_version_accepts_text_and_element(self):
-        self.assertEqual(runtime_gmp_smoke.parse_version("<get_version_response><version>22.7</version></get_version_response>"), "22.7")
-        element = ET.fromstring("<get_version_response><version>22.8</version></get_version_response>")
-        self.assertEqual(runtime_gmp_smoke.parse_version(element), "22.8")
-
     def test_gmp_smoke_raw_xml_helper_escapes_credentials_and_reads_complete_response(self):
         xml = runtime_gmp_smoke.gmp_authenticate_xml("admin<&", "pass>&")
         self.assertIn("<username>admin&lt;&amp;</username>", xml)
@@ -12368,13 +12363,22 @@ safelyDeleteCredential({}, fixture).then(result => {
 
         class FakeSocket:
             def __init__(self):
-                self.chunks = [b"<get_version_response>", b"<version>22.9</version></get_version_response>"]
+                self.chunks = [b"<authenticate_response status=\"200\"", b" status_text=\"OK\"/>"]
 
             def recv(self, _size):
                 return self.chunks.pop(0)
 
         payload = runtime_gmp_smoke.read_gmp_xml_response(FakeSocket())
-        self.assertEqual(runtime_gmp_smoke.parse_version(payload), "22.9")
+        response = runtime_gmp_smoke.parse_gmp_response(payload)
+        self.assertEqual(response.tag, "authenticate_response")
+        self.assertEqual(response.get("status"), "200")
+
+    def test_gmp_smoke_does_not_request_retired_get_version(self):
+        source = GMP_SMOKE_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("get_version", source.lower())
+        self.assertIn("gmp_authenticate_xml", source)
+        self.assertIn("<get_credentials", source)
+        self.assertIn("<get_aggregates", source)
 
     def test_gmp_smoke_no_longer_imports_python_gvm_runtime_client(self):
         source = GMP_SMOKE_PATH.read_text(encoding="utf-8")

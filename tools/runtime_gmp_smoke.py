@@ -23,25 +23,6 @@ def result(status: str, summary: str, **details: Any) -> dict[str, Any]:
     return {"status": status, "summary": summary, "details": details}
 
 
-def parse_version(response: Any) -> str | None:
-    if isinstance(response, bytes):
-        response = response.decode("utf-8", errors="replace")
-    if isinstance(response, str):
-        try:
-            root = ET.fromstring(response)
-        except ET.ParseError:
-            return None
-    else:
-        root = response
-    try:
-        version = root.find("version")
-    except AttributeError:
-        return None
-    if version is not None and getattr(version, "text", None):
-        return version.text
-    return None
-
-
 def gmp_authenticate_xml(username: str, password: str) -> str:
     return (
         "<authenticate><credentials>"
@@ -82,8 +63,9 @@ def raw_gmp_checks(
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.settimeout(timeout)
         connection.connect(str(socket_path))
-        send_gmp_xml_command(connection, gmp_authenticate_xml(username, password))
-        version_response = send_gmp_xml_command(connection, "<get_version/>")
+        authentication_response = send_gmp_xml_command(
+            connection, gmp_authenticate_xml(username, password)
+        )
         copy_response = send_gmp_xml_command(
             connection,
             "<create_credential>"
@@ -105,7 +87,7 @@ def raw_gmp_checks(
             '<get_aggregates type="vuln" group_column="severity" first_group="1" max_groups="1"/>',
         )
         return (
-            version_response,
+            authentication_response,
             copy_response,
             copy_only_response,
             credentials_response,
@@ -142,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         (
-            version_response,
+            authentication_response,
             copy_response,
             copy_only_response,
             credentials_response,
@@ -162,7 +144,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    version = parse_version(version_response)
+    authentication_root = parse_gmp_response(authentication_response)
+    authenticated = (
+        authentication_root.tag == "authenticate_response"
+        and authentication_root.get("status") == "200"
+    )
     copy_root = parse_gmp_response(copy_response)
     copy_rejected = (
         copy_root.get("status") == "400"
@@ -185,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
         and aggregate_root.get("status") == "200"
     )
     passed = (
-        bool(version)
+        authenticated
         and copy_rejected
         and copy_only_rejected
         and no_credential_created
@@ -196,8 +182,9 @@ def main(argv: list[str] | None = None) -> int:
             result(
                 "pass" if passed else "fail",
                 "GMP authentication, retained vulnerability aggregation, and retired credential-copy rejection completed",
-                authenticated=True,
-                version=version,
+                authenticated=authenticated,
+                authentication_status=authentication_root.get("status"),
+                authentication_status_text=authentication_root.get("status_text"),
                 credential_copy_rejected=copy_rejected,
                 credential_copy_status=copy_root.get("status"),
                 credential_copy_status_text=copy_root.get("status_text"),

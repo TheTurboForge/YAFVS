@@ -49,7 +49,6 @@ command_t gmp_commands[]
     {"GET_REPORTS", "Get all reports."},
     {"GET_SETTINGS", "Get all settings."},
     {"GET_TASKS", "Get all tasks."},
-    {"GET_VERSION", "Get the Greenbone Management Protocol version."},
     {"HELP", "Get this help text."},
     {"MODIFY_ASSET", "Modify an existing asset."},
     {"MODIFY_CONFIG", "Update an existing config."},
@@ -163,7 +162,6 @@ gmp_command_takes_resource (const char* name)
          && strcasestr (name, "CREATE_") != name
          && strcasestr (name, "DESCRIBE_") != name
          && strcasecmp (name, "EMPTY_TRASHCAN")
-         && strcasecmp (name, "GET_VERSION")
          && strcasecmp (name, "HELP")
          && strcasestr (name, "SYNC_") != name;
 }

@@ -686,7 +686,7 @@ pub(crate) fn command_runtime_gmp_smoke_with(
                 "fail"
             },
             "gvmd.gmp",
-            format!("Raw GMP socket authenticated get_version exit code {exit_code}."),
+            format!("Authenticated raw GMP compatibility smoke exit code {exit_code}."),
         )
         .with_details(json!({
             "probe": parsed,
@@ -1790,6 +1790,10 @@ mod tests {
         let result = command_runtime_gmp_smoke_with(&repo, &runner);
         assert_eq!(result.status, "pass");
         assert_eq!(result.findings.last().unwrap().check, "gvmd.gmp");
+        assert_eq!(
+            result.findings.last().unwrap().message,
+            "Authenticated raw GMP compatibility smoke exit code 0."
+        );
         let serialized = serde_json::to_string(&result).unwrap();
         assert!(!serialized.contains("long-runtime-secret"));
         assert!(serialized.contains("[redacted]"));

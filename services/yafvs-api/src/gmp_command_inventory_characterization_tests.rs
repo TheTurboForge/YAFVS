@@ -36,6 +36,27 @@ fn advertised_commands() -> BTreeSet<String> {
 }
 
 #[test]
+fn get_version_is_retired_while_authenticate_help_and_gsad_login_remain() {
+    let advertised = advertised_commands();
+    let accepted = authenticated_parser_commands();
+
+    assert!(!advertised.contains("GET_VERSION"));
+    assert!(!accepted.contains("GET_VERSION"));
+    assert!(!GMP.contains("CLIENT_GET_VERSION"));
+    assert!(!GMP.contains("handle_get_version"));
+    assert!(!MANAGE_COMMANDS.contains("strcasecmp (name, \"GET_VERSION\")"));
+    assert!(GMP.contains("Only command AUTHENTICATE is"));
+    assert!(GMP.contains("allowed before authentication"));
+
+    assert!(advertised.contains("AUTHENTICATE"));
+    assert!(advertised.contains("HELP"));
+    assert!(accepted.contains("AUTHENTICATE"));
+    assert!(accepted.contains("HELP"));
+    assert!(GMP_SCHEMA.contains("<name>authenticate</name>"));
+    assert!(GSAD_GMP.contains("<help format=\\\"XML\\\" type=\\\"brief\\\"/>"));
+}
+
+#[test]
 fn get_assets_is_a_native_only_acl_key_not_public_transport() {
     assert!(!advertised_commands().contains("GET_ASSETS"));
     assert!(!authenticated_parser_commands().contains("GET_ASSETS"));

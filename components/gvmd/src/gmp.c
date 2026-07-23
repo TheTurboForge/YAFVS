@@ -1650,8 +1650,6 @@ typedef enum
   CLIENT_GET_RESOURCE_NAMES,
   CLIENT_GET_SETTINGS,
   CLIENT_GET_TASKS,
-  CLIENT_GET_VERSION,
-  CLIENT_GET_VERSION_AUTHENTIC,
   CLIENT_HELP,
   CLIENT_LOGOUT,
   CLIENT_MODIFY_ASSET,
@@ -1845,9 +1843,7 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
   else switch (client_state)
     {
       case CLIENT_TOP:
-        if (strcasecmp ("GET_VERSION", element_name) == 0)
-          set_client_state (CLIENT_GET_VERSION);
-        else if (strcasecmp ("AUTHENTICATE", element_name) == 0)
+        if (strcasecmp ("AUTHENTICATE", element_name) == 0)
           {
             const gchar* attribute;
             if (find_attribute (attribute_names, attribute_values,
@@ -1860,8 +1856,8 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             /** @todo If a real GMP command, return STATUS_ERROR_MUST_AUTH. */
             if (send_to_client
                  (XML_ERROR_SYNTAX ("gmp",
-                                    "Only command GET_VERSION is"
-                                    " allowed before AUTHENTICATE"),
+                                    "Only command AUTHENTICATE is"
+                                    " allowed before authentication"),
                   write_to_client,
                   write_to_client_data))
               {
@@ -2335,8 +2331,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
               get_info_data->type = g_ascii_strdown (typebuf, -1);
             set_client_state (CLIENT_GET_INFO);
           }
-        else if (strcasecmp ("GET_VERSION", element_name) == 0)
-          set_client_state (CLIENT_GET_VERSION_AUTHENTIC);
         else if (strcasecmp ("HELP", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values, "format",
@@ -9180,26 +9174,6 @@ handle_get_tasks (gmp_parser_t *gmp_parser, GError **error)
   set_client_state (CLIENT_AUTHENTIC);
 }
 
-/**
- * @brief Handle end of GET_VERSION element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_version (gmp_parser_t *gmp_parser, GError **error)
-{
-  SEND_TO_CLIENT_OR_FAIL ("<get_version_response"
-                          " status=\"" STATUS_OK "\""
-                          " status_text=\"" STATUS_OK_TEXT "\">"
-                          "<version>" GMP_VERSION "</version>"
-                          "</get_version_response>");
-  if (client_state == CLIENT_GET_VERSION_AUTHENTIC)
-    set_client_state (CLIENT_AUTHENTIC);
-  else
-    set_client_state (CLIENT_TOP);
-}
-
 extern char client_address[];
 
 /**
@@ -9590,12 +9564,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
       case CLIENT_GET_TASKS:
         handle_get_tasks (gmp_parser, error);
-        break;
-
-
-      case CLIENT_GET_VERSION:
-      case CLIENT_GET_VERSION_AUTHENTIC:
-        handle_get_version (gmp_parser, error);
         break;
 
       case CLIENT_HELP:

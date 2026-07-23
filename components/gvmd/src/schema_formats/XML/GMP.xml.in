@@ -2945,8 +2945,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       </p>
       <p>
         The client normally executes this command at the beginning of each
-        connection.  The only command permitted before authentication is
-        get_version.
+        connection.  AUTHENTICATE is the only command permitted before
+        authentication.
       </p>
     </description>
     <pattern>

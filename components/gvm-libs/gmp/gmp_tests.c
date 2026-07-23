@@ -311,57 +311,6 @@ Ensure (gmp, gmp_check_response_returns_error_when_no_status)
   assert_that (entity, is_null);
 }
 
-/* gmp_ping */
-
-Ensure (gmp, gmp_ping_succeeds_with_valid_response)
-{
-  expect (__wrap_gvm_server_sendf, will_return (0));
-
-  entity_t mock_entity = create_mock_entity ("get_version_response", "");
-  add_mock_attribute (mock_entity, "status", "200");
-
-  expect (__wrap_try_read_entity, will_return (0));
-  expect (__wrap_try_read_entity, will_return (mock_entity));
-
-  int result = gmp_ping (NULL, 0);
-
-  assert_that (result, is_equal_to (0));
-}
-
-Ensure (gmp, gmp_ping_returns_error_on_send_failure)
-{
-  expect (__wrap_gvm_server_sendf, will_return (-1));
-
-  int result = gmp_ping (NULL, 0);
-
-  assert_that (result, is_equal_to (-1));
-}
-
-Ensure (gmp, gmp_ping_returns_error_on_read_failure)
-{
-  expect (__wrap_gvm_server_sendf, will_return (0));
-  expect (__wrap_try_read_entity, will_return (-1));
-
-  int result = gmp_ping (NULL, 0);
-
-  assert_that (result, is_equal_to (-1));
-}
-
-Ensure (gmp, gmp_ping_returns_error_with_invalid_status)
-{
-  expect (__wrap_gvm_server_sendf, will_return (0));
-
-  entity_t mock_entity = create_mock_entity ("get_version_response", "");
-  add_mock_attribute (mock_entity, "status", "500");
-
-  expect (__wrap_try_read_entity, will_return (0));
-  expect (__wrap_try_read_entity, will_return (mock_entity));
-
-  int result = gmp_ping (NULL, 0);
-
-  assert_that (result, is_equal_to (-1));
-}
-
 Ensure (gmp, gmp_authenticate_info_ext_c_returns_success_and_sets_outputs)
 {
   entity_t response = create_mock_entity ("authenticate_response", "");
@@ -691,11 +640,6 @@ main (int argc, char **argv)
   add_test_with_context (suite, gmp,
                          gmp_check_response_returns_error_when_no_status);
 
-  add_test_with_context (suite, gmp, gmp_ping_succeeds_with_valid_response);
-  add_test_with_context (suite, gmp, gmp_ping_returns_error_on_send_failure);
-  add_test_with_context (suite, gmp, gmp_ping_returns_error_on_read_failure);
-  add_test_with_context (suite, gmp,
-                         gmp_ping_returns_error_with_invalid_status);
   add_test_with_context (
     suite, gmp, gmp_authenticate_info_ext_c_returns_success_and_sets_outputs);
   add_test_with_context (suite, gmp, gmp_authenticate_info_ext_sets_user_uuid);

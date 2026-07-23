@@ -198,13 +198,6 @@ char *
 save_setting_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                   gsad_command_response_data_t *);
 char *
-get_info_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-              gsad_command_response_data_t *);
-char *
-get_info (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
-          gsad_command_response_data_t *);
-
-char *
 save_asset_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                 gsad_command_response_data_t *);
 

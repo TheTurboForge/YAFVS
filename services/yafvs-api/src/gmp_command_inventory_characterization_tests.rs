@@ -14,6 +14,30 @@ const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_forma
 const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
+const GSA_INFO_ENTITY: &str =
+    include_str!("../../../components/gsa/src/gmp/commands/info-entity.ts");
+const GSA_INFO_ENTITIES: &str =
+    include_str!("../../../components/gsa/src/gmp/commands/info-entities.ts");
+const GSA_ENTITIES: &str = include_str!("../../../components/gsa/src/gmp/commands/entities.ts");
+const GSA_OMP: &str = include_str!("../../../components/gsa/src/web/pages/Omp.jsx");
+const GSA_DETAIL_COMMANDS: [&str; 5] = [
+    include_str!("../../../components/gsa/src/gmp/commands/cpe.ts"),
+    include_str!("../../../components/gsa/src/gmp/commands/cve.ts"),
+    include_str!("../../../components/gsa/src/gmp/commands/nvt.ts"),
+    include_str!("../../../components/gsa/src/gmp/commands/cert-bund-advisory.ts"),
+    include_str!("../../../components/gsa/src/gmp/commands/dfn-cert-advisory.ts"),
+];
+const GSA_LIST_COMMANDS: [&str; 5] = [
+    include_str!("../../../components/gsa/src/gmp/commands/cpes.ts"),
+    include_str!("../../../components/gsa/src/gmp/commands/cves.ts"),
+    include_str!("../../../components/gsa/src/gmp/commands/nvts.ts"),
+    include_str!("../../../components/gsa/src/gmp/commands/cert-bund-advisories.ts"),
+    include_str!("../../../components/gsa/src/gmp/commands/dfn-cert-advisories.ts"),
+];
+const READ_API_ROUTES: &str = include_str!("read_api_routes.rs");
+const MANAGE: &str = include_str!("../../../components/gvmd/src/manage.c");
+const MANAGE_SQL_SECINFO: &str = include_str!("../../../components/gvmd/src/manage_sql_secinfo.c");
+const MANAGE_SQL_NVTS: &str = include_str!("../../../components/gvmd/src/manage_sql_nvts.c");
 
 fn advertised_commands() -> BTreeSet<String> {
     let block = MANAGE_COMMANDS
@@ -33,6 +57,154 @@ fn advertised_commands() -> BTreeSet<String> {
             Some(tail[..end].to_string())
         })
         .collect()
+}
+
+#[test]
+fn get_info_is_native_only_authority_not_public_transport() {
+    let advertised = advertised_commands();
+    let accepted = authenticated_parser_commands();
+
+    assert!(!advertised.contains("GET_INFO"));
+    assert!(!accepted.contains("GET_INFO"));
+    assert!(native_acl_operations().contains("GET_INFO"));
+    assert!(!GMP.contains("CLIENT_GET_INFO"));
+    assert!(!GMP.contains("get_info_data"));
+    assert!(!GMP.contains("handle_get_info"));
+    assert!(!GMP.contains("strcasecmp (\"GET_INFO\""));
+    assert!(!GMP_SCHEMA.contains("<name>get_info</name>"));
+    assert!(GMP_SCHEMA.contains("<command>GET_INFO</command>"));
+
+    for retained in ["AUTHENTICATE", "HELP", "GET_AGGREGATES", "GET_NVTS"] {
+        assert!(advertised.contains(retained));
+        assert!(accepted.contains(retained));
+    }
+}
+
+#[test]
+fn gsad_get_info_and_generic_raw_export_paths_fail_closed() {
+    assert!(!GSAD_GMP.contains("get_info_gmp"));
+    assert!(!GSAD_GMP_HEADER.contains("get_info_gmp"));
+    assert!(!GSAD_GMP.contains("ELSE (get_info)"));
+    assert!(!GSAD_VALIDATOR.contains("|(get_info)"));
+    assert!(!GSAD_GMP.contains("<get_info"));
+
+    let bulk_export = GSAD_GMP
+        .split_once("bulk_export_gmp (")
+        .expect("bulk export handler must remain")
+        .1
+        .split_once("/**\n * @brief Modify an asset")
+        .expect("bulk export handler must terminate before asset modification")
+        .0;
+    let rejection = bulk_export
+        .find("g_ascii_strcasecmp (type, \"info\")")
+        .expect("generic info export must be rejected case-insensitively");
+    let selection = bulk_export
+        .find("if (bulk_select")
+        .expect("retained generic selection handling must remain");
+    let filter_mutation = bulk_export
+        .find("params_add (params, \"filter\"")
+        .expect("retained generic filter construction must remain");
+
+    assert!(bulk_export.contains("MHD_HTTP_BAD_REQUEST"));
+    assert!(bulk_export.contains("Catalog XML bulk export is no longer supported"));
+    assert!(rejection < selection);
+    assert!(rejection < filter_mutation);
+}
+
+#[test]
+fn catalog_browser_commands_are_native_and_raw_bases_are_fail_closed() {
+    for base in [GSA_INFO_ENTITY, GSA_INFO_ENTITIES] {
+        assert!(!base.contains("get_info"));
+        assert!(!base.contains("delete_info"));
+        assert!(!base.contains("bulk_export"));
+        assert!(base.contains("requires a native API implementation"));
+    }
+    assert!(GSA_INFO_ENTITY.contains("Catalog entries cannot be deleted"));
+    assert!(GSA_INFO_ENTITIES.contains("extends EntitiesCommand"));
+    assert!(GSA_INFO_ENTITIES.contains("setDefaultParam('info_type'"));
+    assert!(GSA_ENTITIES.contains("async getAggregates"));
+
+    for command in GSA_DETAIL_COMMANDS {
+        assert!(command.contains("async get("));
+        assert!(command.contains("async export("));
+        assert!(command.contains("fetchNative"));
+        assert!(command.contains("exportNative"));
+        assert!(!command.contains("get_info"));
+    }
+    for command in GSA_LIST_COMMANDS {
+        for method in [
+            "async get(",
+            "async getAll(",
+            "exportByIds(",
+            "async exportByFilter(",
+        ] {
+            assert!(command.contains(method));
+        }
+        assert!(command.contains("fetchNative"));
+        assert!(command.contains("exportNative"));
+        assert!(!command.contains("get_info"));
+    }
+
+    assert!(GSA_DETAIL_COMMANDS[2].contains("fetchNativeScanConfig"));
+    assert!(GSA_DETAIL_COMMANDS[2].contains("Promise.all"));
+    assert!(GSA_DETAIL_COMMANDS[2].contains("configuredTimeout"));
+    assert!(GSA_DETAIL_COMMANDS[2].contains("preferences"));
+}
+
+#[test]
+fn catalog_redirect_routes_and_internal_semantics_remain() {
+    assert!(GSA_OMP.contains("/omp?cmd=get_info"));
+    assert!(GSA_OMP.contains("cmd !== 'get_info'"));
+    for route in [
+        "/api/v1/cpes",
+        "/api/v1/cves",
+        "/api/v1/nvts",
+        "/api/v1/cert-bund-advisories",
+        "/api/v1/dfn-cert-advisories",
+    ] {
+        assert!(READ_API_ROUTES.contains(route));
+    }
+
+    for symbol in [
+        "init_cpe_info_iterator",
+        "cpe_info_count",
+        "init_cve_info_iterator",
+        "cve_info_count",
+        "init_cert_bund_adv_info_iterator",
+        "cert_bund_adv_info_count",
+        "init_dfn_cert_adv_info_iterator",
+        "dfn_cert_adv_info_count",
+        "update_scap_cpes",
+        "update_scap_cves",
+        "update_cert_bund_advisories",
+    ] {
+        assert!(MANAGE_SQL_SECINFO.contains(symbol));
+    }
+    for symbol in [
+        "init_nvt_info_iterator",
+        "nvt_info_count",
+        "update_or_rebuild_nvts",
+    ] {
+        assert!(MANAGE_SQL_NVTS.contains(symbol));
+    }
+    for symbol in [
+        "manage_sync_scap",
+        "manage_sync_cert",
+        "manage_rebuild_gvmd_data_from_feed",
+        "manage_read_info",
+        "cve_scan_report_host_json",
+        "host_details_cpe",
+        "make_cve_result",
+        "init_resource_tag_iterator (&tags, \"nvt\"",
+    ] {
+        assert!(MANAGE.contains(symbol));
+    }
+
+    assert!(GMP.contains("send_nvt ("));
+    assert!(GMP.contains("result_iterator_nvt_oid"));
+    assert!(GMP.contains("handle_get_resource_names"));
+    assert!(GMP.contains("acl_user_may (\"get_info\")"));
+    assert!(GMP.contains("init_resource_tag_iterator"));
 }
 
 #[test]

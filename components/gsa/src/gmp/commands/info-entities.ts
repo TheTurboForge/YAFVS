@@ -1,63 +1,84 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import {
-  parseCollectionList,
-  parseInfoEntities,
-  parseInfoCounts,
   type ModelClass,
   type InfoEntitiesFilterFunc,
-  type InfoElement,
 } from 'gmp/collection/parser';
-import EntitiesCommand from 'gmp/commands/entities';
+import EntitiesCommand, {type EntitiesMeta} from 'gmp/commands/entities';
+import type {
+  HttpCommandInputParams,
+  HttpCommandOptions,
+} from 'gmp/commands/http';
 import {type InfoType} from 'gmp/commands/info-entity';
 import type Http from 'gmp/http/http';
-import {type default as Model, type Element} from 'gmp/models/model';
+import type Response from 'gmp/http/response';
+import type {XmlMeta} from 'gmp/http/transform/fast-xml';
+import Filter from 'gmp/models/filter';
+import {type default as Model} from 'gmp/models/model';
 
 class InfoEntitiesCommand<
   TModel extends Model,
 > extends EntitiesCommand<TModel> {
-  private readonly entitiesFilterFunc: InfoEntitiesFilterFunc;
-
   constructor(
     http: Http,
     infoType: InfoType,
     model: ModelClass<TModel>,
-    entitiesFilterFunc: InfoEntitiesFilterFunc,
+    _entitiesFilterFunc: InfoEntitiesFilterFunc,
   ) {
     super(http, 'info', model);
-    this.setDefaultParam('cmd', 'get_info');
     this.setDefaultParam('info_type', infoType);
-    this.entitiesFilterFunc = entitiesFilterFunc;
-
-    this.parseInfoEntities = this.parseInfoEntities.bind(this);
   }
 
-  getEntitiesResponse(root) {
-    return root.get_info.get_info_response;
+  protected getEntitiesResponse(): never {
+    throw new Error('Raw catalog response parsing is not supported');
   }
 
-  parseInfoEntities(
-    response: InfoElement,
-    name: string,
-    modelClass: ModelClass<TModel>,
-  ) {
-    return parseInfoEntities<TModel>(
-      response,
-      name,
-      modelClass,
-      this.entitiesFilterFunc,
+  async get(
+    _params: HttpCommandInputParams = {},
+    _options?: HttpCommandOptions,
+  ): Promise<Response<TModel[], EntitiesMeta>> {
+    throw new Error('Catalog list reads require a native API implementation');
+  }
+
+  async getAll(
+    _params: HttpCommandInputParams = {},
+    _options?: HttpCommandOptions,
+  ): Promise<Response<TModel[], EntitiesMeta>> {
+    throw new Error('Catalog list reads require a native API implementation');
+  }
+
+  async export(_entities: TModel[]): Promise<Response<string>> {
+    throw new Error(
+      'Catalog metadata export requires a native API implementation',
     );
   }
 
-  getCollectionListFromRoot(root: Element) {
-    const response = this.getEntitiesResponse(root);
-    return parseCollectionList<TModel>(response, this.name, this.clazz, {
-      entitiesParseFunc: this.parseInfoEntities,
-      collectionCountParseFunc: parseInfoCounts,
-    });
+  async exportByIds(_ids: string[]): Promise<Response<string>> {
+    throw new Error(
+      'Catalog metadata export requires a native API implementation',
+    );
+  }
+
+  async exportByFilter(_filter: Filter): Promise<Response<string>> {
+    throw new Error(
+      'Catalog metadata export requires a native API implementation',
+    );
+  }
+
+  async delete(_entities: TModel[]): Promise<Response<TModel[], XmlMeta>> {
+    throw new Error('Catalog entries cannot be deleted through this command');
+  }
+
+  async deleteByIds(_ids: string[]): Promise<Response<string[], XmlMeta>> {
+    throw new Error('Catalog entries cannot be deleted through this command');
+  }
+
+  async deleteByFilter(_filter: Filter): Promise<Response<TModel[], XmlMeta>> {
+    throw new Error('Catalog entries cannot be deleted through this command');
   }
 }
 

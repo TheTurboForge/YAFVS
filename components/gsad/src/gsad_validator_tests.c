@@ -27,6 +27,8 @@ Ensure (gsad_validator, reject_removed_credential_download_transport)
 Ensure (gsad_validator, reject_removed_native_only_commands)
 {
   validator_t validator = gsad_get_validator ();
+  assert_that (gvm_validate (validator, "cmd", "get_info"),
+               is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_timezones"),
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_config_nvt"),

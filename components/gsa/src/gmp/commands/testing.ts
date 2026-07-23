@@ -101,17 +101,6 @@ export const createAggregatesResponse = (data = {}) =>
     },
   });
 
-export const createInfoResponse = (infoData: Element) =>
-  createEntityResponse('info', [infoData] as unknown as Element, {
-    responseName: 'get_info_response',
-  });
-
-export const createInfoEntitiesResponse = (entities: Element[]) =>
-  createEntitiesResponse('info', entities, {
-    getName: 'get_info',
-    responseName: 'get_info_response',
-  });
-
 export const createHttp = <TData = Element, TMeta extends Meta = Meta>(
   response?: TData | Response<TData, TMeta>,
   options: Partial<HttpOptions> = {},

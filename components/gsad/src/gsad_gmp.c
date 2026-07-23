@@ -1180,49 +1180,23 @@ export_many (gvm_connection_t *connection, const char *type,
 
   filter_escaped = g_markup_escape_text (filter, -1);
 
-  if (strcmp (type, "info") == 0)
+  if (gvm_connection_sendf (connection,
+                            "<get_%ss"
+                            " export=\"1\""
+                            " details=\"1\""
+                            " filter=\"%s\"/>",
+                            type, filter_escaped ? filter_escaped : "")
+      == -1)
     {
-      if (gvm_connection_sendf (connection,
-                                "<get_info"
-                                " type=\"%s\""
-                                " export=\"1\""
-                                " details=\"1\""
-                                " filter=\"%s\"/>",
-                                params_value (params, "info_type"),
-                                filter_escaped ? filter_escaped : "")
-          == -1)
-        {
-          g_free (filter_escaped);
-          gsad_command_response_data_set_status_code (
-            response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-          return gsad_http_create_gsad_message (
-            credentials,
-            "An internal error occurred while getting a list. "
-            "The list could not be delivered. "
-            "Diagnostics: Failure to send command to manager daemon.",
-            response_data);
-        }
-    }
-  else
-    {
-      if (gvm_connection_sendf (connection,
-                                "<get_%ss"
-                                " export=\"1\""
-                                " details=\"1\""
-                                " filter=\"%s\"/>",
-                                type, filter_escaped ? filter_escaped : "")
-          == -1)
-        {
-          g_free (filter_escaped);
-          gsad_command_response_data_set_status_code (
-            response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-          return gsad_http_create_gsad_message (
-            credentials,
-            "An internal error occurred while getting a list. "
-            "The list could not be delivered. "
-            "Diagnostics: Failure to send command to manager daemon.",
-            response_data);
-        }
+      g_free (filter_escaped);
+      gsad_command_response_data_set_status_code (
+        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "An internal error occurred while getting a list. "
+        "The list could not be delivered. "
+        "Diagnostics: Failure to send command to manager daemon.",
+        response_data);
     }
   g_free (filter_escaped);
 
@@ -1282,10 +1256,7 @@ export_many (gvm_connection_t *connection, const char *type,
       fname_format = "%T-%D";
     }
 
-  if (strcmp (type, "info") == 0)
-    type_many = g_strdup (type);
-  else
-    type_many = g_strdup_printf ("%ss", type);
+  type_many = g_strdup_printf ("%ss", type);
 
   file_name =
     format_file_name (fname_format, credentials, type_many, "list", NULL);
@@ -2146,58 +2117,6 @@ move_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 
   free_entity (entity);
   return html;
-}
-
-/**
- * @brief Get info, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_info_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-              params_t *params, gsad_command_response_data_t *response_data)
-{
-  const gchar *info_type;
-  const gchar *info_name;
-  const gchar *info_id;
-  const gchar *details;
-
-  gmp_arguments_t *arguments;
-
-  info_type = params_value (params, "info_type");
-  info_name = params_value (params, "info_name");
-  info_id = params_value (params, "info_id");
-  details = params_value (params, "details");
-
-  CHECK_VARIABLE_INVALID (info_type, "Get SecInfo")
-
-  arguments = gmp_arguments_new ();
-
-  gmp_arguments_add (arguments, "type", info_type);
-  if (details)
-    {
-      gmp_arguments_add (arguments, "details", details);
-    }
-
-  if (info_id)
-    {
-      gmp_arguments_add (arguments, "info_id", info_id);
-
-      return get_entity (connection, "info", credentials, params, arguments,
-                         response_data);
-    }
-  else if (info_name)
-    {
-      gmp_arguments_add (arguments, "name", info_name);
-    }
-
-  return get_many (connection, "info", credentials, params, arguments,
-                   response_data);
 }
 
 /**
@@ -5635,6 +5554,18 @@ bulk_export_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (type, "Bulk Export")
   CHECK_VARIABLE_INVALID (bulk_select, "Bulk Export")
 
+  if (g_ascii_strcasecmp (type, "info") == 0)
+    {
+      gsad_command_response_data_set_status_code (response_data,
+                                                  MHD_HTTP_BAD_REQUEST);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "Catalog XML bulk export is no longer supported. Use the native CPE, "
+        "CVE, NVT, CERT-Bund, and DFN-CERT JSON metadata export endpoints "
+        "instead.",
+        response_data);
+    }
+
   if (g_ascii_strcasecmp (type, "asset") == 0)
     {
       gsad_command_response_data_set_status_code (response_data,
@@ -6355,7 +6286,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_config)
   ELSE (get_configs)
   ELSE (get_config_family)
-  ELSE (get_info)
   ELSE (get_report)
   ELSE (get_reports)
   ELSE (get_resource_names)

@@ -6,11 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import CpeCommand from 'gmp/commands/cpe';
-import {
-  createActionResultResponse,
-  createHttp,
-  createInfoResponse,
-} from 'gmp/commands/testing';
+import {createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -110,19 +106,13 @@ describe('CpeCommand tests', () => {
     expect(result.data.id).toEqual('cpe:/a:vendor:product:1.0');
   });
 
-  test('should allow to delete a cpe', async () => {
-    const response = createActionResultResponse({id: '123'});
-    const fakeHttp = createHttp(response);
+  test('should reject CPE deletion before making an HTTP request', async () => {
+    const fakeHttp = createHttp();
     const cmd = new CpeCommand(fakeHttp);
-    const result = await cmd.delete({id: '123'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'delete_info',
-        details: '1',
-        info_type: 'cpe',
-        info_id: '123',
-      },
-    });
-    expect(result).toBeUndefined();
+
+    await expect(cmd.delete({id: '123'})).rejects.toThrow(
+      'Catalog entries cannot be deleted through this command',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 });

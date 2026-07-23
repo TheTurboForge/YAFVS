@@ -230,7 +230,7 @@ fn credential_metadata_reads_and_browser_downloads_are_native_only() {
         .split_once("handle_get_credentials (")
         .expect("retained credential metadata handler")
         .1
-        .split_once("handle_get_info (")
+        .split_once("handle_get_nvts (")
         .expect("credential metadata handler boundary")
         .0;
     for retired in [

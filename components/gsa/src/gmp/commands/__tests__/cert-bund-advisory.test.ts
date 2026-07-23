@@ -6,7 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import CertBundAdvisoryCommand from 'gmp/commands/cert-bund-advisory';
-import {createActionResultResponse, createHttp} from 'gmp/commands/testing';
+import {createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -98,19 +98,13 @@ describe('CertBundAdvisoryCommand tests', () => {
     expect(result.data.description).toEqual(['Native detail']);
   });
 
-  test('should allow to delete a cert bund advisory', async () => {
-    const response = createActionResultResponse({id: '123'});
-    const fakeHttp = createHttp(response);
+  test('should reject CERT-Bund deletion before making an HTTP request', async () => {
+    const fakeHttp = createHttp();
     const cmd = new CertBundAdvisoryCommand(fakeHttp);
-    const result = await cmd.delete({id: '123'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'delete_info',
-        details: '1',
-        info_type: 'cert_bund_adv',
-        info_id: '123',
-      },
-    });
-    expect(result).toBeUndefined();
+
+    await expect(cmd.delete({id: '123'})).rejects.toThrow(
+      'Catalog entries cannot be deleted through this command',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 });

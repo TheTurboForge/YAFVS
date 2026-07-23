@@ -45,7 +45,6 @@ gsad_init_validator ()
                      "|(get_config)"
                      "|(get_config_family)"
                      "|(get_configs)"
-                     "|(get_info)"
                      "|(get_report)"
                      "|(get_reports)"
                      "|(get_resource_names)"

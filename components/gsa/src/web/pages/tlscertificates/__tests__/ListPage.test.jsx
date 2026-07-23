@@ -50,6 +50,7 @@ const nativeTlsCertificateItem = {
   serial: '123',
   sha256_fingerprint: '2142',
   md5_fingerprint: '4221',
+  writable: true,
 };
 
 const createGmp = ({

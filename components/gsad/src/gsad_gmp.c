@@ -154,10 +154,6 @@ gmpf (gvm_connection_t *, gsad_credentials_t *, gchar **, entity_t *,
       gsad_command_response_data_t *, const char *, ...);
 
 static char *
-get_alert (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
-           gsad_command_response_data_t *);
-
-static char *
 get_asset (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
            gsad_command_response_data_t *);
 
@@ -3494,186 +3490,6 @@ get_aggregate_gmp (gvm_connection_t *connection,
   g_free (response);
   return envelope_gmp (connection, credentials, params,
                        g_string_free (xml, FALSE), response_data);
-}
-
-/**
- * @brief Delete an alert, get all alerts, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-delete_alert_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                  params_t *params, gsad_command_response_data_t *response_data)
-{
-  return move_resource_to_trash (connection, "alert", credentials, params,
-                                 response_data);
-}
-
-/**
- * @brief Get one alert, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[in]  extra_xml    Extra XML to insert inside page element.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_alert (gvm_connection_t *connection, gsad_credentials_t *credentials,
-           params_t *params, const char *extra_xml,
-           gsad_command_response_data_t *response_data)
-{
-  gmp_arguments_t *arguments;
-  arguments = gmp_arguments_new ();
-
-  gmp_arguments_add (arguments, "tasks", "1");
-
-  return get_one (connection, "alert", credentials, params, NULL, arguments,
-                  response_data);
-}
-
-/**
- * @brief Get one alert, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials   Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_alert_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-               params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_alert (connection, credentials, params, NULL, response_data);
-}
-
-/**
- * @brief Get all alerts, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_alerts_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_many (connection, "alerts", credentials, params, NULL,
-                   response_data);
-}
-
-/**
- * @brief Test an alert, get all alerts envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-test_alert_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                params_t *params, gsad_command_response_data_t *response_data)
-{
-  gchar *html;
-  const char *alert_id;
-  entity_t entity;
-
-  alert_id = params_value (params, "alert_id");
-
-  if (alert_id == NULL)
-    {
-      gsad_command_response_data_set_status_code (response_data,
-                                                  GSAD_STATUS_INVALID_REQUEST);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "Missing parameter alert_id."
-        "Diagnostics: Required parameter was NULL.",
-        response_data);
-    }
-
-  /* Test the alert. */
-
-  if (gvm_connection_sendf (connection, "<test_alert alert_id=\"%s\"/>",
-                            alert_id)
-      == -1)
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while testing an alert. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    }
-
-  entity = NULL;
-  if (read_entity_c (connection, &entity))
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while testing an alert. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    }
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Test Alert", response_data);
-
-  free_entity (entity);
-  return html;
-}
-
-/**
- * @brief Export an alert.
- *
- * @param[in]   connection           Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Alert XML on success.  Enveloped XML on error.
- */
-char *
-export_alert_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                  params_t *params, gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "alert", credentials, params,
-                          response_data);
-}
-
-/**
- * @brief Export a list of alerts.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Alerts XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_alerts_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "alert", credentials, params, response_data);
 }
 
 /**
@@ -7672,8 +7488,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
     }
   ELSE (edit_config_family)
   ELSE (edit_config_family_all)
-  ELSE (export_alert)
-  ELSE (export_alerts)
   ELSE (export_asset)
   ELSE (export_assets)
   ELSE (download_credential)
@@ -7693,8 +7507,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_asset)
   ELSE (get_assets)
   ELSE (get_aggregate)
-  ELSE (get_alert)
-  ELSE (get_alerts)
   ELSE (get_config)
   ELSE (get_configs)
   ELSE (get_config_family)
@@ -7937,7 +7749,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (create_task)
   ELSE (create_target)
   ELSE (delete_asset)
-  ELSE (delete_alert)
   ELSE (delete_config)
   ELSE (delete_credential)
   ELSE (delete_report)
@@ -7958,7 +7769,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (sync_feed)
   ELSE (sync_scap)
   ELSE (sync_cert)
-  ELSE (test_alert)
   else
   {
     gsad_command_response_data_set_status_code (response_data,

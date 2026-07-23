@@ -678,28 +678,6 @@ delete_config_data_reset (delete_config_data_t *data)
 }
 
 /**
- * @brief Command data for the delete_alert command.
- */
-typedef struct
-{
-  char *alert_id;   ///< ID of alert to delete.
-  int ultimate;     ///< Boolean.  Whether to remove entirely or to trashcan.
-} delete_alert_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_alert_data_reset (delete_alert_data_t *data)
-{
-  free (data->alert_id);
-
-  memset (data, 0, sizeof (delete_alert_data_t));
-}
-
-/**
  * @brief Command data for the delete_credential command.
  */
 typedef struct
@@ -895,27 +873,6 @@ get_configs_data_reset (get_configs_data_t *data)
 {
   get_data_reset (&data->get);
   memset (data, 0, sizeof (get_configs_data_t));
-}
-
-/**
- * @brief Command data for the get_alerts command.
- */
-typedef struct
-{
-  get_data_t get;   ///< Get args.
-  int tasks;        ///< Boolean.  Whether to include tasks that use alert.
-} get_alerts_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_alerts_data_reset (get_alerts_data_t *data)
-{
-  get_data_reset (&data->get);
-  memset (data, 0, sizeof (get_alerts_data_t));
 }
 
 /**
@@ -1651,28 +1608,6 @@ scope_command_data_start (scope_command_data_t *data,
 }
 
 /**
- * @brief Command data for the test_alert command.
- */
-typedef struct
-{
-  char *alert_id;   ///< ID of alert to test.
-} test_alert_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-test_alert_data_reset (test_alert_data_t *data)
-{
-  free (data->alert_id);
-
-  memset (data, 0, sizeof (test_alert_data_t));
-}
-
-
-/**
  * @brief Command data, as passed between GMP parser callbacks.
  */
 typedef union
@@ -1684,14 +1619,12 @@ typedef union
   delete_asset_data_t delete_asset;                   ///< delete_asset
   delete_credential_data_t delete_credential;         ///< delete_credential
   delete_config_data_t delete_config;                 ///< delete_config
-  delete_alert_data_t delete_alert;                   ///< delete_alert
   delete_report_data_t delete_report;                 ///< delete_report
   delete_schedule_data_t delete_schedule;             ///< delete_schedule
   delete_target_data_t delete_target;                 ///< delete_target
   delete_task_data_t delete_task;                     ///< delete_task
   get_aggregates_data_t get_aggregates;               ///< get_aggregates
   get_configs_data_t get_configs;                     ///< get_configs
-  get_alerts_data_t get_alerts;                       ///< get_alerts
   get_assets_data_t get_assets;                       ///< get_assets
   get_credentials_data_t get_credentials;             ///< get_credentials
   get_info_data_t get_info;                           ///< get_info
@@ -1717,7 +1650,6 @@ typedef union
   move_task_data_t move_task;                         ///< move_task
   start_task_data_t start_task;                       ///< start_task
   stop_task_data_t stop_task;                         ///< stop_task
-  test_alert_data_t test_alert;                       ///< test_alert
 } command_data_t;
 
 /**
@@ -1777,12 +1709,6 @@ static delete_config_data_t *delete_config_data
  = (delete_config_data_t*) &(command_data.delete_config);
 
 /**
- * @brief Parser callback data for DELETE_ALERT.
- */
-static delete_alert_data_t *delete_alert_data
- = (delete_alert_data_t*) &(command_data.delete_alert);
-
-/**
  * @brief Parser callback data for DELETE_CREDENTIAL.
  */
 static delete_credential_data_t *delete_credential_data
@@ -1824,12 +1750,6 @@ static get_aggregates_data_t *get_aggregates_data
  */
 static get_configs_data_t *get_configs_data
  = &(command_data.get_configs);
-
-/**
- * @brief Parser callback data for GET_ALERTS.
- */
-static get_alerts_data_t *get_alerts_data
- = &(command_data.get_alerts);
 
 /**
  * @brief Parser callback data for GET_ASSETS.
@@ -1975,13 +1895,6 @@ static stop_task_data_t *stop_task_data
  = (stop_task_data_t*) &(command_data.stop_task);
 
 /**
- * @brief Parser callback data for TEST_ALERT.
- */
-static test_alert_data_t *test_alert_data
- = (test_alert_data_t*) &(command_data.test_alert);
-
-
-/**
  * @brief Buffer of output to the client.
  */
 char to_client[TO_CLIENT_BUFFER_SIZE];
@@ -2094,7 +2007,6 @@ typedef enum
   CLIENT_CREATE_TASK_SCHEDULE_PERIODS,
   CLIENT_CREATE_TASK_TARGET,
   CLIENT_CREATE_TASK_USAGE_TYPE,
-  CLIENT_DELETE_ALERT,
   CLIENT_DELETE_ASSET,
   CLIENT_DELETE_CONFIG,
   CLIENT_DELETE_CREDENTIAL,
@@ -2106,7 +2018,6 @@ typedef enum
   CLIENT_GET_AGGREGATES_DATA_COLUMN,
   CLIENT_GET_AGGREGATES_SORT,
   CLIENT_GET_AGGREGATES_TEXT_COLUMN,
-  CLIENT_GET_ALERTS,
   CLIENT_GET_ASSETS,
   CLIENT_GET_CONFIGS,
   CLIENT_GET_CREDENTIALS,
@@ -2193,7 +2104,6 @@ typedef enum
   CLIENT_MOVE_TASK,
   CLIENT_START_TASK,
   CLIENT_STOP_TASK,
-  CLIENT_TEST_ALERT,
 } client_state_t;
 
 /**
@@ -2394,19 +2304,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             create_task_data->alerts = make_array ();
             set_client_state (CLIENT_CREATE_TASK);
           }
-        else if (strcasecmp ("DELETE_ALERT", element_name) == 0)
-          {
-            const gchar* attribute;
-            append_attribute (attribute_names, attribute_values,
-                              "alert_id",
-                              &delete_alert_data->alert_id);
-            if (find_attribute (attribute_names, attribute_values,
-                                "ultimate", &attribute))
-              delete_alert_data->ultimate = strcmp (attribute, "0");
-            else
-              delete_alert_data->ultimate = 0;
-            set_client_state (CLIENT_DELETE_ALERT);
-          }
         else if (strcasecmp ("DELETE_ASSET", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values, "asset_id",
@@ -2572,22 +2469,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
               }
 
             set_client_state (CLIENT_GET_AGGREGATES);
-          }
-        else if (strcasecmp ("GET_ALERTS", element_name) == 0)
-          {
-            const gchar* attribute;
-
-            get_data_parse_attributes (&get_alerts_data->get,
-                                       "alert",
-                                       attribute_names,
-                                       attribute_values);
-            if (find_attribute (attribute_names, attribute_values,
-                                "tasks", &attribute))
-              get_alerts_data->tasks = strcmp (attribute, "0");
-            else
-              get_alerts_data->tasks = 0;
-
-            set_client_state (CLIENT_GET_ALERTS);
           }
         else if (strcasecmp ("GET_ASSETS", element_name) == 0)
           {
@@ -3039,13 +2920,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "task_id",
                               &stop_task_data->task_id);
             set_client_state (CLIENT_STOP_TASK);
-          }
-        else if (strcasecmp ("TEST_ALERT", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values,
-                              "alert_id",
-                              &test_alert_data->alert_id);
-            set_client_state (CLIENT_TEST_ALERT);
           }
         else
           {
@@ -6470,269 +6344,6 @@ handle_get_aggregates (gmp_parser_t *gmp_parser, GError **error)
   cleanup_iterator (&aggregate);
   g_string_free (xml, TRUE);
   get_aggregates_data_reset (get_aggregates_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
- * @brief Handle end of GET_ALERTS element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_alerts (gmp_parser_t *gmp_parser, GError **error)
-{
-  iterator_t alerts;
-  int count, filtered, ret, first;
-
-  INIT_GET (alert, Alert);
-
-  ret = init_alert_iterator (&alerts, &get_alerts_data->get);
-  if (ret)
-    {
-      switch (ret)
-        {
-          case 1:
-            if (send_find_error_to_client ("get_alerts", "alert",
-                                           get_alerts_data->get.id,
-                                           gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          case 2:
-            if (send_find_error_to_client
-                  ("get_alerts", "filter", get_alerts_data->get.filt_id,
-                   gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          case -1:
-            SEND_TO_CLIENT_OR_FAIL
-              (XML_INTERNAL_ERROR ("get_alerts"));
-            break;
-        }
-      get_alerts_data_reset (get_alerts_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  SEND_GET_START ("alert");
-  while (1)
-    {
-      iterator_t data;
-      char *filter_uuid;
-      int notice, message, has_secinfo_type;
-      const char *method;
-
-      ret = get_next (&alerts, &get_alerts_data->get, &first,
-                      &count, init_alert_iterator);
-      if (ret == 1)
-        break;
-      if (ret == -1)
-        {
-          internal_error_send_to_client (error);
-          return;
-        }
-      SEND_GET_COMMON (alert, &get_alerts_data->get,
-                        &alerts);
-
-      /* Filter. */
-
-      filter_uuid = alert_iterator_filter_uuid (&alerts);
-      if (filter_uuid)
-        {
-          SENDF_TO_CLIENT_OR_FAIL ("<filter id=\"%s\">"
-                                   "<name>%s</name>"
-                                   "<trash>%i</trash>",
-                                   filter_uuid,
-                                   alert_iterator_filter_name (&alerts),
-                                   alert_iterator_filter_trash (&alerts));
-          if (alert_iterator_filter_readable (&alerts))
-            SEND_TO_CLIENT_OR_FAIL ("</filter>");
-          else
-            SEND_TO_CLIENT_OR_FAIL ("<permissions/>"
-                                    "</filter>");
-        }
-
-      /* Condition. */
-
-      SENDF_TO_CLIENT_OR_FAIL ("<condition>%s",
-                               alert_condition_name
-                               (alert_iterator_condition (&alerts)));
-      init_alert_data_iterator (&data, get_iterator_resource (&alerts),
-                                get_alerts_data->get.trash,
-                                "condition");
-      while (next (&data))
-        SENDF_TO_CLIENT_OR_FAIL ("<data>"
-                                 "<name>%s</name>"
-                                 "%s"
-                                 "</data>",
-                                 alert_data_iterator_name (&data),
-                                 alert_data_iterator_data (&data));
-      cleanup_iterator (&data);
-
-      SEND_TO_CLIENT_OR_FAIL ("</condition>");
-
-      /* Event. */
-
-      SENDF_TO_CLIENT_OR_FAIL ("<event>%s",
-                                event_name (alert_iterator_event (&alerts)));
-      init_alert_data_iterator (&data, get_iterator_resource (&alerts),
-                                get_alerts_data->get.trash, "event");
-      has_secinfo_type = 0;
-      while (next (&data))
-        {
-          if (strcmp (alert_data_iterator_name (&data), "secinfo_type")
-              == 0)
-            has_secinfo_type = 1;
-          SENDF_TO_CLIENT_OR_FAIL ("<data>"
-                                   "<name>%s</name>"
-                                   "%s"
-                                   "</data>",
-                                   alert_data_iterator_name (&data),
-                                   alert_data_iterator_data (&data));
-        }
-      if ((alert_iterator_event (&alerts) == EVENT_NEW_SECINFO
-            || alert_iterator_event (&alerts) == EVENT_UPDATED_SECINFO)
-          && (has_secinfo_type == 0))
-        SENDF_TO_CLIENT_OR_FAIL ("<data>"
-                                 "<name>secinfo_type</name>"
-                                 "NVT"
-                                 "</data>");
-      cleanup_iterator (&data);
-      SEND_TO_CLIENT_OR_FAIL ("</event>");
-
-      /* Method. */
-
-      method = alert_method_name (alert_iterator_method (&alerts));
-      SENDF_TO_CLIENT_OR_FAIL ("<method>%s", method);
-      init_alert_data_iterator (&data, get_iterator_resource (&alerts),
-                                get_alerts_data->get.trash, "method");
-      notice = -1;
-      message = 0;
-      while (next (&data))
-        {
-          const char *name;
-          name = alert_data_iterator_name (&data);
-          if (strcmp (name, "notice") == 0)
-            notice = atoi (alert_data_iterator_data (&data));
-          else if (strcmp (method, "Email") == 0
-                    && strcmp (name, "message") == 0)
-            {
-              if (strlen (alert_data_iterator_data (&data)) == 0)
-                continue;
-              message = 1;
-            }
-
-          if (strcmp (name, "scp_credential") == 0)
-            {
-              // Username + Password credentials
-              const char *credential_id;
-              credential_t credential;
-              credential_id = alert_data_iterator_data (&data);
-              if (find_credential_with_permission (credential_id,
-                                                   &credential,
-                                                   "get_credentials"))
-                {
-                  abort ();
-                }
-              else if (credential == 0)
-                {
-                  SENDF_TO_CLIENT_OR_FAIL ("<data>"
-                                           "<name>%s</name>"
-                                           "%s"
-                                           "</data>",
-                                           name,
-                                           credential_id);
-                }
-              else
-                {
-                  gchar *cred_name, *username;
-                  cred_name = credential_name (credential);
-                  username = credential_value (credential, "username");
-
-                  SENDF_TO_CLIENT_OR_FAIL ("<data>"
-                                           "<name>%s</name>"
-                                           "<credential id=\"%s\">"
-                                           "<name>%s</name>"
-                                           "<login>%s</login>"
-                                           "</credential>"
-                                           "%s"
-                                           "</data>",
-                                           name,
-                                           credential_id,
-                                           cred_name,
-                                           username,
-                                           credential_id);
-
-                  g_free (cred_name);
-                  g_free (username);
-                }
-            }
-          else
-            {
-              SENDF_TO_CLIENT_OR_FAIL ("<data>"
-                                       "<name>%s</name>"
-                                       "%s"
-                                       "</data>",
-                                       name,
-                                       alert_data_iterator_data (&data));
-            }
-        }
-      /* If there is no email message data, send the default. */
-      if (strcmp (method, "Email") == 0
-          && message == 0
-          && (notice == 0 || notice == 2))
-        SENDF_TO_CLIENT_OR_FAIL ("<data>"
-                                 "<name>message</name>"
-                                 "%s"
-                                 "</data>",
-                                 notice == 0
-                                  ? ALERT_MESSAGE_INCLUDE
-                                  : ALERT_MESSAGE_ATTACH);
-      cleanup_iterator (&data);
-      SEND_TO_CLIENT_OR_FAIL ("</method>");
-
-      if (get_alerts_data->tasks)
-        {
-          iterator_t tasks;
-
-          SEND_TO_CLIENT_OR_FAIL ("<tasks>");
-          init_alert_task_iterator (&tasks,
-                                    get_iterator_resource (&alerts), 0);
-          while (next (&tasks))
-            {
-              SENDF_TO_CLIENT_OR_FAIL ("<task id=\"%s\">"
-                                       "<name>%s</name>",
-                                       alert_task_iterator_uuid (&tasks),
-                                       alert_task_iterator_name (&tasks));
-
-              if (alert_task_iterator_readable (&tasks))
-                SEND_TO_CLIENT_OR_FAIL ("</task>");
-              else
-                SEND_TO_CLIENT_OR_FAIL ("<permissions/>"
-                                        "</task>");
-            }
-          cleanup_iterator (&tasks);
-          SEND_TO_CLIENT_OR_FAIL ("</tasks>");
-        }
-
-      SENDF_TO_CLIENT_OR_FAIL ("<active>%i</active>"
-                               "</alert>",
-                               alert_iterator_active (&alerts));
-      count++;
-    }
-  cleanup_iterator (&alerts);
-  filtered = get_alerts_data->get.id
-              ? 1
-              : alert_count (&get_alerts_data->get);
-  SEND_GET_END ("alert", &get_alerts_data->get, count, filtered);
-
-  get_alerts_data_reset (get_alerts_data);
   set_client_state (CLIENT_AUTHENTIC);
 }
 
@@ -11714,9 +11325,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         set_client_state (CLIENT_AUTHENTICATE_CREDENTIALS);
         break;
 
-
-      CASE_DELETE (ALERT, alert, "Alert");
-
       case CLIENT_DELETE_ASSET:
         if (delete_asset_data->asset_id
             || delete_asset_data->report_id)
@@ -11958,10 +11566,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_GET_AGGREGATES, DATA_COLUMN);
       CLOSE (CLIENT_GET_AGGREGATES, SORT);
       CLOSE (CLIENT_GET_AGGREGATES, TEXT_COLUMN);
-
-      case CLIENT_GET_ALERTS:
-        handle_get_alerts (gmp_parser, error);
-        break;
 
       case CLIENT_GET_ASSETS:
         handle_get_assets (gmp_parser, error);
@@ -14381,94 +13985,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
           }
           move_task_data_reset (move_task_data);
           set_client_state (CLIENT_AUTHENTIC);
-        break;
-
-      case CLIENT_TEST_ALERT:
-        if (test_alert_data->alert_id)
-          {
-            gchar *script_message = NULL;
-            switch (manage_test_alert (test_alert_data->alert_id,
-                                       &script_message))
-              {
-                case 0:
-                  SEND_TO_CLIENT_OR_FAIL (XML_OK ("test_alert"));
-                  break;
-                case 1:
-                  if (send_find_error_to_client
-                       ("test_alert", "alert", test_alert_data->alert_id,
-                        gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("test_alert",
-                                      "Permission denied"));
-                  break;
-                case 2:
-                case -1:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_INTERNAL_ERROR ("test_alert"));
-                  break;
-                case -2:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("test_alert",
-                                      "Failed to find report format for"
-                                      " alert"));
-                  break;
-                case -3:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("test_alert",
-                                      "Failed to find filter for alert"));
-                  break;
-                case -4:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("test_alert",
-                                      "Failed to find credential for alert"));
-                  break;
-                case -5:
-                  if (script_message)
-                    {
-                      gchar *msg;
-                      msg = g_markup_printf_escaped
-                              ("<test_alert_response status=\"400\""
-                               " status_text=\"Alert script failed\">"
-                               "<status_details>%s</status_details>"
-                               "</test_alert_response>",
-                               script_message);
-
-                      if (send_to_client (msg, gmp_parser->client_writer,
-                                          gmp_parser->client_writer_data))
-                        {
-                          error_send_to_client (error);
-                          g_free (msg);
-                          return;
-                        }
-                      g_free (msg);
-                    }
-                  else
-                    {
-                      SEND_TO_CLIENT_OR_FAIL
-                      (XML_ERROR_SYNTAX ("test_alert",
-                                         "Alert script failed"));
-                    }
-                  break;
-                default: /* Programming error. */
-                  assert (0);
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_INTERNAL_ERROR ("test_alert"));
-                  break;
-              }
-          }
-        else
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("test_alert",
-                              "An alert_id"
-                              " attribute is required"));
-        test_alert_data_reset (test_alert_data);
-        set_client_state (CLIENT_AUTHENTIC);
         break;
 
       case CLIENT_START_TASK:

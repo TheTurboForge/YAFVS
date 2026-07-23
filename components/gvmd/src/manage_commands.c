@@ -37,7 +37,6 @@ command_t gmp_commands[]
     {"CREATE_CREDENTIAL", "Create a credential."},
     {"CREATE_TARGET", "Create a target."},
     {"CREATE_TASK", "Create a task."},
-    {"DELETE_ALERT", "Delete an alert."},
     {"DELETE_ASSET", "Delete an asset."},
     {"DELETE_CONFIG", "Delete a config."},
     {"DELETE_CREDENTIAL", "Delete a credential."},
@@ -46,7 +45,6 @@ command_t gmp_commands[]
     {"DELETE_TARGET", "Delete a target."},
     {"DELETE_TASK", "Delete a task."},
     {"GET_AGGREGATES", "Get aggregates of resources."},
-    {"GET_ALERTS", "Get all alerts."},
     {"GET_ASSETS", "Get all assets."},
     {"GET_CONFIGS", "Get all configs."},
     {"GET_CREDENTIALS", "Get all credentials."},
@@ -73,13 +71,15 @@ command_t gmp_commands[]
     {"MOVE_TASK", "Assign task to another slave scanner, even while running."},
     {"START_TASK", "Manually start an existing task."},
     {"STOP_TASK", "Stop a running task."},
-    {"TEST_ALERT", "Run an alert."},
     {NULL, NULL}};
 
 /* Native control paths can retain gvmd ACL operation keys after their public
  * GMP parser, help, and schema surfaces are removed. */
 static const char *native_acl_operations[] = {
   "CREATE_ALERT",
+  "DELETE_ALERT",
+  "GET_ALERTS",
+  "TEST_ALERT",
   "CREATE_USER",
   "CREATE_PORT_LIST",
   "CREATE_REPORT_FORMAT",

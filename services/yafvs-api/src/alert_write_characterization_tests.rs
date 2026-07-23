@@ -8,6 +8,7 @@ use std::path::Path;
 use crate::direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed};
 
 const GSA_ALERT_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/alert.ts");
+const GSA_ALERTS_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/alerts.ts");
 const GSA_ALLOWED_SNAKE_CASE: &str =
     include_str!("../../../components/gsa/eslint-script/allowedSnakeCase.js");
 const GSA_ALERT_MODEL: &str = include_str!("../../../components/gsa/src/gmp/models/alert.ts");
@@ -24,6 +25,8 @@ const GSA_ZH_CN_LOCALE: &str =
 const GSA_ZH_TW_LOCALE: &str =
     include_str!("../../../components/gsa/public/locales/gsa-zh_TW.json");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSAD_GMP_H: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
+const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GVMD_CMAKE: &str = include_str!("../../../components/gvmd/CMakeLists.txt");
 const GVMD_GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GVMD_MANAGE_COMMANDS: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
@@ -50,6 +53,12 @@ fn inherited_function(source: &str, name: &str) -> String {
     let tail = &source[start..];
     let end = tail.find("\n/**").unwrap_or(tail.len());
     tail[..end].to_string()
+}
+
+fn contains_c_identifier(source: &str, identifier: &str) -> bool {
+    source
+        .split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+        .any(|token| token == identifier)
 }
 
 #[test]
@@ -487,6 +496,7 @@ fn gsad_and_gsa_alert_definition_paths_are_native_only() {
 
     for required in [
         "fetchNativeAlertDefinition",
+        "exportNativeAlertMetadata",
         "replaceNativeAlertDefinition",
         "createNativeAlert",
         "cloneNativeAlert",
@@ -496,6 +506,42 @@ fn gsad_and_gsa_alert_definition_paths_are_native_only() {
         assert!(
             GSA_ALERT_COMMAND.contains(required),
             "GSA native Alert command missing {required}"
+        );
+    }
+
+    for required in ["fetchNativeAlerts", "exportNativeAlertsMetadata"] {
+        assert!(
+            GSA_ALERTS_COMMAND.contains(required),
+            "GSA native Alert collection command missing {required}"
+        );
+    }
+
+    for retired in [
+        "get_alert",
+        "get_alert_gmp",
+        "get_alerts_gmp",
+        "export_alert_gmp",
+        "export_alerts_gmp",
+        "delete_alert_gmp",
+        "test_alert_gmp",
+    ] {
+        assert!(
+            !contains_c_identifier(GSAD_GMP_C, retired),
+            "gsad implementation still contains retired Alert alias {retired}"
+        );
+        assert!(
+            !contains_c_identifier(GSAD_GMP_H, retired),
+            "gsad header still declares retired Alert alias {retired}"
+        );
+        let dispatch = format!("ELSE ({})", retired.trim_end_matches("_gmp"));
+        assert!(
+            !GSAD_GMP_C.contains(&dispatch),
+            "gsad still dispatches retired Alert alias {retired}"
+        );
+        let validator = format!("|({})", retired.trim_end_matches("_gmp"));
+        assert!(
+            !GSAD_VALIDATOR_C.contains(&validator),
+            "gsad validator still accepts retired Alert alias {retired}"
         );
     }
 

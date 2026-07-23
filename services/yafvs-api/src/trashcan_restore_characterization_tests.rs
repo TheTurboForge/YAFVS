@@ -95,7 +95,6 @@ fn trashcan_inventory_is_native_only_and_has_no_gmp_fallback() {
 
     let normalized_gvmd_gmp = GVMD_GMP.split_whitespace().collect::<Vec<_>>().join(" ");
     for (data, resource_type) in [
-        ("get_alerts_data", "alert"),
         ("get_configs_data", "config"),
         ("get_credentials_data", "credential"),
         ("get_overrides_data", "override"),
@@ -112,6 +111,10 @@ fn trashcan_inventory_is_native_only_and_has_no_gmp_fallback() {
             "raw manager trash compatibility lost {resource_type} attribute parsing"
         );
     }
+    assert!(
+        !GVMD_GMP.contains("get_alerts_data"),
+        "retired public GET_ALERTS parser data must stay absent"
+    );
     assert!(!GVMD_GMP.contains("get_report_formats_data"));
     assert!(
         !GVMD_GMP.contains("get_tags_data"),

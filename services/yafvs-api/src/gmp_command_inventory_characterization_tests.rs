@@ -7,6 +7,10 @@ use std::collections::BTreeSet;
 
 const GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const MANAGE_COMMANDS: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
+const MANAGE_ALERTS: &str = include_str!("../../../components/gvmd/src/manage_alerts.c");
+const MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
+const MANAGE_SQL_ALERTS: &str = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
+const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 
 fn advertised_commands() -> BTreeSet<String> {
     let block = MANAGE_COMMANDS
@@ -101,10 +105,13 @@ fn retired_public_commands_keep_only_live_native_authority_keys() {
         "CREATE_USER",
         "CREATE_PORT_LIST",
         "CREATE_REPORT_FORMAT",
+        "DELETE_ALERT",
         "DELETE_USER",
         "EMPTY_TRASHCAN",
+        "GET_ALERTS",
         "GET_USERS",
         "MODIFY_USER",
+        "TEST_ALERT",
     ];
 
     for command in [
@@ -115,6 +122,7 @@ fn retired_public_commands_keep_only_live_native_authority_keys() {
         "CREATE_REPORT_FORMAT",
         "CREATE_SCOPE",
         "CREATE_USER",
+        "DELETE_ALERT",
         "DELETE_FILTER",
         "DELETE_PORT_LIST",
         "DELETE_PORT_RANGE",
@@ -123,6 +131,7 @@ fn retired_public_commands_keep_only_live_native_authority_keys() {
         "DELETE_USER",
         "DESCRIBE_AUTH",
         "EMPTY_TRASHCAN",
+        "GET_ALERTS",
         "GET_USERS",
         "MODIFY_AUTH",
         "MODIFY_FILTER",
@@ -131,6 +140,7 @@ fn retired_public_commands_keep_only_live_native_authority_keys() {
         "MODIFY_SCOPE",
         "MODIFY_USER",
         "SYNC_CONFIG",
+        "TEST_ALERT",
         "VERIFY_REPORT_FORMAT",
     ] {
         assert!(
@@ -143,4 +153,31 @@ fn retired_public_commands_keep_only_live_native_authority_keys() {
             "retired command {command} has the wrong native authority classification"
         );
     }
+
+    for command in ["DELETE_ALERT", "GET_ALERTS", "TEST_ALERT"] {
+        let lower = command.to_ascii_lowercase();
+        assert!(
+            !GMP.contains(&format!("strcasecmp (\"{command}\"")),
+            "raw GMP parser still accepts retired command {command}"
+        );
+        assert!(
+            !MANAGE_COMMANDS.contains(&format!("{{\"{command}\",")),
+            "GMP HELP still advertises retired command {command}"
+        );
+        assert!(
+            !GMP_SCHEMA.contains(&format!("<name>{lower}</name>")),
+            "live GMP schema still documents retired command {command}"
+        );
+        assert!(
+            native_acl.contains(command),
+            "native authorization must retain {command}"
+        );
+    }
+
+    assert!(MANAGE_SQL_ALERTS.contains("delete_alert ("));
+    assert!(MANAGE_ALERTS.contains("manage_test_alert"));
+    assert!(MANAGE_SQL_ALERTS.contains("\"delete_alert\""));
+    assert!(MANAGE_ALERTS.contains("\"test_alert\""));
+    assert!(MANAGE_SQL.contains("\"get_alerts\""));
+    assert!(GMP_SCHEMA.contains("<command>GET_ALERTS</command>"));
 }

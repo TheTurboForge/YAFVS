@@ -170,6 +170,20 @@ sys.modules["runtime_full_test_scan"] = runtime_full_test_scan
 FULL_TEST_SCAN_SPEC.loader.exec_module(runtime_full_test_scan)
 TEST_FULL_TEST_TARGET = runtime_full_test_scan.parse_full_test_target("192.0.2.0/24")
 
+
+def credential_smoke_material_run(command, **kwargs):
+    if len(command) > 1 and command[1] == "genpkey":
+        Path(command[command.index("-out") + 1]).write_text(
+            "synthetic client key fixture\n",
+            encoding="utf-8",
+        )
+    if len(command) > 1 and command[1] == "req":
+        Path(command[command.index("-out") + 1]).write_text(
+            "-----BEGIN CERTIFICATE-----\nQUFBQQ==\n-----END CERTIFICATE-----\n",
+            encoding="utf-8",
+        )
+    return subprocess.CompletedProcess(command, 0, "")
+
 RUNTIME_SCOPE_PATH = Path(__file__).resolve().parents[1] / "runtime_scope.py"
 RUNTIME_SCOPE_SPEC = importlib.util.spec_from_loader("runtime_scope", SourceFileLoader("runtime_scope", str(RUNTIME_SCOPE_PATH)))
 runtime_scope = importlib.util.module_from_spec(RUNTIME_SCOPE_SPEC)
@@ -3472,6 +3486,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 }
             ],
         )
+
         for item in compact["findings"]:
             finding_details = item.get("details", {})
             self.assertNotIn("inventory_endpoints", finding_details)
@@ -8415,6 +8430,12 @@ class YAFVSCtlTests(unittest.TestCase):
             "input[name=\"comment\"]",
             "setInputFiles(config.sshPrivateKeyPath)",
             "page.waitForResponse",
+            "isCredentialCreateResponse",
+            "credentialIdFromCreateResponse",
+            "id ? 'create-response' : null",
+            "if (id) identitySource = 'list-response'",
+            "if (id) identitySource = 'native-marker-recovery'",
+            "Create Credential",
             "headers['content-type']",
             "headers['content-disposition']",
             "MAX_DECLARED_DOWNLOAD_BYTES",
@@ -8422,7 +8443,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "captureDownloadRequest",
             "'**/api/v1/credentials/*/public-key?*'",
             "request.method() === 'GET'",
-            "url.pathname === expectedPath",
+            "url.pathname === `/api/v1/credentials/${encodeURIComponent(credentialId)}/public-key`",
             "route.abort('blockedbyclient')",
             "boundedAuthenticatedGet",
             "'accept-encoding': 'identity'",
@@ -8738,6 +8759,265 @@ const page = {reload: async () => null};
             },
         )
 
+    def test_runtime_credential_client_certificate_characterization_contract(self):
+        source = runtime_credential_smoke.BROWSER_SCRIPT
+        helper_source = CREDENTIAL_SMOKE_PATH.read_text(encoding="utf-8")
+        for anchor in (
+            "Download Client Certificate",
+            "package_format') === 'pem'",
+            "kind: 'cc'",
+            "typeLabel: 'Client Certificate'",
+            "input[name=\"certificate\"]",
+            "input[name=\"passphrase\"]",
+            "await passphrase.fill(credentialPassword)",
+            "clientCertificateMetadata",
+            "-----BEGIN CERTIFICATE-----",
+            "containsPrivateKeyMarker",
+            "containsConfiguredSecret",
+            "contentEncoding === 'identity'",
+            "certificateCleaned = certificateFixture ? await safelyDeleteCredential",
+            "[upFixture, sshFixture, certificateFixture]",
+            "credentialDownloadRequestMatches",
+            "recoverOwnedCredentialIdentity",
+            "item.comment === expected.ownershipMarker",
+            "matches.length === 1",
+            "async function safelyDeleteCredential",
+        ):
+            self.assertIn(anchor, source)
+        for anchor in (
+            'kind not in {"up", "usk", "cc"}',
+            'name.endswith("-cert")',
+            '"openssl"',
+            '"genpkey"',
+            '"-algorithm"',
+            '"RSA"',
+            '"rsa_keygen_bits:2048"',
+            '"req"',
+            '"-x509"',
+            '"-out"',
+            'timeout=30',
+            'clientCertificateSha256',
+        ):
+            self.assertIn(anchor, helper_source)
+        fixture = {
+            "kind": "cc",
+            "name": "yafvs-credential-smoke-001122aa-cert",
+            "id": "a0000000-0000-4000-8000-000000000001",
+            "baseUrl": "https://one.example/",
+            "ownershipMarker": "yafvs-smoke:" + "a" * 43,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            artifact_dir = Path(tmp)
+            (artifact_dir / "credential-smoke-state.json").write_text(
+                json.dumps({"fixtures": [fixture]}), encoding="utf-8"
+            )
+            self.assertEqual(
+                runtime_credential_smoke.load_owned_fixtures(
+                    artifact_dir, {"https://one.example/"}
+                ),
+                [fixture],
+            )
+            fixture["name"] = "yafvs-credential-smoke-001122aa"
+            (artifact_dir / "credential-smoke-state.json").write_text(
+                json.dumps({"fixtures": [fixture]}), encoding="utf-8"
+            )
+            with self.assertRaises(ValueError):
+                runtime_credential_smoke.load_owned_fixtures(
+                    artifact_dir, {"https://one.example/"}
+                )
+
+    def test_runtime_credential_certificate_metadata_rejects_key_material_and_mismatch(self):
+        source = runtime_credential_smoke.BROWSER_SCRIPT
+        start = source.index("function clientCertificateMetadata")
+        end = source.index("function declaredContentLength", start)
+        helper = source[start:end]
+        script = helper + r"""
+const crypto = require('crypto');
+const certificate = Buffer.from(
+  '-----BEGIN CERTIFICATE-----\nQUFBQQ==\n-----END CERTIFICATE-----\n',
+);
+const fingerprint = crypto.createHash('sha256').update(certificate).digest('hex');
+const keyMarker = '-----BEGIN ' + 'PRIVATE KEY-----\nQUFBQQ==\n-----END ' + 'PRIVATE KEY-----\n';
+const bundle = Buffer.concat([certificate, Buffer.from(keyMarker)]);
+const chain = Buffer.concat([certificate, certificate]);
+console.log(JSON.stringify({
+  exact: clientCertificateMetadata(certificate, fingerprint),
+  bundle: clientCertificateMetadata(bundle, fingerprint),
+  chain: clientCertificateMetadata(chain, crypto.createHash('sha256').update(chain).digest('hex')),
+  mismatch: clientCertificateMetadata(certificate, '0'.repeat(64)),
+}));
+"""
+        completed = subprocess.run(
+            ["node", "-e", script],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10,
+        )
+        result = json.loads(completed.stdout)
+        self.assertEqual(
+            result["exact"],
+            {
+                "pemOnly": True,
+                "containsPrivateKeyMarker": False,
+                "fingerprintMatched": True,
+            },
+        )
+        self.assertFalse(result["bundle"]["pemOnly"])
+        self.assertTrue(result["bundle"]["containsPrivateKeyMarker"])
+        self.assertFalse(result["bundle"]["fingerprintMatched"])
+        self.assertTrue(result["chain"]["pemOnly"])
+        self.assertFalse(result["chain"]["containsPrivateKeyMarker"])
+        self.assertTrue(result["chain"]["fingerprintMatched"])
+        self.assertFalse(result["mismatch"]["fingerprintMatched"])
+
+    def test_runtime_credential_certificate_request_matcher_is_exact(self):
+        source = runtime_credential_smoke.BROWSER_SCRIPT
+        start = source.index("function credentialDownloadRequestMatches")
+        end = source.index("async function captureDownloadRequest", start)
+        helper = source[start:end]
+        credential_id = "a0000000-0000-4000-8000-000000000001"
+        script = helper + f"""
+const config = {{baseUrl: 'https://one.example/'}};
+const credentialId = {json.dumps(credential_id)};
+function request(method, url) {{
+  return {{method: () => method, url: () => url}};
+}}
+const expected = 'https://one.example/gmp?cmd=download_credential&package_format=pem&credential_id=' + credentialId;
+console.log(JSON.stringify({{
+  expected: credentialDownloadRequestMatches(request('GET', expected), 'certificate', credentialId),
+  wrongMethod: credentialDownloadRequestMatches(request('POST', expected), 'certificate', credentialId),
+  wrongOrigin: credentialDownloadRequestMatches(request('GET', expected.replace('one.example', 'two.example')), 'certificate', credentialId),
+  wrongPath: credentialDownloadRequestMatches(request('GET', expected.replace('/gmp?', '/other?')), 'certificate', credentialId),
+  wrongFormat: credentialDownloadRequestMatches(request('GET', expected.replace('package_format=pem', 'package_format=key')), 'certificate', credentialId),
+  wrongId: credentialDownloadRequestMatches(request('GET', expected.replace(credentialId, 'b0000000-0000-4000-8000-000000000002')), 'certificate', credentialId),
+}}));
+"""
+        completed = subprocess.run(
+            ["node", "-e", script],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(
+            json.loads(completed.stdout),
+            {
+                "expected": True,
+                "wrongMethod": False,
+                "wrongOrigin": False,
+                "wrongPath": False,
+                "wrongFormat": False,
+                "wrongId": False,
+            },
+        )
+
+    def test_runtime_credential_create_response_identity_is_strict(self):
+        source = runtime_credential_smoke.BROWSER_SCRIPT
+        start = source.index("function isCredentialCreateResponse")
+        end = source.index("async function deleteNativeTrashCredential", start)
+        helper = source[start:end]
+        credential_id = "a0000000-0000-4000-8000-000000000001"
+        script = helper + f"""
+const config = {{baseUrl: 'https://one.example/'}};
+function response(method, url, body, status, text) {{
+  return {{
+    request: () => ({{method: () => method, postData: () => body}}),
+    url: () => url,
+    status: () => status,
+    text: async () => text,
+  }};
+}}
+const expected = response(
+  'POST',
+  'https://one.example/gmp',
+  '',
+  200,
+  '<envelope><action_result><action>Create Credential</action><message>OK</message><id>{credential_id}</id></action_result></envelope>',
+);
+const wrongOrigin = response(
+  'POST',
+  'https://two.example/gmp?cmd=create_credential',
+  '',
+  200,
+  '<action_result><action>Create Credential</action><id>{credential_id}</id></action_result>',
+);
+const ambiguous = response(
+  'POST',
+  'https://one.example/gmp?cmd=create_credential',
+  '',
+  200,
+  '<action_result><action>Create Target</action><id>{credential_id}</id></action_result>',
+);
+Promise.all([
+  credentialIdFromCreateResponse(expected),
+  credentialIdFromCreateResponse(ambiguous),
+]).then(([id, ambiguousId]) => {{
+  console.log(JSON.stringify({{
+    matches: isCredentialCreateResponse(expected),
+    wrongOrigin: isCredentialCreateResponse(wrongOrigin),
+    id,
+    ambiguousId,
+  }}));
+}});
+"""
+        completed = subprocess.run(
+            ["node", "-e", script],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(
+            json.loads(completed.stdout),
+            {
+                "matches": True,
+                "wrongOrigin": False,
+                "id": credential_id,
+                "ambiguousId": None,
+            },
+        )
+
+    def test_runtime_credential_cleanup_exception_is_bounded(self):
+        source = runtime_credential_smoke.BROWSER_SCRIPT
+        start = source.index("async function safelyDeleteCredential")
+        end = source.index("async function runForBaseUrl", start)
+        helper = source[start:end]
+        script = helper + r"""
+const findings = [];
+function add(status, check, message, details) {
+  findings.push({status, check, message, details});
+}
+function safeError(error) {
+  return String(error);
+}
+async function deleteCredential() {
+  throw new Error('bounded cleanup failure');
+}
+const fixture = {kind: 'cc', name: 'owned', id: 'a0000000-0000-4000-8000-000000000001'};
+safelyDeleteCredential({}, fixture).then(result => {
+  console.log(JSON.stringify({result, findings}));
+});
+"""
+        completed = subprocess.run(
+            ["node", "-e", script],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10,
+        )
+        result = json.loads(completed.stdout)
+        self.assertFalse(result["result"])
+        self.assertEqual(len(result["findings"]), 1)
+        self.assertEqual(
+            result["findings"][0]["check"],
+            "credential-smoke.cc.cleanup-exception",
+        )
+
     def test_runtime_credential_smoke_rejects_noncanonical_or_malformed_state(self):
         valid = {
             "kind": "up",
@@ -8871,6 +9151,7 @@ const page = {reload: async () => null};
                 )
                 + "\n",
             )
+
             with (
                 unittest.mock.patch.object(
                     runtime_credential_smoke,
@@ -8880,7 +9161,7 @@ const page = {reload: async () => null};
                 unittest.mock.patch.object(
                     runtime_credential_smoke.subprocess,
                     "run",
-                    return_value=subprocess.CompletedProcess([], 0, ""),
+                    side_effect=credential_smoke_material_run,
                 ),
                 unittest.mock.patch.object(
                     runtime_credential_smoke,
@@ -8914,7 +9195,10 @@ const page = {reload: async () => null};
                 )
             )
             self.assertEqual(config["sshCredentialName"], "test-ssh")
+            self.assertEqual(config["clientCertificateName"], "test-cert")
             self.assertTrue(config["sshPrivateKeyPath"].endswith("/id_ed25519"))
+            self.assertTrue(config["clientCertificatePath"].endswith("/client-certificate.pem"))
+            self.assertNotIn("clientCertificateSha256", json.dumps(result))
             self.assertEqual(config["baseUrls"], ["https://127.0.0.1:19392/"])
             for secret in ("environment-password", "admin-secret", "url-secret"):
                 self.assertNotIn(secret, serialized)
@@ -8951,7 +9235,7 @@ const page = {reload: async () => null};
                 unittest.mock.patch.object(
                     runtime_credential_smoke.subprocess,
                     "run",
-                    return_value=subprocess.CompletedProcess([], 0, ""),
+                    side_effect=credential_smoke_material_run,
                 ),
                 unittest.mock.patch.object(
                     runtime_credential_smoke,
@@ -9062,6 +9346,59 @@ const page = {reload: async () => null};
             )
             run.assert_not_called()
 
+    def test_runtime_credential_smoke_fails_before_node_without_openssl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            password_file = root / "admin-password"
+            password_file.write_text("admin\n", encoding="utf-8")
+            args = runtime_credential_smoke.build_parser().parse_args(
+                [
+                    "--base-url",
+                    "https://127.0.0.1:19392",
+                    "--username",
+                    "admin",
+                    "--password-file",
+                    str(password_file),
+                    "--artifact-dir",
+                    str(root / "artifacts"),
+                    "--credential-name",
+                    "test",
+                ]
+            )
+            which_results = {
+                "ssh-keygen": "/usr/bin/ssh-keygen",
+                "openssl": None,
+            }
+            with (
+                unittest.mock.patch.object(
+                    runtime_credential_smoke,
+                    "playwright_node_path_candidates",
+                    return_value=["/tmp/node_modules"],
+                ),
+                unittest.mock.patch.object(
+                    runtime_credential_smoke.shutil,
+                    "which",
+                    side_effect=which_results.get,
+                ),
+                unittest.mock.patch.object(
+                    runtime_credential_smoke.subprocess, "run"
+                ) as run,
+                unittest.mock.patch.dict(
+                    os.environ,
+                    {
+                        "YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD": "credential-password"
+                    },
+                    clear=False,
+                ),
+            ):
+                result = runtime_credential_smoke.run_credential_smoke(args)
+
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(
+                result["findings"][0]["check"], "credential-smoke.openssl"
+            )
+            run.assert_not_called()
+
     def test_runtime_credential_smoke_bounds_node_timeout_and_redacts_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -9134,7 +9471,7 @@ const page = {reload: async () => null};
                 unittest.mock.patch.object(
                     runtime_credential_smoke.subprocess,
                     "run",
-                    return_value=subprocess.CompletedProcess([], 0, ""),
+                    side_effect=credential_smoke_material_run,
                 ),
                 unittest.mock.patch.object(
                     runtime_credential_smoke,

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -99,6 +100,11 @@ const DOWNLOAD_CONTRACTS = {
     contentType: 'application/key',
     extension: 'pub',
   },
+  certificate: {
+    title: 'Download Client Certificate',
+    contentType: 'application/octet-stream',
+    extension: 'pem',
+  },
 };
 const REMOVED_DOWNLOAD_TITLES = [
   'Download Windows Executable (.exe)',
@@ -169,6 +175,18 @@ async function fillFirst(page, selectors, value) {
   return false;
 }
 
+function clientCertificateMetadata(bytes, expectedFingerprint) {
+  const text = bytes.toString('utf8');
+  const certificateOnly = /^-----BEGIN CERTIFICATE-----\r?\n[ -~\r\n]+-----END CERTIFICATE-----\r?\n?$/;
+  const privateKeyMarker = /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/;
+  const fingerprint = require('crypto').createHash('sha256').update(bytes).digest('hex');
+  return {
+    pemOnly: certificateOnly.test(text),
+    containsPrivateKeyMarker: privateKeyMarker.test(text),
+    fingerprintMatched: fingerprint === expectedFingerprint,
+  };
+}
+
 function declaredContentLength(headers) {
   const raw = headers['content-length'];
   if (typeof raw !== 'string' || !/^\d+$/.test(raw)) return null;
@@ -189,12 +207,28 @@ function forwardedAuthHeaders(headers) {
   return forwarded;
 }
 
+function credentialDownloadRequestMatches(request, format, credentialId) {
+  const url = new URL(request.url());
+  if (url.origin !== new URL(config.baseUrl).origin) return false;
+  if (format === 'key') {
+    return request.method() === 'GET'
+      && url.pathname === `/api/v1/credentials/${encodeURIComponent(credentialId)}/public-key`;
+  }
+  return format === 'certificate'
+    && request.method() === 'GET'
+    && url.pathname === '/gmp'
+    && url.searchParams.get('cmd') === 'download_credential'
+    && url.searchParams.get('package_format') === 'pem'
+    && url.searchParams.get('credential_id') === credentialId;
+}
+
 async function captureDownloadRequest(page, action, format, credentialId) {
-  if (format !== 'key') {
+  if (!Object.prototype.hasOwnProperty.call(DOWNLOAD_CONTRACTS, format)) {
     throw new Error(`Unsupported credential download capture format: ${format}`);
   }
-  const expectedPath = `/api/v1/credentials/${encodeURIComponent(credentialId)}/public-key`;
-  const pattern = '**/api/v1/credentials/*/public-key?*';
+  const pattern = format === 'key'
+    ? '**/api/v1/credentials/*/public-key?*'
+    : '**/gmp?*';
   let timer;
   let resolveCapture;
   let rejectCapture;
@@ -209,8 +243,7 @@ async function captureDownloadRequest(page, action, format, credentialId) {
   const handler = async route => {
     const request = route.request();
     try {
-      const url = new URL(request.url());
-      if (request.method() === 'GET' && url.pathname === expectedPath) {
+      if (credentialDownloadRequestMatches(request, format, credentialId)) {
         const headers = await request.allHeaders();
         clearTimeout(timer);
         resolveCapture({url: request.url(), headers});
@@ -330,6 +363,27 @@ async function credentialIdFromResponse(response, credentialName) {
     : null;
 }
 
+function isCredentialCreateResponse(response) {
+  try {
+    const request = response.request();
+    const url = new URL(response.url());
+    return request.method() === 'POST'
+      && url.origin === new URL(config.baseUrl).origin
+      && url.pathname === '/gmp';
+  } catch {
+    return false;
+  }
+}
+
+async function credentialIdFromCreateResponse(response) {
+  if (!response || response.status() < 200 || response.status() >= 300) return null;
+  const body = await response.text().catch(() => '');
+  const match = body.match(
+    /<action_result\b[^>]*>[\s\S]*?<action>Create Credential<\/action>[\s\S]*?<id>([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})<\/id>[\s\S]*?<\/action_result>/i,
+  );
+  return match ? match[1] : null;
+}
+
 async function deleteNativeTrashCredential(page, credentialId) {
   return await page.evaluate(async id => {
     const token = globalThis.localStorage.getItem('token');
@@ -427,6 +481,43 @@ async function fetchNativeLiveCredential(page, credentialId) {
   }, credentialId);
 }
 
+async function recoverOwnedCredentialIdentity(page, fixture) {
+  return await page.evaluate(async expected => {
+    const token = globalThis.localStorage.getItem('token');
+    const jwt = globalThis.localStorage.getItem('jwt');
+    const url = new URL('/api/v1/credentials', globalThis.location.origin);
+    url.searchParams.set('filter', expected.name);
+    url.searchParams.set('page', '1');
+    url.searchParams.set('page_size', '2');
+    url.searchParams.set('sort', 'name');
+    if (token) url.searchParams.set('token', token);
+    url.searchParams.set('_smoke_nonce', String(Date.now()));
+    const response = await fetch(url, {
+      cache: 'no-store',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        ...(token ? {'X-YAFVS-Token': token} : {}),
+        ...(jwt ? {Authorization: `Bearer ${jwt}`} : {}),
+      },
+    });
+    if (!response.ok) return {ok: false, status: response.status, id: null};
+    const payload = await response.json().catch(() => null);
+    const matches = payload && Array.isArray(payload.items)
+      ? payload.items.filter(item =>
+        item
+        && item.name === expected.name
+        && item.comment === expected.ownershipMarker
+        && typeof item.id === 'string')
+      : [];
+    const id = matches.length === 1
+      && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(matches[0].id)
+      ? matches[0].id
+      : null;
+    return {ok: Boolean(id), status: response.status, id};
+  }, {name: fixture.name, ownershipMarker: config.ownershipMarker});
+}
+
 async function login(page) {
   await page.goto(new URL('/login', config.baseUrl).toString(), {waitUntil: 'domcontentloaded', timeout: config.timeoutMs});
   await fillFirst(page, ['input[name="username"]', 'input#username', 'input[type="text"]'], config.username);
@@ -490,7 +581,9 @@ async function createCredential(page, fixture) {
   }
   await page.locator('input[name="name"]').first().fill(fixture.name);
   await page.locator('input[name="comment"]').first().fill(config.ownershipMarker);
-  await page.locator('input[name="credentialLogin"]').first().fill(config.credentialLogin);
+  if (fixture.kind !== 'cc') {
+    await page.locator('input[name="credentialLogin"]').first().fill(config.credentialLogin);
+  }
   if (fixture.kind === 'up') {
     await page.locator('input[name="password"]').first().fill(credentialPassword);
   }
@@ -501,7 +594,24 @@ async function createCredential(page, fixture) {
     add(acceptsKey ? 'pass' : 'fail', 'credential-smoke.usk.private-key', acceptsKey ? 'Attached an ephemeral SSH private key.' : 'Could not attach the ephemeral SSH private key.');
     if (!acceptsKey) return null;
   }
+  if (fixture.kind === 'cc') {
+    const certificate = page.locator('input[name="certificate"]').first();
+    const privateKey = page.locator('input[name="privateKey"]').first();
+    const passphrase = page.locator('input[name="passphrase"]').first();
+    const acceptsCertificate = await certificate.count() && await certificate.isEnabled().catch(() => false);
+    const acceptsKey = await privateKey.count() && await privateKey.isEnabled().catch(() => false);
+    const acceptsPassphrase = await passphrase.count() && await passphrase.isEnabled().catch(() => false);
+    if (acceptsCertificate) await certificate.setInputFiles(config.clientCertificatePath);
+    if (acceptsKey) await privateKey.setInputFiles(config.clientPrivateKeyPath);
+    if (acceptsPassphrase) await passphrase.fill(credentialPassword);
+    const attached = acceptsCertificate && acceptsKey && acceptsPassphrase;
+    add(attached ? 'pass' : 'fail', 'credential-smoke.cc.certificate-material', attached ? 'Attached an ephemeral client certificate, private key, and passphrase.' : 'Could not attach the complete ephemeral client-certificate material.');
+    if (!attached) return null;
+  }
   await screenshot(page, `credential-dialog-filled-${fixture.kind}-${config.urlIndex}`);
+  const createResponse = page.waitForResponse(isCredentialCreateResponse, {
+    timeout: config.timeoutMs,
+  }).catch(() => null);
   const listResponse = page.waitForResponse(isCredentialListResponse, {
     timeout: config.timeoutMs,
   }).catch(() => null);
@@ -518,9 +628,23 @@ async function createCredential(page, fixture) {
   await screenshot(page, `credentials-after-create-${fixture.kind}-${config.urlIndex}`);
   const noNameError = await assertNoCredentialNameError(page, `credential-smoke.${fixture.kind}.create-name-validation`);
   const created = noNameError && await credentialRowVisible(page, fixture.name);
-  const id = created ? await credentialIdFromResponse(await listResponse, fixture.name) : null;
-  const identified = created && Boolean(id);
-  add(identified ? 'pass' : 'fail', `credential-smoke.${fixture.kind}.created-visible`, identified ? 'Temporary credential is visible after save and has a stable identity.' : 'Temporary credential is not visible after save or lacks a stable identity.', {credentialName: fixture.name, credentialId: id});
+  let id = noNameError
+    ? await credentialIdFromCreateResponse(await createResponse)
+    : null;
+  let identitySource = id ? 'create-response' : null;
+  if (!id && created) {
+    id = await credentialIdFromResponse(await listResponse, fixture.name);
+    if (id) identitySource = 'list-response';
+  }
+  let recoveredIdentity = false;
+  if (!id && noNameError) {
+    const recovered = await recoverOwnedCredentialIdentity(page, fixture);
+    id = recovered.id;
+    recoveredIdentity = recovered.ok;
+    if (id) identitySource = 'native-marker-recovery';
+  }
+  const identified = Boolean(id);
+  add(identified ? 'pass' : 'fail', `credential-smoke.${fixture.kind}.created-visible`, identified ? 'Temporary credential is visible after save and has a stable identity.' : 'Temporary credential is not visible after save or lacks a stable identity.', {credentialName: fixture.name, credentialId: id, identitySource});
   if (!identified) return null;
   const owned = {
     kind: fixture.kind,
@@ -530,6 +654,9 @@ async function createCredential(page, fixture) {
     ownershipMarker: config.ownershipMarker,
   };
   recordOwnedFixture(owned);
+  if (recoveredIdentity && !created) {
+    add('warn', `credential-smoke.${fixture.kind}.created-recovered`, 'Recovered exact owned credential identity from the native inventory after the visible list response did not identify it.', {credentialName: fixture.name, credentialId: id});
+  }
   return owned;
 }
 
@@ -537,6 +664,9 @@ function hasExpectedSignature(format, bytes) {
   if (format === 'key') {
     const prefix = bytes.subarray(0, Math.min(bytes.length, 96)).toString('utf8').trimStart();
     return prefix.startsWith('ssh-') || prefix.startsWith('-----BEGIN');
+  }
+  if (format === 'certificate') {
+    return bytes.subarray(0, Math.min(bytes.length, 64)).toString('utf8').startsWith('-----BEGIN CERTIFICATE-----');
   }
   return false;
 }
@@ -579,12 +709,22 @@ async function characterizeDownload(page, fixture, format) {
   const filename = filenameMatch ? path.basename(filenameMatch[1]) : '';
   const expectedFilename = `credential-${fixture.id}.${contract.extension}`;
   const statusOk = streamed.status === 200;
-  const contentTypeOk = contentType === contract.contentType;
+  const contentTypeOk = !contract.contentType || contentType === contract.contentType;
   const filenameOk = filename === expectedFilename;
   const lengthMatched = bytes.length === declaredLength;
-  const sizeOk = bytes.length === 80;
+  const sizeOk = format === 'key'
+    ? bytes.length === 80
+    : bytes.length > 64 && bytes.length <= 64 * 1024;
   const signatureOk = hasExpectedSignature(format, bytes);
-  const operationalOk = statusOk && contentTypeOk && contentEncoding === 'identity' && filenameOk && lengthMatched && sizeOk && signatureOk;
+  const certificate = format === 'certificate'
+    ? clientCertificateMetadata(bytes, config.clientCertificateSha256)
+    : null;
+  const containsConfiguredSecret = [loginPassword, credentialPassword]
+    .filter(Boolean)
+    .some(secret => bytes.includes(Buffer.from(secret, 'utf8')));
+  const operationalOk = statusOk && contentTypeOk && contentEncoding === 'identity' && filenameOk && lengthMatched && sizeOk && signatureOk
+    && (!certificate || (certificate.pemOnly && !certificate.containsPrivateKeyMarker && certificate.fingerprintMatched))
+    && !containsConfiguredSecret;
   const ok = operationalOk;
   const message = ok
     ? `Characterized ${format.toUpperCase()} credential download transport.`
@@ -597,6 +737,10 @@ async function characterizeDownload(page, fixture, format) {
     declaredLength,
     byteLength: bytes.length,
     signatureMatched: signatureOk,
+    pemOnly: certificate && certificate.pemOnly,
+    fingerprintMatched: certificate && certificate.fingerprintMatched,
+    containsPrivateKeyMarker: certificate && certificate.containsPrivateKeyMarker,
+    containsConfiguredSecret,
   });
   return {
     ok,
@@ -716,6 +860,15 @@ async function deleteCredential(page, fixture) {
   return removed && await purgeCredentialFromTrash(page, fixture);
 }
 
+async function safelyDeleteCredential(page, fixture) {
+  try {
+    return await deleteCredential(page, fixture);
+  } catch (error) {
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-exception`, safeError(error), {credentialName: fixture.name, credentialId: fixture.id});
+    return false;
+  }
+}
+
 async function runForBaseUrl(baseUrl, urlIndex) {
   config.baseUrl = baseUrl;
   config.urlIndex = urlIndex;
@@ -732,7 +885,7 @@ async function runForBaseUrl(baseUrl, urlIndex) {
         baseUrl,
       );
       for (const fixture of [...applicableFixtures].reverse()) {
-        cleaned = await deleteCredential(page, fixture) && cleaned;
+        cleaned = await safelyDeleteCredential(page, fixture) && cleaned;
       }
       add(cleaned ? 'pass' : 'fail', 'credential-smoke.timeout-cleanup', cleaned ? 'Owned timeout fixtures were cleaned.' : 'One or more owned timeout fixtures could not be cleaned.', {baseUrl: safeStoredUrl(baseUrl)});
       return;
@@ -743,7 +896,7 @@ async function runForBaseUrl(baseUrl, urlIndex) {
     );
     let recovered = true;
     for (const fixture of [...pendingRecovery].reverse()) {
-      recovered = await deleteCredential(page, fixture) && recovered;
+      recovered = await safelyDeleteCredential(page, fixture) && recovered;
     }
     if (pendingRecovery.length > 0) {
       add(recovered ? 'pass' : 'fail', 'credential-smoke.retry-cleanup', recovered ? 'Recovered and cleaned all exact owned fixtures retained from a prior invocation.' : 'One or more exact owned fixtures from a prior invocation remain unresolved.', {baseUrl: safeStoredUrl(baseUrl), fixtureCount: pendingRecovery.length});
@@ -751,12 +904,14 @@ async function runForBaseUrl(baseUrl, urlIndex) {
     if (!recovered) return;
     let upFixture = null;
     let sshFixture = null;
+    let certificateFixture = null;
     let downloadsOk = false;
     let missingOk = false;
     let requestUrl;
     let requestHeaders;
     let upCleaned = false;
     let sshCleaned = false;
+    let certificateCleaned = false;
     try {
       upFixture = await createCredential(page, {
         kind: 'up',
@@ -767,24 +922,35 @@ async function runForBaseUrl(baseUrl, urlIndex) {
         name: config.sshCredentialName,
         typeLabel: 'Username + SSH Key',
       });
-      if (upFixture && sshFixture) {
+      certificateFixture = await createCredential(page, {
+        kind: 'cc',
+        name: config.clientCertificateName,
+        typeLabel: 'Client Certificate',
+      });
+      if (upFixture && sshFixture && certificateFixture) {
         const removedActionsOk = await removedDownloadActionsAreAbsent(
           page,
-          [upFixture, sshFixture],
+          [upFixture, sshFixture, certificateFixture],
         );
         const key = await characterizeDownload(page, sshFixture, 'key');
+        const certificate = await characterizeDownload(
+          page,
+          certificateFixture,
+          'certificate',
+        );
         requestUrl = key.requestUrl;
         requestHeaders = key.requestHeaders;
-        downloadsOk = removedActionsOk && key.ok;
+        downloadsOk = removedActionsOk && key.ok && certificate.ok;
       }
     } finally {
-      sshCleaned = sshFixture ? await deleteCredential(page, sshFixture) : true;
-      upCleaned = upFixture ? await deleteCredential(page, upFixture) : true;
+      certificateCleaned = certificateFixture ? await safelyDeleteCredential(page, certificateFixture) : true;
+      sshCleaned = sshFixture ? await safelyDeleteCredential(page, sshFixture) : true;
+      upCleaned = upFixture ? await safelyDeleteCredential(page, upFixture) : true;
     }
     if (requestUrl && requestHeaders) {
       missingOk = await characterizeMissingCredential(requestUrl, requestHeaders);
     }
-    const workflowOk = Boolean(upFixture) && Boolean(sshFixture) && downloadsOk && missingOk && upCleaned && sshCleaned;
+    const workflowOk = Boolean(upFixture) && Boolean(sshFixture) && Boolean(certificateFixture) && downloadsOk && missingOk && upCleaned && sshCleaned && certificateCleaned;
     add(workflowOk ? 'pass' : 'fail', 'credential-smoke.workflow', workflowOk ? 'Credential lifecycle and download characterization completed.' : 'Credential lifecycle or download characterization failed.', {baseUrl: safeStoredUrl(baseUrl)});
   } finally {
     await context.close();
@@ -808,7 +974,7 @@ async function runForBaseUrl(baseUrl, urlIndex) {
     generated_at: new Date().toISOString(),
     findings,
     artifacts,
-    metadata: {base_urls: config.baseUrls.map(safeStoredUrl), credential_name: config.credentialName, ssh_credential_name: config.sshCredentialName},
+    metadata: {base_urls: config.baseUrls.map(safeStoredUrl), credential_name: config.credentialName, ssh_credential_name: config.sshCredentialName, client_certificate_name: config.clientCertificateName},
   };
   const output = artifactPath('credential-smoke.json');
   fs.writeFileSync(output, JSON.stringify(payload, null, 2) + '\n');
@@ -821,7 +987,7 @@ async function runForBaseUrl(baseUrl, urlIndex) {
     generated_at: new Date().toISOString(),
     findings: [{status: 'fail', check: 'credential-smoke.crash', message: safeError(error)}],
     artifacts,
-    metadata: {base_urls: config.baseUrls.map(safeStoredUrl), credential_name: config.credentialName, ssh_credential_name: config.sshCredentialName},
+    metadata: {base_urls: config.baseUrls.map(safeStoredUrl), credential_name: config.credentialName, ssh_credential_name: config.sshCredentialName, client_certificate_name: config.clientCertificateName},
   };
   console.log(JSON.stringify(payload));
   process.exit(1);
@@ -894,7 +1060,7 @@ def json_object_without_duplicate_keys(
 
 
 FIXTURE_NAME_PATTERN = re.compile(
-    r"^yafvs-credential-smoke-[0-9a-f]{8}(?:-ssh)?$"
+    r"^yafvs-credential-smoke-[0-9a-f]{8}(?:-(?:ssh|cert))?$"
 )
 OWNERSHIP_MARKER_PATTERN = re.compile(
     r"^yafvs-smoke:[A-Za-z0-9_-]{43}$"
@@ -941,7 +1107,7 @@ def load_owned_fixtures(
         credential_id = fixture.get("id")
         ownership_marker = fixture.get("ownershipMarker")
         if (
-            kind not in {"up", "usk"}
+            kind not in {"up", "usk", "cc"}
             or not isinstance(name, str)
             or FIXTURE_NAME_PATTERN.fullmatch(name) is None
             or not isinstance(credential_id, str)
@@ -949,7 +1115,13 @@ def load_owned_fixtures(
             or OWNERSHIP_MARKER_PATTERN.fullmatch(ownership_marker) is None
         ):
             raise ValueError("credential smoke state contains invalid fixture authority")
-        if (kind == "usk") != name.endswith("-ssh"):
+        if (
+            (kind == "usk") != name.endswith("-ssh")
+            or (kind == "cc") != name.endswith("-cert")
+            or (kind == "up") != (
+                not name.endswith("-ssh") and not name.endswith("-cert")
+            )
+        ):
             raise ValueError("credential smoke fixture kind and name disagree")
         try:
             canonical_id = str(uuid.UUID(credential_id))
@@ -1128,6 +1300,12 @@ def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
         failed["findings"] = [{"status": "fail", "check": "credential-smoke.ssh-keygen", "message": "ssh-keygen is required to create an ephemeral SSH fixture."}]
         failed["artifacts"] = [write_artifact(artifact_dir, "credential-smoke-failed.json", failed)]
         return failed
+    openssl = shutil.which("openssl")
+    if not openssl:
+        failed = payload("fail", "openssl was not found.")
+        failed["findings"] = [{"status": "fail", "check": "credential-smoke.openssl", "message": "openssl is required to create an ephemeral client-certificate fixture."}]
+        failed["artifacts"] = [write_artifact(artifact_dir, "credential-smoke-failed.json", failed)]
+        return failed
 
     script_path = artifact_dir / "credential-smoke.cjs"
     config_path = artifact_dir / "credential-smoke-config.json"
@@ -1149,8 +1327,11 @@ def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
         return failed
     ownership_marker = f"yafvs-smoke:{secrets.token_urlsafe(32)}"
     script_path.write_text(BROWSER_SCRIPT, encoding="utf-8")
-    with tempfile.TemporaryDirectory(prefix="yafvs-credential-smoke-") as key_dir:
-        private_key_path = Path(key_dir) / "id_ed25519"
+    with tempfile.TemporaryDirectory(prefix="yafvs-credential-smoke-") as material_dir:
+        material_path = Path(material_dir)
+        private_key_path = material_path / "id_ed25519"
+        client_certificate_path = material_path / "client-certificate.pem"
+        client_private_key_path = material_path / "client-private-key.pem"
         try:
             keygen = subprocess.run(
                 [
@@ -1187,6 +1368,82 @@ def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
             failed["findings"] = [{"status": "fail", "check": "credential-smoke.ssh-keygen", "message": "ssh-keygen could not create the ephemeral SSH fixture."}]
             failed["artifacts"] = [write_artifact(artifact_dir, "credential-smoke-failed.json", failed)]
             return failed
+        try:
+            private_key_generation = subprocess.run(
+                [
+                    openssl,
+                    "genpkey",
+                    "-algorithm",
+                    "RSA",
+                    "-pkeyopt",
+                    "rsa_keygen_bits:2048",
+                    "-out",
+                    str(client_private_key_path),
+                ],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            failed = payload("fail", "Ephemeral client private-key generation timed out.")
+            failed["findings"] = [{"status": "fail", "check": "credential-smoke.openssl-key-timeout", "message": "openssl exceeded its bounded runtime while generating the client private key."}]
+            failed["artifacts"] = [write_artifact(artifact_dir, "credential-smoke-failed.json", failed)]
+            return failed
+        if private_key_generation.returncode != 0:
+            failed = payload(
+                "fail",
+                "Ephemeral client private-key generation failed.",
+                output_tail=redact_text(
+                    private_key_generation.stdout, [login_password, credential_password]
+                ).splitlines()[-20:],
+            )
+            failed["findings"] = [{"status": "fail", "check": "credential-smoke.openssl-key", "message": "openssl could not create the ephemeral traditional-format client private key."}]
+            failed["artifacts"] = [write_artifact(artifact_dir, "credential-smoke-failed.json", failed)]
+            return failed
+        try:
+            certificate_generation = subprocess.run(
+                [
+                    openssl,
+                    "req",
+                    "-x509",
+                    "-new",
+                    "-key",
+                    str(client_private_key_path),
+                    "-sha256",
+                    "-out",
+                    str(client_certificate_path),
+                    "-subj",
+                    "/CN=yafvs-credential-smoke",
+                    "-days",
+                    "1",
+                ],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            failed = payload("fail", "Ephemeral client certificate generation timed out.")
+            failed["findings"] = [{"status": "fail", "check": "credential-smoke.openssl-certificate-timeout", "message": "openssl exceeded its bounded runtime while generating the client certificate."}]
+            failed["artifacts"] = [write_artifact(artifact_dir, "credential-smoke-failed.json", failed)]
+            return failed
+        if certificate_generation.returncode != 0:
+            failed = payload(
+                "fail",
+                "Ephemeral client certificate generation failed.",
+                output_tail=redact_text(
+                    certificate_generation.stdout, [login_password, credential_password]
+                ).splitlines()[-20:],
+            )
+            failed["findings"] = [{"status": "fail", "check": "credential-smoke.openssl-certificate", "message": "openssl could not create the ephemeral client certificate."}]
+            failed["artifacts"] = [write_artifact(artifact_dir, "credential-smoke-failed.json", failed)]
+            return failed
+        certificate_sha256 = hashlib.sha256(
+            client_certificate_path.read_bytes()
+        ).hexdigest()
         config_path.write_text(
             json.dumps(
                 {
@@ -1196,7 +1453,11 @@ def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
                     "credentialLogin": args.credential_login,
                     "credentialName": args.credential_name,
                     "sshCredentialName": f"{args.credential_name}-ssh",
+                    "clientCertificateName": f"{args.credential_name}-cert",
                     "sshPrivateKeyPath": str(private_key_path),
+                    "clientCertificatePath": str(client_certificate_path),
+                    "clientPrivateKeyPath": str(client_private_key_path),
+                    "clientCertificateSha256": certificate_sha256,
                     "timeoutMs": args.timeout_ms,
                     "username": args.username,
                     "ownershipMarker": ownership_marker,

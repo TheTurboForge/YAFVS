@@ -268,6 +268,14 @@ fn same_identity(before: &libc::stat, after: &libc::stat) -> bool {
         && before.st_mode == after.st_mode
 }
 
+fn same_directory_identity(before: &libc::stat, after: &libc::stat) -> bool {
+    before.st_dev == after.st_dev
+        && before.st_ino == after.st_ino
+        && before.st_mode == after.st_mode
+        && before.st_uid == after.st_uid
+        && before.st_gid == after.st_gid
+}
+
 fn private_directory(path: &Path) -> Result<OwnedFd, String> {
     if !path.is_absolute() {
         return Err(format!(
@@ -360,7 +368,7 @@ fn private_directory(path: &Path) -> Result<OwnedFd, String> {
         }
         let opened = unsafe { OwnedFd::from_raw_fd(raw) };
         let after = stat(opened.as_raw_fd())?;
-        if !same_identity(&before, &after) {
+        if !same_directory_identity(&before, &after) {
             return Err("private deployment receipt directory changed while opening".into());
         }
         current = opened;
@@ -495,6 +503,28 @@ mod tests {
         let path = runtime.join(RECEIPT_DIR).join(RECEIPT_NAME);
         fs::write(&path, serde_json::to_vec(value).unwrap()).unwrap();
         fs::set_permissions(path, fs::Permissions::from_mode(0o600)).unwrap();
+    }
+
+    #[test]
+    fn directory_identity_ignores_entry_metadata_churn_but_not_replacement() {
+        let mut before: libc::stat = unsafe { std::mem::zeroed() };
+        before.st_dev = 11;
+        before.st_ino = 22;
+        before.st_mode = libc::S_IFDIR | 0o700;
+        before.st_uid = 33;
+        before.st_gid = 44;
+        before.st_size = 55;
+        before.st_mtime = 66;
+        before.st_ctime = 77;
+
+        let mut after = before;
+        after.st_size += 1;
+        after.st_mtime += 1;
+        after.st_ctime += 1;
+        assert!(same_directory_identity(&before, &after));
+
+        after.st_ino += 1;
+        assert!(!same_directory_identity(&before, &after));
     }
 
     #[test]

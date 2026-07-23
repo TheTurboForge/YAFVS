@@ -461,7 +461,7 @@ fn credential_openapi_declares_redacted_read_boundary() {
             "x-yafvs-exposure: direct-read",
             "x-yafvs-maturity: live-read",
             replaces,
-            "credential-secret-updates-non-up-usk-types-and-download",
+            "credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
             "secret",
         ] {
             assert!(
@@ -526,7 +526,7 @@ fn credential_patch_route_is_direct_write_control_metadata_only() {
         "x-yafvs-safety-contract: write-control-v1",
         "x-yafvs-side-effect: metadata-write",
         "CredentialPatchRequest",
-        "Secret updates, allow_insecure mutation, credential type changes, target/scanner link mutation, and secret download remain on inherited compatibility paths; clone, live trash move, restore, and permanent trash deletion are separately native.",
+        "SSH public-key retrieval is native. Secret updates, allow_insecure mutation, credential type changes, target/scanner link mutation, and stored client-certificate PEM download remain on inherited compatibility paths; clone, live trash move, restore, and permanent trash deletion are separately native.",
     ] {
         assert!(
             block.contains(required),
@@ -553,7 +553,7 @@ fn credential_delete_route_and_openapi_define_native_secret_opaque_trash_move() 
         "operationId: deleteCredentialsByCredentialId",
         "x-yafvs-exposure: direct-write",
         "x-yafvs-replaces: credential-live-move-to-trash",
-        "x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-download",
+        "x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
         "x-yafvs-owner-semantics: preserve-existing-owner",
         "x-yafvs-safety-contract: write-control-v1",
         "x-yafvs-side-effect: secret-opaque-trash-move",
@@ -564,6 +564,29 @@ fn credential_delete_route_and_openapi_define_native_secret_opaque_trash_move() 
         assert!(
             block.contains(required),
             "credential delete block missing {required}"
+        );
+    }
+}
+
+#[test]
+fn credential_public_key_openapi_declares_bounded_native_binary_read() {
+    let block = openapi_path_block("/credentials/{credential_id}/public-key");
+    for required in [
+        "operationId: getCredentialsByCredentialIdPublicKey",
+        "x-yafvs-exposure: direct-read",
+        "x-yafvs-replaces: credential-ssh-public-key-download-read",
+        "x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
+        "application/key:",
+        "format: binary",
+        "Content-Disposition:",
+        "Content-Length:",
+        "Cache-Control:",
+        "X-Content-Type-Options:",
+        "'502':",
+    ] {
+        assert!(
+            block.contains(required),
+            "credential public-key OpenAPI block missing {required}"
         );
     }
 }

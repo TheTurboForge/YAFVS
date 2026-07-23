@@ -352,6 +352,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "credential-redacted-metadata-export-read",
         "credential-redacted-metadata-detail-read",
         "credential-redacted-metadata-list-read",
+        "credential-ssh-public-key-download-read",
         "credential-trash-hard-delete",
         "credential-trash-restore",
         "credential-live-move-to-trash",
@@ -550,7 +551,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "raw-gmp-alert-trash-control",
         "delivery-payload-mutations",
         "credential-secrets-writes-and-deletes",
-        "credential-secret-updates-non-up-usk-types-and-download",
+        "credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
         "feed-sync-import-control",
         "host-os-catalog-target-creation-tags-export-and-rich-history",
         "operating-system-writes-deletes-and-rich-history",
@@ -639,6 +640,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/credentials"): "direct-read",
     ("post", "/credentials"): "direct-write",
     ("get", "/credentials/{credential_id}"): "direct-read",
+    ("get", "/credentials/{credential_id}/public-key"): "direct-read",
     ("patch", "/credentials/{credential_id}"): "direct-write",
     ("delete", "/credentials/{credential_id}"): "direct-write",
     ("post", "/credentials/{credential_id}/clone"): "direct-write",
@@ -765,7 +767,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-yafvs-replaces": "alert-metadata-list-read",
     },
     ("post", "/credentials/{credential_id}/clone"): {
-        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-download",
+        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
         "x-yafvs-maturity": "live-write",
         "x-yafvs-operator-identity": "direct-token-operator",
         "x-yafvs-owner-semantics": "request-operator-owner",
@@ -1342,12 +1344,12 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-yafvs-replaces": "scanner-metadata-export-read",
     },
     ("get", "/credentials"): {
-        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-download",
+        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
         "x-yafvs-maturity": "live-read",
         "x-yafvs-replaces": "credential-redacted-metadata-list-read",
     },
     ("post", "/credentials"): {
-        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-download",
+        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
         "x-yafvs-maturity": "live-write",
         "x-yafvs-operator-identity": "direct-token-operator",
         "x-yafvs-owner-semantics": "request-operator-owner",
@@ -1356,17 +1358,22 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-yafvs-side-effect": "credential-secret-control",
     },
     ("get", "/credentials/{credential_id}"): {
-        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-download",
+        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
         "x-yafvs-maturity": "live-read",
         "x-yafvs-replaces": "credential-redacted-metadata-detail-read",
     },
+    ("get", "/credentials/{credential_id}/public-key"): {
+        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
+        "x-yafvs-maturity": "live-read",
+        "x-yafvs-replaces": "credential-ssh-public-key-download-read",
+    },
     ("get", "/credentials/{credential_id}/export"): {
-        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-download",
+        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
         "x-yafvs-maturity": "live-read",
         "x-yafvs-replaces": "credential-redacted-metadata-export-read",
     },
     ("patch", "/credentials/{credential_id}"): {
-        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-download",
+        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
         "x-yafvs-maturity": "live-write",
         "x-yafvs-operator-identity": "direct-token-operator",
         "x-yafvs-owner-semantics": "preserve-existing-owner",
@@ -1375,7 +1382,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-yafvs-side-effect": "metadata-write",
     },
     ("delete", "/credentials/{credential_id}"): {
-        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-download",
+        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
         "x-yafvs-maturity": "live-write",
         "x-yafvs-operator-identity": "direct-token-operator",
         "x-yafvs-owner-semantics": "preserve-existing-owner",
@@ -1955,6 +1962,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/credentials",
         "/api/v1/credentials/{}",
         "/api/v1/credentials/{}/export",
+        "/api/v1/credentials/{}/public-key",
         "/api/v1/user-management/users",
         "/api/v1/user-management/users/{}",
         "/api/v1/users",
@@ -6663,6 +6671,12 @@ def rust_direct_api_allowed_endpoint_templates(repo_root: Path | None) -> list[s
         endpoint = rust_match_pattern_to_endpoint(pattern_source)
         if endpoint and endpoint.startswith("/api/v1"):
             templates.add(endpoint)
+    for helper_name in ("direct_api_credential_public_key_path_is_allowed",):
+        helper_body = rust_source_function_body(source, helper_name)
+        for match in re.finditer(r"\[([^\]]+)\]", helper_body):
+            endpoint = rust_match_pattern_to_endpoint(match.group(1))
+            if endpoint and endpoint.startswith("/api/v1"):
+                templates.add(endpoint)
     templates.update(rust_direct_scope_report_section_templates(function_body))
 
     write_function_body = rust_source_function_body(source, "direct_api_v1_write_method_path_is_allowed")
@@ -6863,6 +6877,31 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             templates.add(f"{pdf_prefix.rstrip('/')}/{{}}{pdf_suffix}")
         else:
             errors.append("unresolved_pdf_download_path")
+
+    credential_key_function_body = c_source_function_body(
+        source, "native_api_credential_public_key_path_is_allowed"
+    )
+    if credential_key_function_body:
+        credential_key_constants = {
+            **global_constants,
+            **c_string_constants(credential_key_function_body),
+        }
+        credential_key_prefix = credential_key_constants.get("prefix")
+        credential_key_suffix = credential_key_constants.get(
+            "CREDENTIAL_PUBLIC_KEY_SUFFIX"
+        )
+        if (
+            credential_key_prefix
+            and credential_key_suffix
+            and "g_str_has_prefix (path, prefix)" in credential_key_function_body
+            and "g_str_has_suffix (path, CREDENTIAL_PUBLIC_KEY_SUFFIX)"
+            in credential_key_function_body
+        ):
+            templates.add(
+                f"{credential_key_prefix.rstrip('/')}/{{}}{credential_key_suffix}"
+            )
+        else:
+            errors.append("unresolved_credential_public_key_path")
 
     for match in re.finditer(
         r"if\s*\(\s*g_strcmp0\s*\(\s*path\s*,\s*(\w+)\s*\)\s*==\s*0\s*\)\s*return\s+TRUE\s*;",
@@ -8045,7 +8084,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["guarded native username/password and username/SSH-key credential creation", "native-credentials-from-csv", "future GSA native credential create"],
                 "residual_inherited": [
-                    "Secret updates, other credential types, allow_insecure mutation, target/scanner link mutation, and secret download remain inherited; clone, live trash move, restore, and permanent trash deletion are native.",
+                    "SSH public-key retrieval is native. Secret updates, other credential types, allow_insecure mutation, target/scanner link mutation, and stored client-certificate PEM download remain inherited; clone, live trash move, restore, and permanent trash deletion are native.",
                     "Passwords, passphrases, and private keys are write-only and are never returned by the native API."
                 ],
             },
@@ -8053,6 +8092,16 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/credentials/{credential_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Credential detail redacted metadata (migrated through gsad same-origin proxy)", "read-only credential metadata automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/credentials/{credential_id}/public-key",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["GSA SSH public-key credential download (migrated through gsad same-origin proxy)", "direct native SSH public-key download"],
+                "residual_inherited": [
+                    "Stored client-certificate PEM download and credential secret updates remain inherited.",
+                    "Private keys, passphrases, and passwords are never returned by this endpoint."
+                ],
             },
             {
                 "endpoint": "/api/v1/credentials/{credential_id}/export",
@@ -8086,7 +8135,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["same-origin browser credential clone", "direct native secret-opaque credential clone"],
                 "residual_inherited": [
                     "Clone copies opaque secret rows and active tag links transactionally without loading or returning secret values.",
-                    "Secret mutation and secret download remain inherited."
+                    "Secret mutation and stored client-certificate PEM download remain inherited."
                 ],
             },
             {
@@ -8096,7 +8145,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser credential restore", "direct native credential restore"],
                 "residual_inherited": [
-                    "Credential secret mutation and download semantics remain inherited; clone, live trash move, and permanent trash deletion are native.",
+                    "Credential secret mutation and stored client-certificate PEM download remain inherited; SSH public-key retrieval, clone, live trash move, and permanent trash deletion are native.",
                     "Restore copies opaque secret rows transactionally but returns only redacted metadata."
                 ],
             },

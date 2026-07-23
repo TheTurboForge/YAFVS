@@ -31,11 +31,8 @@ function retainOwnedFixture(fixtures, fixture) {
     .concat([fixture]);
 }
 
-function fixturesForBaseUrl(fixtures, baseUrl, urlIndex) {
-  return fixtures.filter(fixture =>
-    fixture.baseUrl
-      ? fixture.baseUrl === baseUrl
-      : urlIndex === 0);
+function fixturesForBaseUrl(fixtures, baseUrl) {
+  return fixtures.filter(fixture => fixture.baseUrl === baseUrl);
 }
 
 function releaseOwnedFixture(fixtures, fixture) {
@@ -648,10 +645,6 @@ async function purgeCredentialFromTrash(page, fixture) {
     add('fail', `credential-smoke.${fixture.kind}.cleanup-live-inventory`, 'The exact owned credential UUID was absent from Trashcan but its live state could not be verified.', {credentialName: fixture.name, credentialId: fixture.id});
     return false;
   }
-  if (live.item.comment !== fixture.ownershipMarker) {
-    add('fail', `credential-smoke.${fixture.kind}.cleanup-authority`, 'Refusing to delete a credential because its server-side ownership marker does not match the retained fixture authority.', {credentialName: fixture.name, credentialId: fixture.id});
-    return false;
-  }
   if (decision.action === 'live-present') {
     add('fail', `credential-smoke.${fixture.kind}.cleanup-live-present`, 'Refusing to discard ownership because the exact credential UUID is still present in the live inventory.', {credentialName: fixture.name, credentialId: fixture.id});
     return false;
@@ -694,6 +687,10 @@ async function deleteCredential(page, fixture) {
     add('fail', `credential-smoke.${fixture.kind}.cleanup-identity`, 'Refusing to delete a credential because the exact live UUID does not map to the owned fixture name.', {credentialName: fixture.name, expectedCredentialId: fixture.id, liveCredentialId: live.item.id, liveCredentialName: live.item.name});
     return false;
   }
+  if (live.item.comment !== fixture.ownershipMarker) {
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-authority`, 'Refusing to delete a credential because its server-side ownership marker does not match the retained fixture authority.', {credentialName: fixture.name, credentialId: fixture.id});
+    return false;
+  }
   const deletion = await deleteNativeLiveCredential(page, fixture.id);
   if (!deletion.ok) {
     add('fail', `credential-smoke.${fixture.kind}.cleanup-request`, 'Native Trashcan move for the exact owned credential UUID failed.', {credentialName: fixture.name, credentialId: fixture.id, status: deletion.status});
@@ -721,7 +718,6 @@ async function runForBaseUrl(baseUrl, urlIndex) {
       const applicableFixtures = fixturesForBaseUrl(
         ownedFixtures,
         baseUrl,
-        urlIndex,
       );
       for (const fixture of [...applicableFixtures].reverse()) {
         cleaned = await deleteCredential(page, fixture) && cleaned;
@@ -732,7 +728,6 @@ async function runForBaseUrl(baseUrl, urlIndex) {
     const pendingRecovery = fixturesForBaseUrl(
       recoveryFixtures,
       baseUrl,
-      urlIndex,
     );
     let recovered = true;
     for (const fixture of [...pendingRecovery].reverse()) {
@@ -887,8 +882,12 @@ def load_owned_fixtures(
     state_path = artifact_dir / "credential-smoke-state.json"
     try:
         payload = json.loads(state_path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    except FileNotFoundError:
         return []
+    except (json.JSONDecodeError, OSError) as error:
+        raise ValueError(
+            "credential smoke state is unreadable or malformed"
+        ) from error
     fixtures = payload.get("fixtures") if isinstance(payload, dict) else None
     if not isinstance(fixtures, list):
         raise ValueError("credential smoke state has no fixture list")
@@ -915,7 +914,7 @@ def load_owned_fixtures(
             canonical_id = str(uuid.UUID(credential_id))
         except ValueError as error:
             raise ValueError("credential smoke fixture ID is invalid") from error
-        if canonical_id != credential_id.lower():
+        if canonical_id != credential_id:
             raise ValueError("credential smoke fixture ID is not canonical")
         retained_fixture = {
             "kind": kind,
@@ -930,6 +929,8 @@ def load_owned_fixtures(
             canonical_base_url = sanitized_base_url(base_url)
         except ValueError as error:
             raise ValueError("credential smoke fixture base URL is invalid") from error
+        if canonical_base_url != base_url:
+            raise ValueError("credential smoke fixture base URL is not canonical")
         if canonical_base_url not in configured_base_urls:
             raise ValueError("credential smoke fixture belongs to an unconfigured base URL")
         retained_fixture["baseUrl"] = canonical_base_url
@@ -986,21 +987,34 @@ def timeout_cleanup(
     env: dict[str, str],
     redactions: list[str],
 ) -> dict[str, Any]:
-    state_path = artifact_dir / "credential-smoke-state.json"
     try:
-        state = json.loads(state_path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        configured_urls = config.get("baseUrls")
+        if not isinstance(configured_urls, list) or not all(
+            isinstance(url, str) for url in configured_urls
+        ):
+            raise ValueError("credential smoke cleanup config has no base URL list")
+        canonical_urls = {sanitized_base_url(url) for url in configured_urls}
+        if len(canonical_urls) != len(configured_urls) or any(
+            sanitized_base_url(url) != url for url in configured_urls
+        ):
+            raise ValueError(
+                "credential smoke cleanup config contains noncanonical base URLs"
+            )
+        fixtures = load_owned_fixtures(artifact_dir, canonical_urls)
+    except (json.JSONDecodeError, OSError, ValueError) as error:
         return {
-            "status": "pass",
-            "summary": "No owned credential fixtures were recorded before timeout.",
+            "status": "fail",
+            "summary": (
+                "Credential timeout cleanup refused untrusted retained state: "
+                f"{error}"
+            ),
         }
-    fixtures = state.get("fixtures")
-    if not isinstance(fixtures, list) or not fixtures:
+    if not fixtures:
         return {
             "status": "pass",
             "summary": "No owned credential fixtures remained after timeout.",
         }
-    config = json.loads(config_path.read_text(encoding="utf-8"))
     config["cleanupOnly"] = True
     config["cleanupFixtures"] = fixtures
     cleanup_config_path = artifact_dir / "credential-smoke-cleanup-config.json"
@@ -1008,6 +1022,7 @@ def timeout_cleanup(
         json.dumps(config, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    cleanup_config_path.chmod(0o600)
     try:
         completed = run_node_process(
             ["node", str(script_path), str(cleanup_config_path)],

@@ -8585,7 +8585,7 @@ class YAFVSCtlTests(unittest.TestCase):
             + "\nfor (const fixture of additions) owned = retainOwnedFixture(owned, fixture);"
             + "\nconst retained = owned.length;"
             + "\nowned = releaseOwnedFixture(owned, additions[0]);"
-            + "\nconst firstBase = fixturesForBaseUrl(owned, 'https://one.example/', 0);"
+            + "\nconst firstBase = fixturesForBaseUrl(owned, 'https://one.example/');"
             + "\nconsole.log(JSON.stringify({retained, remaining: owned.map(item => item.id), firstBase: firstBase.map(item => item.id)}));\n"
         )
         completed = subprocess.run(
@@ -8616,7 +8616,7 @@ class YAFVSCtlTests(unittest.TestCase):
                                 "kind": "up",
                                 "name": "yafvs-credential-smoke-001122aa",
                                 "id": "00000000-0000-4000-8000-000000000001",
-                                "baseUrl": "https://ONE.EXAMPLE:443/?ignored=yes",
+                                "baseUrl": "https://one.example/",
                                 "ownershipMarker": "yafvs-smoke:" + "a" * 43,
                             },
                         ]
@@ -8638,6 +8638,156 @@ class YAFVSCtlTests(unittest.TestCase):
                     }
                 ],
             )
+
+    def test_runtime_credential_cleanup_executes_marker_checks_before_deletion(self):
+        start = runtime_credential_smoke.BROWSER_SCRIPT.index(
+            "async function purgeCredentialFromTrash"
+        )
+        end = runtime_credential_smoke.BROWSER_SCRIPT.index(
+            "async function runForBaseUrl", start
+        )
+        flow = runtime_credential_smoke.BROWSER_SCRIPT[start:end]
+        fixture = {
+            "kind": "up",
+            "name": "yafvs-credential-smoke-001122aa",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "baseUrl": "https://one.example/",
+            "ownershipMarker": "yafvs-smoke:" + "a" * 43,
+        }
+        script = (
+            runtime_credential_smoke.CREDENTIAL_CLEANUP_POLICY
+            + "\n"
+            + flow
+            + "\nconst fixture = "
+            + json.dumps(fixture)
+            + """;
+const config = {urlIndex: 0};
+let liveDeleteCalls = 0;
+let trashDeleteCalls = 0;
+let trashFetchCalls = 0;
+let liveItem = {...fixture, comment: 'wrong-marker'};
+let trashItems = [{
+  entity_type: 'credential',
+  id: fixture.id,
+  name: fixture.name,
+  comment: fixture.ownershipMarker,
+}];
+function add() {}
+async function gotoStable() {}
+async function screenshot() {}
+function forgetOwnedFixture() {}
+async function fetchNativeLiveCredential() {
+  return {ok: true, status: 200, item: liveItem};
+}
+async function deleteNativeLiveCredential() {
+  liveDeleteCalls += 1;
+  return {ok: true, status: 204};
+}
+async function fetchNativeTrashCredential() {
+  trashFetchCalls += 1;
+  return {
+    ok: true,
+    status: 200,
+    items: trashFetchCalls === 1 ? trashItems : [],
+  };
+}
+async function deleteNativeTrashCredential() {
+  trashDeleteCalls += 1;
+  return {ok: true, status: 204};
+}
+const page = {reload: async () => null};
+(async () => {
+  const rejected = await deleteCredential(page, fixture);
+  liveItem = null;
+  const purged = await purgeCredentialFromTrash(page, fixture);
+  console.log(JSON.stringify({
+    rejected,
+    purged,
+    liveDeleteCalls,
+    trashDeleteCalls,
+  }));
+})().catch(error => {
+  console.error(error);
+  process.exit(1);
+});
+"""
+        )
+        completed = subprocess.run(
+            ["node", "-e", script],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(
+            json.loads(completed.stdout),
+            {
+                "rejected": False,
+                "purged": True,
+                "liveDeleteCalls": 0,
+                "trashDeleteCalls": 1,
+            },
+        )
+
+    def test_runtime_credential_smoke_rejects_noncanonical_or_malformed_state(self):
+        valid = {
+            "kind": "up",
+            "name": "yafvs-credential-smoke-001122aa",
+            "id": "a0000000-0000-4000-8000-000000000001",
+            "baseUrl": "https://one.example/",
+            "ownershipMarker": "yafvs-smoke:" + "a" * 43,
+        }
+        invalid_payloads = [
+            "{malformed",
+            json.dumps({"fixtures": [{**valid, "baseUrl": "https://ONE.example/"}]}),
+            json.dumps({"fixtures": [{**valid, "id": valid["id"].upper()}]}),
+            json.dumps(
+                {
+                    "fixtures": [
+                        {key: value for key, value in valid.items() if key != "baseUrl"}
+                    ]
+                }
+            ),
+        ]
+        for serialized in invalid_payloads:
+            with self.subTest(serialized=serialized):
+                with tempfile.TemporaryDirectory() as tmp:
+                    artifact_dir = Path(tmp)
+                    (artifact_dir / "credential-smoke-state.json").write_text(
+                        serialized,
+                        encoding="utf-8",
+                    )
+                    with self.assertRaises(ValueError):
+                        runtime_credential_smoke.load_owned_fixtures(
+                            artifact_dir, {"https://one.example/"}
+                        )
+
+    def test_runtime_credential_timeout_cleanup_uses_strict_owned_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifact_dir = Path(tmp)
+            config_path = artifact_dir / "credential-smoke-config.json"
+            config_path.write_text(
+                json.dumps({"baseUrls": ["https://one.example/"]}),
+                encoding="utf-8",
+            )
+            (artifact_dir / "credential-smoke-state.json").write_text(
+                "{malformed",
+                encoding="utf-8",
+            )
+            with unittest.mock.patch.object(
+                runtime_credential_smoke, "run_node_process"
+            ) as node_run:
+                result = runtime_credential_smoke.timeout_cleanup(
+                    script_path=artifact_dir / "credential-smoke.cjs",
+                    config_path=config_path,
+                    artifact_dir=artifact_dir,
+                    env={},
+                    redactions=[],
+                )
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("refused untrusted retained state", result["summary"])
+            node_run.assert_not_called()
 
     def test_runtime_credential_smoke_rejects_untrusted_prior_state(self):
         with tempfile.TemporaryDirectory() as tmp:

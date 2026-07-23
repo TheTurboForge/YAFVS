@@ -36,6 +36,8 @@
 #define DEFAULT_NATIVE_API_PORT "9080"
 #define NATIVE_API_MAX_RESPONSE_BYTES (10 * 1024 * 1024)
 #define NATIVE_API_MAX_PDF_RESPONSE_BYTES (32 * 1024 * 1024)
+#define NATIVE_API_MAX_KEY_RESPONSE_BYTES (128 * 1024)
+#define NATIVE_API_MAX_KEY_BODY_BYTES 49146
 #define PDF_REPORT_FORMAT_ID "c402cc3e-b531-11e1-9163-406186ea4fc5"
 #define BROWSER_PROXY_SECRET_ENV "YAFVS_API_BROWSER_PROXY_SECRET"
 #define BROWSER_PROXY_SECRET_HEADER "x-yafvs-browser-proxy-secret"
@@ -56,6 +58,7 @@
 #define AUTHENTICATION_SETTINGS_PATH "/api/v1/authentication-settings"
 #define AUTHENTICATION_SETTINGS_LDAP_PATH "/api/v1/authentication-settings/ldap"
 #define AUTHENTICATION_SETTINGS_RADIUS_PATH "/api/v1/authentication-settings/radius"
+#define CREDENTIAL_PUBLIC_KEY_SUFFIX "/public-key"
 
 static void
 secure_clear (void *value, gsize length)
@@ -120,12 +123,38 @@ is_user_management_user_path (const gchar *path)
 }
 
 static gboolean
+native_api_credential_public_key_path_is_allowed (const gchar *path)
+{
+  const gchar *prefix = "/api/v1/credentials/";
+  const gchar *id;
+  gsize id_length;
+
+  if (path == NULL || strchr (path, '?') != NULL
+      || !g_str_has_prefix (path, prefix)
+      || !g_str_has_suffix (path, CREDENTIAL_PUBLIC_KEY_SUFFIX))
+    return FALSE;
+
+  id = path + strlen (prefix);
+  id_length = strlen (path) - strlen (prefix)
+              - strlen (CREDENTIAL_PUBLIC_KEY_SUFFIX);
+  if (!is_uuid_segment (id, id_length))
+    return FALSE;
+
+  for (gsize index = 0; index < id_length; index++)
+    if (g_ascii_isupper (id[index]))
+      return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
 native_api_get_path_requires_operator (const gchar *path)
 {
   return g_strcmp0 (path, AUTHENTICATION_SETTINGS_PATH) == 0
          || g_strcmp0 (path, USER_SETTINGS_PATH) == 0
          || g_strcmp0 (path, USER_MANAGEMENT_USERS_PATH) == 0
-         || is_user_management_user_path (path);
+         || is_user_management_user_path (path)
+         || native_api_credential_public_key_path_is_allowed (path);
 }
 
 static gboolean
@@ -347,6 +376,122 @@ malformed:
   g_free (content_disposition);
   *error_message =
     g_strdup ("Native API returned invalid PDF response framing.");
+  return FALSE;
+}
+
+static gboolean
+parse_native_api_key_response (const guint8 *data, gsize length,
+                               native_api_pdf_response_t *response,
+                               gchar **error_message)
+{
+  gssize header_end;
+  gssize status_end;
+  gsize cursor;
+  gsize content_length = 0;
+  gboolean content_length_present = FALSE;
+  gchar *content_type = NULL;
+  gchar *content_disposition = NULL;
+  const guint8 *body;
+
+  native_api_pdf_response_clear (response);
+  header_end = find_header_end (data, length);
+  status_end = find_crlf (data, 0, header_end < 0 ? length : (gsize) header_end);
+  if (header_end < 0 || status_end < 0
+      || !parse_response_status (data, (gsize) status_end,
+                                 &response->status_code))
+    goto malformed;
+
+  cursor = (gsize) status_end + 2;
+  while (cursor < (gsize) header_end)
+    {
+      gssize line_end = find_crlf (data, cursor, (gsize) header_end + 2);
+      const guint8 *colon;
+      gchar *name;
+      gchar *value;
+
+      if (line_end < 0 || data[cursor] == ' ' || data[cursor] == '\t')
+        goto malformed;
+      colon = memchr (data + cursor, ':', (gsize) line_end - cursor);
+      if (colon == NULL || colon == data + cursor)
+        goto malformed;
+      name = g_strndup ((const gchar *) data + cursor,
+                        (gsize) (colon - data - cursor));
+      value = g_strndup ((const gchar *) colon + 1,
+                         (gsize) line_end - (gsize) (colon - data) - 1);
+      for (const guchar *p = (const guchar *) name; *p != '\0'; p++)
+        if (!g_ascii_isalnum (*p) && strchr ("!#$%&'*+-.^_`|~", *p) == NULL)
+          {
+            g_free (name);
+            g_free (value);
+            goto malformed;
+          }
+      for (const guchar *p = (const guchar *) value; *p != '\0'; p++)
+        if (*p < 0x20 && *p != '\t')
+          {
+            g_free (name);
+            g_free (value);
+            goto malformed;
+          }
+      g_strstrip (value);
+      if (g_ascii_strcasecmp (name, "Content-Length") == 0)
+        {
+          if (content_length_present
+              || !parse_content_length_value (value, &content_length))
+            {
+              g_free (name);
+              g_free (value);
+              goto malformed;
+            }
+          content_length_present = TRUE;
+        }
+      else if (g_ascii_strcasecmp (name, "Content-Type") == 0)
+        {
+          if (content_type != NULL)
+            {
+              g_free (name);
+              g_free (value);
+              goto malformed;
+            }
+          content_type = g_steal_pointer (&value);
+        }
+      else if (g_ascii_strcasecmp (name, "Content-Disposition") == 0)
+        {
+          if (content_disposition != NULL
+              || !content_disposition_is_safe (value))
+            {
+              g_free (name);
+              g_free (value);
+              goto malformed;
+            }
+          content_disposition = g_steal_pointer (&value);
+        }
+      g_free (name);
+      g_free (value);
+      cursor = (gsize) line_end + 2;
+    }
+
+  if (!content_length_present
+      || content_length > NATIVE_API_MAX_KEY_BODY_BYTES
+      || length - (gsize) header_end - 4 != content_length)
+    goto malformed;
+
+  body = data + header_end + 4;
+  if (response->status_code == MHD_HTTP_OK
+      && (content_type == NULL
+          || g_ascii_strcasecmp (content_type, "application/key") != 0
+          || content_disposition == NULL || content_length == 0))
+    goto malformed;
+
+  response->body = g_bytes_new (body, content_length);
+  response->content_disposition = content_disposition;
+  g_free (content_type);
+  return TRUE;
+
+malformed:
+  native_api_pdf_response_clear (response);
+  g_free (content_type);
+  g_free (content_disposition);
+  *error_message = g_strdup ("Native API returned invalid key response framing.");
   return FALSE;
 }
 
@@ -2577,6 +2722,88 @@ fetch_native_api_pdf (const gchar *path,
   return parsed;
 }
 
+static gboolean
+fetch_native_api_key (const gchar *path, const gchar *browser_proxy_secret,
+                      const gchar *operator_name, const gchar *operator_uuid,
+                      native_api_pdf_response_t *key_response,
+                      gchar **error_message)
+{
+  const gchar *host = g_getenv ("YAFVS_NATIVE_API_HOST");
+  const gchar *port = g_getenv ("YAFVS_NATIVE_API_PORT");
+  int fd;
+  GString *request;
+  GByteArray *response;
+  gchar buffer[8192];
+  gboolean parsed;
+
+  if (host == NULL || host[0] == 0)
+    host = DEFAULT_NATIVE_API_HOST;
+  if (port == NULL || port[0] == 0)
+    port = DEFAULT_NATIVE_API_PORT;
+  if (browser_proxy_secret == NULL || operator_name == NULL
+      || operator_uuid == NULL)
+    {
+      *error_message = g_strdup ("Native API browser proxy is not configured.");
+      return FALSE;
+    }
+
+  fd = connect_to_native_api (host, port);
+  if (fd == -1)
+    {
+      *error_message = g_strdup ("Native API service is unavailable.");
+      return FALSE;
+    }
+  request = g_string_new (NULL);
+  g_string_printf (request,
+                   "GET %s HTTP/1.1\r\n"
+                   "Host: %s:%s\r\n"
+                   "Accept: application/key\r\n"
+                   "Connection: close\r\n"
+                   BROWSER_PROXY_SECRET_HEADER ": %s\r\n"
+                   BROWSER_PROXY_OPERATOR_HEADER ": %s\r\n"
+                   BROWSER_PROXY_OPERATOR_UUID_HEADER ": %s\r\n"
+                   "User-Agent: gsad-native-api-proxy\r\n\r\n",
+                   path, host, port, browser_proxy_secret, operator_name,
+                   operator_uuid);
+  if (!send_all (fd, request->str, request->len))
+    {
+      secure_gstring_free (request);
+      close (fd);
+      *error_message = g_strdup ("Native API request could not be sent.");
+      return FALSE;
+    }
+  secure_gstring_free (request);
+
+  response = g_byte_array_new ();
+  while (TRUE)
+    {
+      ssize_t count = recv (fd, buffer, sizeof (buffer), 0);
+      if (count == 0)
+        break;
+      if (count < 0)
+        {
+          g_byte_array_unref (response);
+          close (fd);
+          *error_message = g_strdup ("Native API response could not be read.");
+          return FALSE;
+        }
+      if (response->len > NATIVE_API_MAX_KEY_RESPONSE_BYTES - (gsize) count)
+        {
+          g_byte_array_unref (response);
+          close (fd);
+          *error_message = g_strdup ("Native API response is too large.");
+          return FALSE;
+        }
+      g_byte_array_append (response, (const guint8 *) buffer, (guint) count);
+    }
+  close (fd);
+
+  parsed = parse_native_api_key_response (response->data, response->len,
+                                          key_response, error_message);
+  g_byte_array_unref (response);
+  return parsed;
+}
+
 gsad_http_result_t
 gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
                                  void *handler_data,
@@ -2658,6 +2885,47 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
         connection, pdf, MHD_HTTP_OK, NULL, GSAD_CONTENT_TYPE_APP_PDF,
         pdf_response.content_disposition, pdf_length);
       native_api_pdf_response_clear (&pdf_response);
+      return ret;
+    }
+
+  if (native_api_credential_public_key_path_is_allowed (path))
+    {
+      native_api_pdf_response_t key_response = {0};
+      const gchar *secret = browser_proxy_secret ();
+
+      if (secret == NULL)
+        {
+          gsad_credentials_free (credentials);
+          return send_json_error (
+            connection, MHD_HTTP_SERVICE_UNAVAILABLE, "control_unavailable",
+            "Native API browser key download is not configured.");
+        }
+      if (!fetch_native_api_key (path, secret, operator_name, operator_uuid,
+                                 &key_response, &error_message))
+        {
+          g_warning ("%s: %s", __func__, error_message);
+          gsad_credentials_free (credentials);
+          g_free (error_message);
+          return send_json_error (connection, MHD_HTTP_BAD_GATEWAY,
+                                  "control_unavailable",
+                                  "Native API service is unavailable.");
+        }
+      gsad_credentials_free (credentials);
+      if (key_response.status_code != MHD_HTTP_OK)
+        {
+          guint native_status = key_response.status_code;
+          native_api_pdf_response_clear (&key_response);
+          return send_json_error (connection, (int) native_status,
+                                  "credential_key_download_failed",
+                                  "Native API credential key download failed.");
+        }
+
+      gsize key_length;
+      const gchar *key = g_bytes_get_data (key_response.body, &key_length);
+      ret = gsad_http_send_response_for_content (
+        connection, key, MHD_HTTP_OK, NULL, GSAD_CONTENT_TYPE_APP_KEY,
+        key_response.content_disposition, key_length);
+      native_api_pdf_response_clear (&key_response);
       return ret;
     }
 
@@ -3001,6 +3269,31 @@ gboolean
 gsad_native_api_test_get_path_requires_operator (const gchar *path)
 {
   return native_api_get_path_requires_operator (path);
+}
+
+gboolean
+gsad_native_api_test_credential_public_key_path_is_allowed (const gchar *path)
+{
+  return native_api_credential_public_key_path_is_allowed (path);
+}
+
+gboolean
+gsad_native_api_test_parse_key_response (const guint8 *data, gsize length,
+                                         guint *status_code, GBytes **body,
+                                         gchar **content_disposition)
+{
+  native_api_pdf_response_t response = {0};
+  gchar *error_message = NULL;
+  gboolean parsed = parse_native_api_key_response (
+    data, length, &response, &error_message);
+
+  g_free (error_message);
+  if (!parsed)
+    return FALSE;
+  *status_code = response.status_code;
+  *body = g_steal_pointer (&response.body);
+  *content_disposition = g_steal_pointer (&response.content_disposition);
+  return TRUE;
 }
 
 gboolean

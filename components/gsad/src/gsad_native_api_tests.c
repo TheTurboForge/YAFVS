@@ -38,6 +38,12 @@ gsad_native_api_test_get_path_is_allowed (const gchar *path);
 extern gboolean
 gsad_native_api_test_get_path_requires_operator (const gchar *path);
 extern gboolean
+gsad_native_api_test_credential_public_key_path_is_allowed (const gchar *path);
+extern gboolean
+gsad_native_api_test_parse_key_response (const guint8 *data, gsize length,
+                                         guint *status_code, GBytes **body,
+                                         gchar **content_disposition);
+extern gboolean
 gsad_native_api_test_patch_path_is_allowed (const gchar *path);
 extern gboolean
 gsad_native_api_test_put_path_is_allowed (const gchar *path);
@@ -71,6 +77,106 @@ gsad_native_api_test_mutation_response_may_have_committed (
   const gchar *method, guint status_code, const gchar *body);
 
 Describe (gsad_native_api);
+
+Ensure (gsad_native_api, should_only_allow_canonical_credential_public_keys)
+{
+  const gchar *valid =
+    "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/public-key";
+  const gchar *rejected[] = {
+    "/api/v1/credentials/not-a-uuid/public-key",
+    "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/public-key/",
+    "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/public-key/extra",
+    "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/public-key?x=1",
+    "/api/v1/credentials/12345678-1234-1234-1234-123456789ab/public-key",
+    "/api/v1/credentials/12345678-1234-1234-1234-123456789ABC/public-key",
+  };
+
+  assert_that (gsad_native_api_test_credential_public_key_path_is_allowed (valid),
+               is_true);
+  assert_that (gsad_native_api_test_get_path_requires_operator (valid),
+               is_true);
+  assert_that (gsad_native_api_test_delete_path_is_allowed (valid), is_false);
+  for (gsize index = 0; index < G_N_ELEMENTS (rejected); index++)
+    assert_that (gsad_native_api_test_credential_public_key_path_is_allowed (
+                   rejected[index]), is_false);
+}
+
+Ensure (gsad_native_api, should_parse_only_valid_credential_key_responses)
+{
+  const gchar *body_text = "ssh-ed25519 AAAA\n";
+  const gchar *valid =
+    "HTTP/1.1 200 OK\r\nContent-Length: 17\r\n"
+    "Content-Type: application/key\r\n"
+    "Content-Disposition: attachment; filename=key.pub\r\n\r\n"
+    "ssh-ed25519 AAAA\n";
+  const gchar *invalid[] = {
+    "HTTP/1.1 200 OK\r\nContent-Length: 17\r\n"
+    "Content-Type: application/json\r\nContent-Disposition: attachment\r\n\r\n"
+    "ssh-ed25519 AAAA\n",
+    "HTTP/1.1 200 OK\r\nContent-Type: application/key\r\n"
+    "Content-Disposition: attachment\r\n\r\nssh-ed25519 AAAA\n",
+    "HTTP/1.1 200 OK\r\nContent-Length: 17\r\nContent-Length: 17\r\n"
+    "Content-Type: application/key\r\nContent-Disposition: attachment\r\n\r\n"
+    "ssh-ed25519 AAAA\n",
+    "HTTP/1.1 200 OK\r\nContent-Length: 17\r\n"
+    "Content-Type: application/key\r\nContent-Type: application/key\r\n"
+    "Content-Disposition: attachment\r\n\r\nssh-ed25519 AAAA\n",
+    "HTTP/1.1 200 OK\r\nContent-Length: 17\r\n"
+    "Content-Type: application/key\r\nContent-Disposition: attachment\r\n"
+    "Content-Disposition: attachment\r\n\r\nssh-ed25519 AAAA\n",
+    "HTTP/1.1 200 OK\r\nContent-Length: 17\r\n"
+    "Content-Type: application/key\r\n\r\nssh-ed25519 AAAA\n",
+    "HTTP/1.1 200 OK\r\nContent-Length: 15\r\nContent-Type: application/key\r\n"
+    "Content-Disposition: attachment\r\n\r\nssh-ed25519 AAAA\n",
+    "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nContent-Type: application/key\r\n"
+    "Content-Disposition: attachment\r\n\r\n",
+  };
+  guint status_code = 0;
+  GBytes *body = NULL;
+  gchar *disposition = NULL;
+  gsize body_length;
+  const gchar *body_data;
+
+  assert_that (strlen (body_text), is_equal_to (17));
+  assert_that (gsad_native_api_test_parse_key_response (
+                 (const guint8 *) valid, strlen (valid), &status_code, &body,
+                 &disposition), is_true);
+  body_data = g_bytes_get_data (body, &body_length);
+  assert_that (body_length, is_equal_to (17));
+  assert_that (body_data, is_equal_to_string (body_text));
+  assert_that (disposition, is_equal_to_string (
+                 "attachment; filename=key.pub"));
+  g_bytes_unref (body);
+  g_free (disposition);
+  for (gsize index = 0; index < G_N_ELEMENTS (invalid); index++)
+    assert_that (gsad_native_api_test_parse_key_response (
+                   (const guint8 *) invalid[index], strlen (invalid[index]),
+                   &status_code, &body, &disposition), is_false);
+
+  {
+    gchar *oversized_body = g_malloc0 (49147);
+    gchar *oversized = g_strdup_printf (
+      "HTTP/1.1 200 OK\r\nContent-Length: 49147\r\n"
+      "Content-Type: application/key\r\nContent-Disposition: attachment\r\n\r\n%s",
+      oversized_body);
+    assert_that (gsad_native_api_test_parse_key_response (
+                   (const guint8 *) oversized, strlen (oversized),
+                   &status_code, &body, &disposition), is_false);
+    g_free (oversized);
+    g_free (oversized_body);
+  }
+
+  {
+    const gchar *native_error =
+      "HTTP/1.1 404 Not Found\r\nContent-Length: 14\r\n\r\n"
+      "{\"error\":true}";
+    assert_that (gsad_native_api_test_parse_key_response (
+                   (const guint8 *) native_error, strlen (native_error),
+                   &status_code, &body, &disposition), is_true);
+    assert_that (status_code, is_equal_to (404));
+    g_bytes_unref (body);
+  }
+}
 
 static guint password_update_count;
 static guint session_revoke_count;

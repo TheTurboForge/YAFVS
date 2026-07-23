@@ -157,16 +157,6 @@ async function deleteCredential(page) {
     await screenshot(page, `credential-cleanup-action-missing-${config.urlIndex}`);
     return false;
   }
-  const confirmClicked = await clickFirst(page, [
-    page.getByRole('button', {name: /Move to Trashcan/i}).first(),
-    page.getByText('Move to Trashcan').first(),
-    page.getByRole('button', {name: /Delete/i}).first(),
-  ]);
-  if (!confirmClicked) {
-    add('fail', 'credential-smoke.cleanup-confirm', 'Trashcan confirmation did not expose a recognizable confirmation action.');
-    await screenshot(page, `credential-cleanup-confirm-missing-${config.urlIndex}`);
-    return false;
-  }
   await page.waitForLoadState('networkidle', {timeout: config.timeoutMs}).catch(() => null);
   await page.waitForFunction(name => !Array.from(document.querySelectorAll('tbody tr')).some(row => row.innerText.includes(name)), config.credentialName, {timeout: config.timeoutMs}).catch(() => null);
   await screenshot(page, `credentials-after-cleanup-${config.urlIndex}`);

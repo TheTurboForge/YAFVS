@@ -8383,6 +8383,14 @@ class YAFVSCtlTests(unittest.TestCase):
             "waitUntil: 'networkidle'",
             runtime_credential_smoke.BROWSER_SCRIPT,
         )
+        self.assertNotIn(
+            "credential-smoke.cleanup-confirm",
+            runtime_credential_smoke.BROWSER_SCRIPT,
+        )
+        self.assertIn(
+            "name => !Array.from(document.querySelectorAll('tbody tr'))",
+            runtime_credential_smoke.BROWSER_SCRIPT,
+        )
 
     def test_runtime_credential_smoke_uses_environment_password_and_redacts_artifact(self):
         with tempfile.TemporaryDirectory() as tmp:

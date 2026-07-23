@@ -415,35 +415,6 @@ command_disabled (gmp_parser_t *gmp_parser, const gchar *name)
 /* Command data passed between parser callbacks. */
 
 /**
- * @brief Command data for the create_asset command.
- */
-typedef struct
-{
-  char *name;                  ///< Name of asset.
-  char *comment;               ///< Comment on asset.
-  char *filter_term;           ///< Filter term, for report.
-  char *report_id;             ///< Report UUID.
-  char *type;                  ///< Type of asset.
-} create_asset_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-create_asset_data_reset (create_asset_data_t *data)
-{
-  free (data->comment);
-  free (data->filter_term);
-  free (data->report_id);
-  free (data->type);
-  free (data->name);
-
-  memset (data, 0, sizeof (create_asset_data_t));
-}
-
-/**
  * @brief Command data for the create_credential command.
  */
 typedef struct
@@ -630,30 +601,6 @@ create_task_data_reset (create_task_data_t *data)
 }
 
 /* Command data passed between parser callbacks. */
-
-/**
- * @brief Command data for the delete_asset command.
- */
-typedef struct
-{
-  char *asset_id;   ///< ID of asset to delete.
-  char *report_id;  ///< ID of report from which to delete assets.
-  int ultimate;     ///< Dummy field for generic macros.
-} delete_asset_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_asset_data_reset (delete_asset_data_t *data)
-{
-  free (data->asset_id);
-  free (data->report_id);
-
-  memset (data, 0, sizeof (delete_asset_data_t));
-}
 
 /**
  * @brief Command data for the delete_config command.
@@ -1467,11 +1414,9 @@ stop_task_data_reset (stop_task_data_t *data)
  */
 typedef union
 {
-  create_asset_data_t create_asset;                   ///< create_asset
   create_credential_data_t create_credential;         ///< create_credential
   create_target_data_t create_target;                 ///< create_target
   create_task_data_t create_task;                     ///< create_task
-  delete_asset_data_t delete_asset;                   ///< delete_asset
   delete_config_data_t delete_config;                 ///< delete_config
   delete_report_data_t delete_report;                 ///< delete_report
   delete_target_data_t delete_target;                 ///< delete_target
@@ -1523,12 +1468,6 @@ command_data_init (command_data_t *data)
 static command_data_t command_data;
 
 /**
- * @brief Parser callback data for CREATE_ASSET.
- */
-static create_asset_data_t *create_asset_data
- = (create_asset_data_t*) &(command_data.create_asset);
-
-/**
  * @brief Parser callback data for CREATE_CREDENTIAL.
  */
 static create_credential_data_t *create_credential_data
@@ -1545,12 +1484,6 @@ static create_target_data_t *create_target_data
  */
 static create_task_data_t *create_task_data
  = (create_task_data_t*) &(command_data.create_task);
-
-/**
- * @brief Parser callback data for DELETE_ASSET.
- */
-static delete_asset_data_t *delete_asset_data
- = (delete_asset_data_t*) &(command_data.delete_asset);
 
 /**
  * @brief Parser callback data for DELETE_CONFIG.
@@ -1756,14 +1689,6 @@ typedef enum
   CLIENT_AUTHENTICATE_CREDENTIALS_PASSWORD,
   CLIENT_AUTHENTICATE_CREDENTIALS_TOKEN,
   CLIENT_AUTHENTICATE_CREDENTIALS_USERNAME,
-  CLIENT_CREATE_ASSET,
-  CLIENT_CREATE_ASSET_REPORT,
-  CLIENT_CREATE_ASSET_REPORT_FILTER,
-  CLIENT_CREATE_ASSET_REPORT_FILTER_TERM,
-  CLIENT_CREATE_ASSET_ASSET,
-  CLIENT_CREATE_ASSET_ASSET_COMMENT,
-  CLIENT_CREATE_ASSET_ASSET_NAME,
-  CLIENT_CREATE_ASSET_ASSET_TYPE,
   CLIENT_CREATE_CONFIG,
   CLIENT_CREATE_CREDENTIAL,
   CLIENT_CREATE_CREDENTIAL_ALLOW_INSECURE,
@@ -1827,7 +1752,6 @@ typedef enum
   CLIENT_CREATE_TASK_SCHEDULE_PERIODS,
   CLIENT_CREATE_TASK_TARGET,
   CLIENT_CREATE_TASK_USAGE_TYPE,
-  CLIENT_DELETE_ASSET,
   CLIENT_DELETE_CONFIG,
   CLIENT_DELETE_REPORT,
   CLIENT_DELETE_TARGET,
@@ -2092,8 +2016,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
               current_credentials.jwt_requested = strcmp (attribute, "0");
             set_client_state (CLIENT_AUTHENTICATE);
           }
-        else if (strcasecmp ("CREATE_ASSET", element_name) == 0)
-          set_client_state (CLIENT_CREATE_ASSET);
         else if (strcasecmp ("CREATE_CONFIG", element_name) == 0)
           {
             create_config_start (gmp_parser, attribute_names,
@@ -2118,14 +2040,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             create_task_data->task = make_task (NULL, NULL, 1, 1);
             create_task_data->alerts = make_array ();
             set_client_state (CLIENT_CREATE_TASK);
-          }
-        else if (strcasecmp ("DELETE_ASSET", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "asset_id",
-                              &delete_asset_data->asset_id);
-            append_attribute (attribute_names, attribute_values, "report_id",
-                              &delete_asset_data->report_id);
-            set_client_state (CLIENT_DELETE_ASSET);
           }
         else if (strcasecmp ("DELETE_CONFIG", element_name) == 0)
           {
@@ -10842,80 +10756,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         set_client_state (CLIENT_AUTHENTICATE_CREDENTIALS);
         break;
 
-      case CLIENT_DELETE_ASSET:
-        if (delete_asset_data->asset_id
-            || delete_asset_data->report_id)
-          switch (delete_asset (delete_asset_data->asset_id,
-                                delete_asset_data->report_id,
-                                delete_asset_data->ultimate))
-            {
-              case 0:
-                SEND_TO_CLIENT_OR_FAIL (XML_OK ("delete_asset"));
-                log_event ("asset", "Asset",
-                           delete_asset_data->asset_id, "deleted");
-                break;
-              case 1:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("delete_asset",
-                                    "Asset is in use"));
-                log_event_fail ("asset", "Asset",
-                                delete_asset_data->asset_id,
-                                "deleted");
-                break;
-              case 2:
-                if (send_find_error_to_client
-                     ("delete_asset",
-                      "asset",
-                      delete_asset_data->asset_id,
-                      gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                log_event_fail ("asset", "Asset",
-                                delete_asset_data->asset_id,
-                                "deleted");
-                break;
-              case 3:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("delete_asset",
-                                    "Attempt to delete a predefined asset"));
-                log_event_fail ("asset", "Asset",
-                                delete_asset_data->asset_id,
-                                "deleted");
-                break;
-              case 4:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("delete_asset",
-                                    "An asset_id or a"
-                                    "report_id is required"));
-                log_event_fail ("asset", "Asset",
-                                delete_asset_data->asset_id,
-                                "deleted");
-                break;
-              case 99:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("delete_asset",
-                                    "Permission denied"));
-                log_event_fail ("asset", "Asset",
-                                delete_asset_data->asset_id,
-                                "deleted");
-                break;
-              default:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_INTERNAL_ERROR ("delete_asset"));
-                log_event_fail ("asset", "Asset",
-                                delete_asset_data->asset_id,
-                                "deleted");
-            }
-        else
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("delete_asset",
-                              "An asset_id attribute is required"));
-        delete_asset_data_reset (delete_asset_data);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
-
       CASE_DELETE (CONFIG, config, "Config");
 
       case CLIENT_DELETE_REPORT:
@@ -11286,115 +11126,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         help_data_reset (help_data);
         set_client_state (CLIENT_AUTHENTIC);
         break;
-
-      case CLIENT_CREATE_ASSET:
-        {
-          resource_t asset;
-
-          if (create_asset_data->report_id == NULL
-              && (create_asset_data->name == NULL
-                  || create_asset_data->type == NULL))
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_asset",
-                                "A report ID or an"
-                                " ASSET with TYPE and NAME is required"));
-          else if (create_asset_data->report_id)
-            switch (create_asset_report (create_asset_data->report_id,
-                                         create_asset_data->filter_term))
-              {
-                case 0:
-                  SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED ("create_asset"));
-                  log_event ("asset", "Asset", NULL, "created");
-                  break;
-                case 1:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_asset",
-                                      "Asset exists already"));
-                  log_event_fail ("asset", "Asset", NULL, "created");
-                  break;
-                case 2:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_asset",
-                                      "Name may only contain alphanumeric"
-                                      " characters"));
-                  log_event_fail ("asset", "Asset", NULL, "created");
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_asset",
-                                      "Permission denied"));
-                  log_event_fail ("asset", "Asset", NULL, "created");
-                  break;
-                default:
-                  assert (0);
-                case -1:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_INTERNAL_ERROR ("create_asset"));
-                  log_event_fail ("asset", "Asset", NULL, "created");
-                  break;
-              }
-          else if (strcasecmp (create_asset_data->type, "host") == 0)
-            {
-              switch (create_asset_host (create_asset_data->name,
-                                         create_asset_data->comment,
-                                         &asset))
-                {
-                  case 0:
-                    {
-                      char *uuid;
-                      uuid = host_uuid (asset);
-                      SENDF_TO_CLIENT_OR_FAIL
-                        (XML_OK_CREATED_ID ("create_asset"), uuid);
-                      log_event ("asset", "Asset", uuid, "created");
-                      g_free (uuid);
-                      break;
-                    }
-                  case 1:
-                    SEND_TO_CLIENT_OR_FAIL
-                       (XML_ERROR_SYNTAX ("create_asset",
-                                          "Asset exists already"));
-                    log_event_fail ("asset", "Asset", NULL, "created");
-                    break;
-                  case 2:
-                    SEND_TO_CLIENT_OR_FAIL
-                       (XML_ERROR_SYNTAX ("create_asset",
-                                          "Name must be an IP address"));
-                    log_event_fail ("asset", "Asset", NULL, "created");
-                    break;
-                  case 99:
-                    SEND_TO_CLIENT_OR_FAIL
-                       (XML_ERROR_SYNTAX ("create_asset",
-                                          "Permission denied"));
-                    log_event_fail ("asset", "Asset", NULL, "created");
-                    break;
-                  default:
-                    assert (0);
-                  case -1:
-                    SEND_TO_CLIENT_OR_FAIL
-                       (XML_INTERNAL_ERROR ("create_asset"));
-                    log_event_fail ("asset", "Asset", NULL, "created");
-                    break;
-                }
-            }
-          else
-            {
-              SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_asset",
-                                    "ASSET TYPE must be 'host'"));
-              log_event_fail ("asset", "Asset", NULL, "created");
-              break;
-            }
-          create_asset_data_reset (create_asset_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-      CLOSE (CLIENT_CREATE_ASSET, REPORT);
-      CLOSE (CLIENT_CREATE_ASSET, ASSET);
-      CLOSE (CLIENT_CREATE_ASSET_ASSET, COMMENT);
-      CLOSE (CLIENT_CREATE_ASSET_ASSET, NAME);
-      CLOSE (CLIENT_CREATE_ASSET_ASSET, TYPE);
-      CLOSE (CLIENT_CREATE_ASSET_REPORT, FILTER);
-      CLOSE (CLIENT_CREATE_ASSET_REPORT_FILTER, TERM);
 
       case CLIENT_CREATE_CONFIG:
         if (create_config_element_end (gmp_parser, error, element_name))
@@ -13798,18 +13529,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
       APPEND (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_VALUE,
               &modify_task_data->preference->value);
 
-
-      APPEND (CLIENT_CREATE_ASSET_ASSET_COMMENT,
-              &create_asset_data->comment);
-
-      APPEND (CLIENT_CREATE_ASSET_ASSET_NAME,
-              &create_asset_data->name);
-
-      APPEND (CLIENT_CREATE_ASSET_ASSET_TYPE,
-              &create_asset_data->type);
-
-      APPEND (CLIENT_CREATE_ASSET_REPORT_FILTER_TERM,
-              &create_asset_data->filter_term);
 
 
       APPEND (CLIENT_CREATE_CREDENTIAL_ALLOW_INSECURE,

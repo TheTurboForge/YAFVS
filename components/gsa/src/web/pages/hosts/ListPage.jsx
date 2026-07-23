@@ -35,7 +35,7 @@ export const ToolBarIcons = ({onHostCreateClick}) => {
         page="managing-assets"
         title={_('Help: Hosts')}
       />
-      {capabilities.mayCreate('host') && (
+      {capabilities.mayAccess('host') && (
         <NewIcon title={_('New Host')} onClick={onHostCreateClick} />
       )}
     </IconDivider>

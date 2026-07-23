@@ -3081,112 +3081,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     </example>
   </command>
   <command>
-    <name>create_asset</name>
-    <summary>Create an asset</summary>
-    <description>
-      <p>
-        The client uses the create_asset command to create a new asset.
-      </p>
-    </description>
-    <pattern>
-      <or>
-        <e>asset</e>
-        <e>report</e>
-      </or>
-    </pattern>
-    <ele>
-      <name>asset</name>
-      <pattern>
-        <e>name</e>
-        <o><e>comment</e></o>
-        <e>type</e>
-      </pattern>
-      <ele>
-        <name>name</name>
-        <summary>A name for the asset. Must be an IPv4 or IPv6 address for hosts</summary>
-        <pattern>
-          <t>name</t>
-        </pattern>
-      </ele>
-      <ele>
-        <name>comment</name>
-        <summary>A comment on the asset</summary>
-        <pattern>
-          text
-        </pattern>
-      </ele>
-      <ele>
-        <name>type</name>
-        <summary>The type of asset to create. Must be 'host'</summary>
-        <pattern>
-          text
-        </pattern>
-      </ele>
-    </ele>
-    <ele>
-      <name>report</name>
-      <summary>Report from which to import assets</summary>
-      <pattern>
-        <attrib>
-          <name>id</name>
-          <type>uuid</type>
-          <required>1</required>
-        </attrib>
-        <e>filter</e>
-      </pattern>
-      <ele>
-        <name>filter</name>
-        <summary>Filter, for min_qod and apply_overrides</summary>
-        <pattern>
-          <e>term</e>
-        </pattern>
-        <ele>
-          <name>term</name>
-          <summary>Filter term</summary>
-          <pattern>
-            text
-          </pattern>
-        </ele>
-      </ele>
-    </ele>
-    <response>
-      <pattern>
-        <attrib>
-          <name>status</name>
-          <type>status</type>
-          <required>1</required>
-        </attrib>
-        <attrib>
-          <name>status_text</name>
-          <type>text</type>
-          <required>1</required>
-        </attrib>
-        <attrib>
-          <name>id</name>
-          <type>uuid</type>
-          <required>1</required>
-        </attrib>
-      </pattern>
-    </response>
-    <example>
-      <summary>Create an asset</summary>
-      <request>
-        <create_asset>
-          <asset>
-            <type>host</type>
-            <name>Localhost</name>
-          </asset>
-        </create_asset>
-      </request>
-      <response>
-        <create_asset_response status="201"
-                                status_text="OK, resource created"
-                                id="254cd3ef-bbe1-4d58-859d-21b8d0c046c6">
-        </create_asset_response>
-      </response>
-    </example>
-  </command>
-  <command>
     <name>create_config</name>
     <summary>Create a config</summary>
     <description>
@@ -4091,65 +3985,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       </response>
     </example>
 </command>
-  <command>
-    <name>delete_asset</name>
-    <summary>Delete an asset</summary>
-    <description>
-      <p>
-        The client uses the delete_asset command to delete an existing asset.
-      </p>
-      <p>
-        Since this is a destructive command, the client is advised to ask
-        for confirmation from the user before sending this command to the
-        Manager.
-      </p>
-    </description>
-    <pattern>
-      <or>
-        <attrib>
-          <name>asset_id</name>
-          <summary>Single asset to delete</summary>
-          <description>
-            <p>
-              Overrides report_id.
-            </p>
-          </description>
-          <type>uuid</type>
-          <required>1</required>
-        </attrib>
-        <attrib>
-          <name>report_id</name>
-          <summary>Report from which to get all assets to delete</summary>
-          <type>uuid</type>
-          <required>1</required>
-        </attrib>
-      </or>
-    </pattern>
-    <response>
-      <pattern>
-        <attrib>
-          <name>status</name>
-          <type>status</type>
-          <required>1</required>
-        </attrib>
-        <attrib>
-          <name>status_text</name>
-          <type>text</type>
-          <required>1</required>
-        </attrib>
-      </pattern>
-    </response>
-    <example>
-      <summary>Delete an asset</summary>
-      <request>
-        <delete_asset asset_id="267a3405-e84a-47da-97b2-5fa0d2e8995e">
-        </delete_asset>
-      </request>
-      <response>
-        <delete_asset_response status="200" status_text="OK"/>
-      </response>
-    </example>
-  </command>
   <command>
     <name>delete_config</name>
     <summary>Delete a config</summary>
@@ -14657,17 +14492,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       <p>
         This does, however, have no effect on the automatic naming when
         copying a resource without giving a name.
-      </p>
-    </description>
-    <version>8.0</version>
-  </change>
-  <change>
-    <command>CREATE_ASSET</command>
-    <summary>ASSET TYPE now mandatory</summary>
-    <description>
-      <p>
-        The TYPE subelement of the ASSET is now mandatory and must be
-        a type supported by the command.
       </p>
     </description>
     <version>8.0</version>

@@ -46,6 +46,11 @@ use crate::{
 
 const GSA_TLS_CERTIFICATE_COMMAND: &str =
     include_str!("../../../components/gsa/src/gmp/commands/tls-certificates.js");
+const GSA_REPORT_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/report.ts");
+const GSA_REPORT_TOOLBAR: &str =
+    include_str!("../../../components/gsa/src/web/pages/reports/details/ToolbarIcons.jsx");
+const GSA_HOST_LIST_PAGE: &str =
+    include_str!("../../../components/gsa/src/web/pages/hosts/ListPage.jsx");
 const GSA_CAPABILITIES: &str =
     include_str!("../../../components/gsa/src/gmp/capabilities/capabilities.ts");
 const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
@@ -55,6 +60,8 @@ const GVMD_GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GVMD_CMAKE: &str = include_str!("../../../components/gvmd/src/CMakeLists.txt");
 const GVMD_GMP_SCHEMA: &str =
     include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
+const GVMD_ASSET_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql_assets.c");
+const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
 const GVMD_TLS_SQL: &str =
     include_str!("../../../components/gvmd/src/manage_sql_tls_certificates.c");
 const READ_API_ROUTES: &str = include_str!("read_api_routes.rs");
@@ -114,6 +121,14 @@ fn cve_catalog_detail_reads_reference_context_without_mutation_workflows() {
     for inherited_workflow in ["export", "delete", "modify", "create"] {
         assert!(!detail_source_without_native_metadata_export.contains(inherited_workflow));
     }
+    for retired in ["'create_asset'", "'delete_asset'"] {
+        assert!(
+            !GSA_CAPABILITIES.contains(retired),
+            "GSA still declares retired capability {retired}"
+        );
+    }
+    assert!(GSA_HOST_LIST_PAGE.contains("capabilities.mayAccess('host')"));
+    assert!(!GSA_HOST_LIST_PAGE.contains("capabilities.mayCreate('host')"));
 }
 
 #[test]
@@ -259,6 +274,127 @@ fn tls_certificate_reads_and_browser_deletes_are_native_only() {
     assert!(READ_API_ROUTES.contains("/api/v1/tls-certificates"));
     assert!(DIRECT_API_CONTRACT.contains(
         "(&Method::DELETE, [\"\", \"api\", \"v1\", \"tls-certificates\", certificate_id])"
+    ));
+}
+
+#[test]
+fn report_asset_mutation_transport_is_retired_while_finalization_stays_native_owned() {
+    for retired in [
+        "addAssets(",
+        "removeAssets(",
+        "cmd: 'create_asset'",
+        "cmd: 'delete_asset'",
+    ] {
+        assert!(
+            !GSA_REPORT_COMMAND.contains(retired),
+            "GSA report command still exposes {retired}"
+        );
+    }
+    for retired in ["AddToAssetsIcon", "RemoveFromAssetsIcon"] {
+        assert!(
+            !GSA_REPORT_TOOLBAR.contains(retired),
+            "report toolbar still exposes {retired}"
+        );
+    }
+
+    for retired in [
+        "create_host_gmp",
+        "create_asset_gmp",
+        "delete_asset_gmp",
+        "ELSE (create_host)",
+        "ELSE (create_asset)",
+        "ELSE (delete_asset)",
+    ] {
+        assert!(!GSAD_GMP.contains(retired), "gsad still exposes {retired}");
+        assert!(
+            !GSAD_GMP_H.contains(retired),
+            "gsad still declares {retired}"
+        );
+    }
+    for retired in ["|(create_host)", "|(create_asset)", "|(delete_asset)"] {
+        assert!(
+            !GSAD_VALIDATOR.contains(retired),
+            "gsad validator still accepts {retired}"
+        );
+    }
+
+    for retired in [
+        "create_asset_data_t",
+        "delete_asset_data_t",
+        "CLIENT_CREATE_ASSET",
+        "CLIENT_DELETE_ASSET",
+        "create_asset_host (",
+        "delete_asset (",
+    ] {
+        assert!(
+            !GVMD_GMP.contains(retired),
+            "GMP parser still exposes {retired}"
+        );
+    }
+    for retired in [
+        "<name>create_asset</name>",
+        "<name>delete_asset</name>",
+        "<command>CREATE_ASSET</command>",
+    ] {
+        assert!(
+            !GVMD_GMP_SCHEMA.contains(retired),
+            "GMP schema still exposes {retired}"
+        );
+    }
+    for retired in [
+        "\ncreate_asset_host (",
+        "\ndelete_report_assets (",
+        "\ndelete_asset (",
+    ] {
+        assert!(
+            !GVMD_ASSET_SQL.contains(retired),
+            "duplicate manager asset writer remains: {retired}"
+        );
+    }
+
+    assert!(GVMD_ASSET_SQL.contains("\ncreate_asset_report ("));
+    let finalization = GVMD_MANAGE_SQL
+        .split_once("process_report_finalization (")
+        .expect("report finalization must remain")
+        .1
+        .split_once("\n}\n")
+        .expect("report finalization must have a bounded body")
+        .0;
+    for retained in [
+        "create_asset_report (report_id, \"\")",
+        "asset_snapshot_collect_report_identifiers (report_id)",
+        "asset_snapshots_target (report, task, check_report_discovery (report))",
+    ] {
+        assert!(
+            finalization.contains(retained),
+            "report finalization lost {retained}"
+        );
+    }
+
+    for retired in [
+        "{\"CREATE_ASSET\", \"Create an asset.\"}",
+        "{\"DELETE_ASSET\", \"Delete an asset.\"}",
+    ] {
+        assert!(
+            !GVMD_COMMAND_INVENTORY.contains(retired),
+            "GMP HELP still advertises retired command: {retired}"
+        );
+    }
+
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::POST,
+        "/api/v1/hosts",
+        true
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::PATCH,
+        "/api/v1/hosts/12345678-1234-1234-1234-123456789abc",
+        true
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/hosts/12345678-1234-1234-1234-123456789abc",
+        true
     ));
 }
 

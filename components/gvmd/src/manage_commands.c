@@ -32,12 +32,10 @@
  */
 command_t gmp_commands[]
  = {{"AUTHENTICATE", "Authenticate with the manager." },
-    {"CREATE_ASSET", "Create an asset."},
     {"CREATE_CONFIG", "Import a scan config."},
     {"CREATE_CREDENTIAL", "Create a credential."},
     {"CREATE_TARGET", "Create a target."},
     {"CREATE_TASK", "Create a task."},
-    {"DELETE_ASSET", "Delete an asset."},
     {"DELETE_CONFIG", "Delete a config."},
     {"DELETE_REPORT", "Delete a report."},
     {"DELETE_TARGET", "Delete a target."},

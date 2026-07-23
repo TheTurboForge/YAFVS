@@ -27,9 +27,6 @@ void
 report_host_set_end_time (report_host_t, time_t);
 
 int
-create_asset_host (const char *, const char *, resource_t* );
-
-int
 create_asset_report (const char *, const char *);
 
 void
@@ -127,9 +124,6 @@ asset_iterator_in_use (iterator_t *);
 
 int
 modify_asset (const char *, const char *);
-
-int
-delete_asset (const char *, const char *, int);
 
 int
 asset_host_count (const get_data_t *);

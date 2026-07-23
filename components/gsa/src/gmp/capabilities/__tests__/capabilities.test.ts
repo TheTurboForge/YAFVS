@@ -138,12 +138,7 @@ describe('Capabilities tests', () => {
   });
 
   test('should support asset types', () => {
-    const caps = new Capabilities([
-      'get_assets',
-      'create_asset',
-      'delete_asset',
-      'modify_asset',
-    ]);
+    const caps = new Capabilities(['get_assets', 'modify_asset']);
 
     expect(caps.mayAccess('host')).toEqual(true);
     // @ts-expect-error
@@ -152,14 +147,14 @@ describe('Capabilities tests', () => {
     // @ts-expect-error
     expect(caps.mayAccess('operatingsystems')).toEqual(true);
 
-    expect(caps.mayClone('host')).toEqual(true);
-    expect(caps.mayClone('operatingsystem')).toEqual(true);
+    expect(caps.mayClone('host')).toEqual(false);
+    expect(caps.mayClone('operatingsystem')).toEqual(false);
 
-    expect(caps.mayCreate('host')).toEqual(true);
-    expect(caps.mayCreate('operatingsystem')).toEqual(true);
+    expect(caps.mayCreate('host')).toEqual(false);
+    expect(caps.mayCreate('operatingsystem')).toEqual(false);
 
-    expect(caps.mayDelete('host')).toEqual(true);
-    expect(caps.mayDelete('operatingsystem')).toEqual(true);
+    expect(caps.mayDelete('host')).toEqual(false);
+    expect(caps.mayDelete('operatingsystem')).toEqual(false);
 
     expect(caps.mayEdit('host')).toEqual(true);
     expect(caps.mayEdit('operatingsystem')).toEqual(true);

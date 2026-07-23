@@ -451,6 +451,20 @@ describe('Host ListPage tests', () => {
 });
 
 describe('Host ListPage ToolBarIcons test', () => {
+  test('should expose native host creation to operators with host read access', () => {
+    const handleCreateHostClick = testing.fn();
+    const gmp = createGmp();
+    const {render} = rendererWith({
+      gmp,
+      capabilities: new Capabilities(['get_assets']),
+      router: true,
+    });
+
+    render(<ToolBarIcons onHostCreateClick={handleCreateHostClick} />);
+
+    expect(screen.getByTitle('New Host')).toBeInTheDocument();
+  });
+
   test('should render', () => {
     const handleCreateHostClick = testing.fn();
 
@@ -497,7 +511,7 @@ describe('Host ListPage ToolBarIcons test', () => {
     expect(handleCreateHostClick).toHaveBeenCalled();
   });
 
-  test('should not show icons if user does not have the right permissions', () => {
+  test('should not show icons without host read access', () => {
     const handleCreateHostClick = testing.fn();
 
     const gmp = createGmp();

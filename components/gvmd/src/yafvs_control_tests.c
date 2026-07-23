@@ -109,6 +109,16 @@ static const char *alert_test_script_message;
 static const char *mock_operator_name;
 static const char *mock_target_auth_method;
 static const char *mock_target_name;
+static gboolean credential_public_key_test_active;
+static gboolean credential_public_key_acl;
+static gboolean credential_public_key_db_error;
+static gboolean credential_public_key_readable;
+static const char *credential_public_key_type;
+static const char *credential_public_key_stored;
+static const char *credential_public_key_private;
+static const char *credential_public_key_password;
+static const char *credential_public_key_derived;
+static int credential_public_key_derivation_calls;
 static gboolean user_uuid_lookup_fails;
 static gboolean alert_uuid_lookup_fails;
 static alert_condition_t received_alert_condition;
@@ -200,6 +210,140 @@ yafvs_control_test_manage_auth_settings_read (
     g_strdup (auth_settings_empty_required ? "" : "radius.example.test");
   settings->radius_secret_configured = 1;
   return MANAGE_AUTH_SETTINGS_OK;
+}
+
+Ensure (yafvs_control, parses_credential_public_key_frames_strictly)
+{
+  const char *valid = "credential-public-key " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174010\n";
+  const char *invalid[] = {
+    "credential-public-key " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174010 extra\n",
+    "credential-public-key " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 123e4567-e89b-12d3-a456-42661417401z\n",
+    "credential-public-key " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-42661417400z "
+    "123e4567-e89b-12d3-a456-426614174010\n",
+  };
+  char operator_uuid[37];
+  yafvs_control_credential_public_key_request_t key_request = {0};
+  size_t i;
+
+  assert_that (yafvs_control_parse_credential_public_key_request (
+                 valid, strlen (valid), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &key_request),
+               is_true);
+  assert_that (operator_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (key_request.credential_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174010"));
+  for (i = 0; i < G_N_ELEMENTS (invalid); i++)
+    assert_that (yafvs_control_parse_credential_public_key_request (
+                   invalid[i], strlen (invalid[i]), TEST_CONTROL_SECRET,
+                   strlen (TEST_CONTROL_SECRET), operator_uuid, &key_request),
+                 is_false);
+}
+
+Ensure (yafvs_control, maps_credential_public_key_responses)
+{
+  assert_that (yafvs_control_credential_public_key_response (1, NULL),
+               is_equal_to_string ("1 not_found\n"));
+  assert_that (yafvs_control_credential_public_key_response (2, NULL),
+               is_equal_to_string ("2 unavailable\n"));
+  assert_that (yafvs_control_credential_public_key_response (99, NULL),
+               is_equal_to_string ("99 forbidden\n"));
+  assert_that (yafvs_control_credential_public_key_response (-2, NULL),
+               is_equal_to_string ("-2 malformed\n"));
+  assert_that (yafvs_control_credential_public_key_response (-1, NULL),
+               is_equal_to_string ("-1 internal\n"));
+}
+
+Ensure (yafvs_control, retrieves_stored_and_derived_credential_public_keys)
+{
+  gchar *response = NULL;
+  char *oversized;
+
+  credential_public_key_test_active = TRUE;
+  credential_public_key_acl = TRUE;
+  credential_public_key_readable = TRUE;
+  credential_public_key_type = "usk";
+  credential_public_key_stored = "ssh-ed25519 AAA";
+  mock_operator_name = "operator";
+  assert_that (yafvs_control_credential_public_key (
+                 "123e4567-e89b-12d3-a456-426614174000",
+                 "123e4567-e89b-12d3-a456-426614174010", &response),
+               is_equal_to (0));
+  assert_that (response, is_equal_to_string ("0 key c3NoLWVkMjU1MTkgQUFB\n"));
+  yafvs_control_secure_free (response);
+
+  credential_public_key_stored = "";
+  credential_public_key_private = "PRIVATE-KEY";
+  credential_public_key_password = "PASSPHRASE";
+  credential_public_key_derived = "ssh-ed25519 DERIVED";
+  assert_that (yafvs_control_credential_public_key (
+                 "123e4567-e89b-12d3-a456-426614174000",
+                 "123e4567-e89b-12d3-a456-426614174010", &response),
+               is_equal_to (0));
+  assert_that (credential_public_key_derivation_calls, is_equal_to (1));
+  assert_that (response, is_equal_to_string (
+                 "0 key c3NoLWVkMjU1MTkgREVSSVZFRA==\n"));
+  yafvs_control_secure_free (response);
+
+  oversized = g_malloc0 (YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_MAX_BYTES + 2);
+  memset (oversized, 'a', YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_MAX_BYTES + 1);
+  credential_public_key_derived = oversized;
+  response = NULL;
+  assert_that (yafvs_control_credential_public_key (
+                 "123e4567-e89b-12d3-a456-426614174000",
+                 "123e4567-e89b-12d3-a456-426614174010", &response),
+               is_equal_to (-1));
+  assert_that (response, is_null);
+  g_free (oversized);
+  credential_public_key_test_active = FALSE;
+  credential_public_key_acl = FALSE;
+  mock_operator_name = NULL;
+}
+
+Ensure (yafvs_control, maps_credential_public_key_lookup_failures)
+{
+  gchar *response = NULL;
+
+  credential_public_key_test_active = TRUE;
+  credential_public_key_acl = TRUE;
+  credential_public_key_readable = FALSE;
+  mock_operator_name = "operator";
+  assert_that (yafvs_control_credential_public_key (
+                 "123e4567-e89b-12d3-a456-426614174000",
+                 "123e4567-e89b-12d3-a456-426614174010", &response),
+               is_equal_to (1));
+  credential_public_key_readable = TRUE;
+  credential_public_key_type = "up";
+  assert_that (yafvs_control_credential_public_key (
+                 "123e4567-e89b-12d3-a456-426614174000",
+                 "123e4567-e89b-12d3-a456-426614174010", &response),
+               is_equal_to (2));
+  credential_public_key_type = "usk";
+  credential_public_key_db_error = TRUE;
+  assert_that (yafvs_control_credential_public_key (
+                 "123e4567-e89b-12d3-a456-426614174000",
+                 "123e4567-e89b-12d3-a456-426614174010", &response),
+               is_equal_to (-1));
+  credential_public_key_db_error = FALSE;
+  credential_public_key_acl = FALSE;
+  assert_that (yafvs_control_credential_public_key (
+                 "123e4567-e89b-12d3-a456-426614174000",
+                 "123e4567-e89b-12d3-a456-426614174010", &response),
+               is_equal_to (99));
+  credential_public_key_acl = TRUE;
+  mock_operator_name = NULL;
+  assert_that (yafvs_control_credential_public_key (
+                 "123e4567-e89b-12d3-a456-426614174000",
+                 "123e4567-e89b-12d3-a456-426614174010", &response),
+               is_equal_to (99));
+  credential_public_key_test_active = FALSE;
+  credential_public_key_acl = FALSE;
 }
 
 void
@@ -1573,6 +1717,12 @@ __wrap_sql_commit (void)
 int
 __wrap_acl_user_may (const char *operation)
 {
+  if (credential_public_key_test_active)
+    {
+      assert_that (operation, is_equal_to_string ("get_credentials"));
+      return credential_public_key_acl;
+    }
+
   if (diagnostic_db_active)
     {
       assert_that (operation, is_equal_to_string ("modify_config"));
@@ -1616,6 +1766,14 @@ __wrap_find_credential_with_permission (const char *uuid,
                                         credential_t *credential,
                                         const char *permission)
 {
+  if (credential_public_key_test_active)
+    {
+      assert_that (uuid, is_equal_to_string (
+        "123e4567-e89b-12d3-a456-426614174010"));
+      assert_that (permission, is_equal_to_string ("get_credentials"));
+      *credential = credential_public_key_readable ? 51 : 0;
+      return credential_public_key_db_error;
+    }
   assert_that (alert_smb_db_active, is_true);
   assert_that (uuid,
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174010"));
@@ -1629,6 +1787,11 @@ __wrap_find_credential_with_permission (const char *uuid,
 char *
 __wrap_credential_type (credential_t credential)
 {
+  if (credential_public_key_test_active)
+    {
+      assert_that (credential, is_equal_to (51));
+      return g_strdup (credential_public_key_type);
+    }
   assert_that (alert_smb_db_active, is_true);
   assert_that (credential, is_equal_to (51));
   alert_smb_record_db_event (ALERT_SMB_DB_CREDENTIAL_TYPE);
@@ -1638,10 +1801,43 @@ __wrap_credential_type (credential_t credential)
 gchar *
 __wrap_credential_value (credential_t credential, const char *name)
 {
+  if (credential_public_key_test_active)
+    {
+      assert_that (credential, is_equal_to (51));
+      assert_that (name, is_equal_to_string ("public_key"));
+      return credential_public_key_stored
+               ? g_strdup (credential_public_key_stored) : NULL;
+    }
   assert_that (alert_smb_db_active, is_true);
   assert_that (credential, is_equal_to (51));
   assert_that (name, is_equal_to_string ("username"));
   return g_strdup (alert_smb_db_credential_username);
+}
+
+gchar *
+__wrap_credential_encrypted_value (credential_t credential, const char *name)
+{
+  assert_that (credential_public_key_test_active, is_true);
+  assert_that (credential, is_equal_to (51));
+  if (strcmp (name, "private_key") == 0)
+    return credential_public_key_private
+             ? g_strdup (credential_public_key_private) : NULL;
+  assert_that (name, is_equal_to_string ("password"));
+  return credential_public_key_password
+           ? g_strdup (credential_public_key_password) : NULL;
+}
+
+char *
+__wrap_gvm_ssh_public_from_private (const char *private_key,
+                                    const char *passphrase)
+{
+  credential_public_key_derivation_calls++;
+  assert_that (private_key,
+               is_equal_to_string (credential_public_key_private));
+  assert_that (passphrase,
+               is_equal_to_string (credential_public_key_password));
+  return credential_public_key_derived
+           ? g_strdup (credential_public_key_derived) : NULL;
 }
 
 gboolean
@@ -6586,6 +6782,14 @@ main (int argc, char **argv)
   add_test_with_context (
     suite, yafvs_control,
     dispatches_alert_test_without_sensitive_response_data);
+  add_test_with_context (suite, yafvs_control,
+                         parses_credential_public_key_frames_strictly);
+  add_test_with_context (suite, yafvs_control,
+                         maps_credential_public_key_responses);
+  add_test_with_context (suite, yafvs_control,
+                         retrieves_stored_and_derived_credential_public_keys);
+  add_test_with_context (suite, yafvs_control,
+                         maps_credential_public_key_lookup_failures);
 
   if (argc > 1)
     ret = run_single_test (suite, argv[1], create_text_reporter ());

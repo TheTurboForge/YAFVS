@@ -26,6 +26,7 @@
 #include "manage_users.h"
 
 #include <gvm/base/pwpolicy.h>
+#include <gvm/util/sshutils.h>
 #include <errno.h>
 #include <glib.h>
 #include <pthread.h>
@@ -70,6 +71,11 @@
 #define YAFVS_CONTROL_CREDENTIAL_PRIVATE_KEY_MAX_BYTES 32768
 #define YAFVS_CONTROL_CREDENTIAL_TYPE_UP "up"
 #define YAFVS_CONTROL_CREDENTIAL_TYPE_USK "usk"
+#define YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_COMMAND \
+  "credential-public-key "
+#define YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_COMMAND) - 1)
+#define YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_MAX_BYTES 49146
 #define YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND "alert-email-create "
 #define YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH \
   (sizeof (YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND) - 1)
@@ -315,6 +321,11 @@ typedef struct
   gchar *secret;
 } yafvs_control_auth_settings_radius_request_t;
 
+typedef struct
+{
+  char credential_uuid[37];
+} yafvs_control_credential_public_key_request_t;
+
 static gboolean
 yafvs_control_decode_base64_field (const char *, size_t, size_t, gboolean,
                                       gchar **);
@@ -329,6 +340,14 @@ yafvs_control_parse_authenticated_prefix (
   const char **, const char **);
 
 static gboolean
+yafvs_control_parse_credential_public_key_request (
+  const char *, size_t, const char *, size_t, char[37],
+  yafvs_control_credential_public_key_request_t *);
+
+static const char *
+yafvs_control_credential_public_key_response (int, gchar **);
+
+static gboolean
 yafvs_control_text_has_allowed_controls (const gchar *, gsize, gboolean);
 
 static void
@@ -336,6 +355,12 @@ yafvs_control_secure_free (gchar *);
 
 static void
 yafvs_control_secure_clear (void *, size_t);
+
+static gboolean
+yafvs_control_start_operator_session (const char *);
+
+static void
+yafvs_control_finish_operator_session (void);
 
 static gboolean
 yafvs_control_alert_status_is_valid (const char *);
@@ -1019,6 +1044,124 @@ yafvs_control_parse_authenticated_prefix (
     return FALSE;
   *end_out = end;
   return TRUE;
+}
+
+static gboolean
+yafvs_control_parse_credential_public_key_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37],
+  yafvs_control_credential_public_key_request_t *key_request)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  size_t field_len;
+
+  memset (key_request, 0, sizeof (*key_request));
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_COMMAND,
+        YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_COMMAND_LENGTH, expected_secret,
+        expected_secret_len, operator_uuid, &cursor, &end))
+    return FALSE;
+
+  if (!yafvs_control_next_field (&cursor, end, &field, &field_len)
+      || field_len != 36)
+    return FALSE;
+  memcpy (key_request->credential_uuid, field, 36);
+  key_request->credential_uuid[36] = '\0';
+  return cursor == end
+         && yafvs_control_uuid_is_valid (key_request->credential_uuid);
+}
+
+static int
+yafvs_control_credential_public_key (const char *operator_uuid,
+                                      const char *credential_uuid,
+                                      gchar **response)
+{
+  credential_t credential = 0;
+  gchar *type = NULL;
+  gchar *public_key = NULL;
+  gchar *private_key = NULL;
+  gchar *password = NULL;
+  gchar *base64 = NULL;
+  int result = -1;
+  size_t public_key_len;
+
+  *response = NULL;
+  if (!yafvs_control_start_operator_session (operator_uuid))
+    return 99;
+  if (acl_user_may ("get_credentials") == 0)
+    {
+      result = 99;
+      goto done;
+    }
+
+  if (find_credential_with_permission (credential_uuid, &credential,
+                                       "get_credentials"))
+    goto done;
+  if (credential == 0)
+    {
+      result = 1;
+      goto done;
+    }
+
+  type = credential_type (credential);
+  if (type == NULL)
+    goto done;
+  if (strcmp (type, YAFVS_CONTROL_CREDENTIAL_TYPE_USK) != 0)
+    {
+      result = 2;
+      goto done;
+    }
+
+  public_key = credential_value (credential, "public_key");
+  if (public_key == NULL || public_key[0] == '\0')
+    {
+      yafvs_control_secure_free (public_key);
+      public_key = NULL;
+      private_key = credential_encrypted_value (credential, "private_key");
+      password = credential_encrypted_value (credential, "password");
+      public_key = gvm_ssh_public_from_private (private_key, password);
+    }
+  if (public_key == NULL || public_key[0] == '\0')
+    goto done;
+
+  public_key_len = strlen (public_key);
+  if (public_key_len > YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_MAX_BYTES)
+    goto done;
+  base64 = g_base64_encode ((const guchar *) public_key, public_key_len);
+  if (base64 == NULL || strlen (base64) + strlen ("0 key \n")
+      >= YAFVS_CONTROL_MAX_REQUEST_BYTES)
+    goto done;
+  *response = g_strdup_printf ("0 key %s\n", base64);
+  if (*response == NULL)
+    goto done;
+  result = 0;
+
+done:
+  yafvs_control_secure_free (private_key);
+  yafvs_control_secure_free (password);
+  yafvs_control_secure_free (public_key);
+  yafvs_control_secure_free (base64);
+  g_free (type);
+  yafvs_control_finish_operator_session ();
+  return result;
+}
+
+static const char *
+yafvs_control_credential_public_key_response (int result, gchar **response)
+{
+  if (result == 0 && response != NULL && *response != NULL)
+    return *response;
+
+  switch (result)
+    {
+      case 1: return "1 not_found\n";
+      case 2: return "2 unavailable\n";
+      case 99: return "99 forbidden\n";
+      case -2: return "-2 malformed\n";
+      default: return "-1 internal\n";
+    }
 }
 
 static gboolean
@@ -4257,6 +4400,8 @@ yafvs_control_serve_client (int client_socket)
   yafvs_control_user_setting_modify_request_t setting_modify_request = {0};
   yafvs_control_auth_settings_ldap_request_t ldap_settings_request = {0};
   yafvs_control_auth_settings_radius_request_t radius_settings_request = {0};
+  yafvs_control_credential_public_key_request_t credential_public_key_request =
+    {0};
   memset (request, 0, sizeof (request));
 
   yafvs_control_set_timeouts (client_socket);
@@ -4280,6 +4425,22 @@ yafvs_control_serve_client (int client_socket)
         && memcmp (request, YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND,
                    YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH) == 0)
         result_response = yafvs_control_auth_settings_response (-2);
+      else if (yafvs_control_parse_credential_public_key_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, &credential_public_key_request))
+        {
+          result = yafvs_control_credential_public_key (
+            operator_uuid, credential_public_key_request.credential_uuid,
+            &allocated_response);
+          result_response = yafvs_control_credential_public_key_response (
+            result, &allocated_response);
+        }
+      else if (request_len >= YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_COMMAND,
+                          YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_COMMAND_LENGTH)
+                    == 0)
+        result_response = yafvs_control_credential_public_key_response (
+          -2, NULL);
       else if (yafvs_control_parse_auth_settings_ldap_write_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &ldap_settings_request))
@@ -4621,6 +4782,11 @@ yafvs_control_serve_client (int client_socket)
     && memcmp (request, YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND,
                YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH) == 0)
     result_response = yafvs_control_auth_settings_response (-2);
+  else if (request_len >= YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_COMMAND,
+                      YAFVS_CONTROL_CREDENTIAL_PUBLIC_KEY_COMMAND_LENGTH)
+                == 0)
+    result_response = yafvs_control_credential_public_key_response (-2, NULL);
   else if (
     request_len >= YAFVS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH
     && memcmp (request, YAFVS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND,
@@ -4742,6 +4908,8 @@ yafvs_control_serve_client (int client_socket)
   yafvs_control_auth_settings_ldap_request_clear (&ldap_settings_request);
   yafvs_control_auth_settings_radius_request_clear (
     &radius_settings_request);
+  yafvs_control_secure_clear (&credential_public_key_request,
+                              sizeof (credential_public_key_request));
   yafvs_control_secure_free (allocated_response);
   if (request_len <= YAFVS_CONTROL_MAX_REQUEST_BYTES)
     {

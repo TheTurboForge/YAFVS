@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 SECONDARY_USER = "yafvs-rbac-smoke"
+TEMP_USER_PREFIX = "yafvs-user-lifecycle-smoke"
 TEMP_FILTER_PREFIX = "YAFVS RBAC smoke filter"
 TEMP_TARGET_PREFIX = "YAFVS RBAC smoke target"
 TEMP_TASK_PREFIX = "YAFVS RBAC smoke task"
@@ -161,6 +162,75 @@ def ensure_secondary_user(admin_client: NativeBrowserClient, password: str) -> d
     if not user_id:
         raise RuntimeError("Could not determine secondary smoke user id")
     return {"id": user_id, "name": SECONDARY_USER, "action": action}
+
+
+def verify_native_user_lifecycle(client: NativeBrowserClient) -> dict[str, Any]:
+    """Exercise native create, modify, delete, and post-delete absence."""
+    username = f"{TEMP_USER_PREFIX}-{secrets.token_hex(4)}"
+    password = secrets.token_urlsafe(24)
+    user_id: str | None = None
+    state = "absent"
+    cleanup = None
+    try:
+        payload = {
+            "name": username,
+            "comment": "Temporary native user lifecycle smoke",
+            "auth_method": "password",
+            "password": password,
+        }
+        created = client.request_json("POST", "user-management/users", payload=payload)
+        user_id = created.get("id")
+        if not isinstance(user_id, str) or not user_id:
+            raise RuntimeError("Native user create returned no id")
+        state = "live"
+        modified_payload = {
+            **payload,
+            "comment": "Modified by native user lifecycle smoke",
+        }
+        modified = client.request_json(
+            "PATCH", f"user-management/users/{user_id}", payload=modified_payload
+        )
+        if modified.get("id") != user_id:
+            raise RuntimeError("Native user modify returned an unexpected id")
+        client.request_json("DELETE", f"user-management/users/{user_id}")
+        state = "deleted"
+        collection = client.request_json(
+            "GET",
+            "user-management/users",
+            query={"page": "1", "page_size": "500", "sort": "name", "filter": ""},
+        )
+        if any(
+            isinstance(item, dict) and item.get("id") == user_id
+            for item in collection.get("items", [])
+        ):
+            raise RuntimeError("Deleted native user remains visible in the collection")
+        return {
+            "status": "pass",
+            "user_id": user_id,
+            "created": True,
+            "modified": True,
+            "deleted": True,
+            "absent_after_delete": True,
+            "cleanup": cleanup,
+        }
+    except Exception as error:  # pylint: disable=broad-except
+        if user_id and state == "live":
+            try:
+                client.request_json("DELETE", f"user-management/users/{user_id}")
+                cleanup = "deleted"
+            except Exception as cleanup_error:  # pylint: disable=broad-except
+                cleanup = f"failed: {type(cleanup_error).__name__}: {cleanup_error}"
+        return {
+            "status": "fail",
+            "user_id": user_id,
+            "created": user_id is not None,
+            "modified": False,
+            "deleted": state == "deleted",
+            "absent_after_delete": False,
+            "cleanup": cleanup,
+            "error_type": type(error).__name__,
+            "error": str(error),
+        }
 
 
 def verify_full_test_visibility(client: NativeBrowserClient) -> dict[str, Any]:
@@ -476,6 +546,7 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError(f"admin password file is empty: {password_path}")
         native_admin = NativeBrowserClient(args.base_url, args.timeout)
         native_admin.login(args.username, admin_password)
+        native_user_lifecycle = verify_native_user_lifecycle(native_admin)
         secondary_user = ensure_secondary_user(native_admin, secondary_password)
         native_secondary = NativeBrowserClient(args.base_url, args.timeout)
         native_secondary.login(SECONDARY_USER, secondary_password)
@@ -487,6 +558,7 @@ def main(argv: list[str] | None = None) -> int:
             native_admin, native_secondary
         )
         checks = (
+            native_user_lifecycle,
             visibility,
             native_filter_admin,
             native_target_task_admin,
@@ -496,6 +568,7 @@ def main(argv: list[str] | None = None) -> int:
             status,
             "Runtime RBAC smoke passed for the operator-account model." if status == "pass" else "Runtime RBAC smoke failed for the operator-account model.",
             secondary_user=secondary_user,
+            native_user_lifecycle=native_user_lifecycle,
             full_test_visibility=visibility,
             native_cross_user_filter_admin=native_filter_admin,
             native_cross_user_target_task_admin=native_target_task_admin,

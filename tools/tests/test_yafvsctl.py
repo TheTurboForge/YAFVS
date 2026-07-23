@@ -11392,6 +11392,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn('"--socket"', source)
         self.assertIn("NativeBrowserClient", source)
         self.assertIn('"user-management/users"', source)
+        self.assertIn("verify_native_user_lifecycle", source)
         self.assertIn("verify_native_cross_user_filter_admin", source)
         self.assertIn("verify_native_cross_user_target_task_admin", source)
         self.assertNotIn("verify_cross_user_filter_admin", source)
@@ -11439,6 +11440,34 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(client.token, "native-session-token")
         self.assertEqual(opener.request.get_method(), "POST")
         self.assertEqual(opener.timeout, 17)
+
+    def test_runtime_rbac_native_user_lifecycle_cleans_up(self):
+        calls = []
+
+        class FakeNativeClient:
+            def request_json(self, method, path, *, payload=None, query=None):
+                calls.append((method, path, payload, query))
+                if method in ("POST", "PATCH"):
+                    return {"id": "user-1"}
+                if method == "GET":
+                    return {"items": []}
+                return {}
+
+        result = runtime_rbac_smoke.verify_native_user_lifecycle(FakeNativeClient())
+
+        self.assertEqual(result["status"], "pass")
+        self.assertTrue(result["absent_after_delete"])
+        self.assertEqual(
+            [(method, path) for method, path, _payload, _query in calls],
+            [
+                ("POST", "user-management/users"),
+                ("PATCH", "user-management/users/user-1"),
+                ("DELETE", "user-management/users/user-1"),
+                ("GET", "user-management/users"),
+            ],
+        )
+        self.assertEqual(calls[0][2]["name"], calls[1][2]["name"])
+        self.assertNotEqual(calls[0][2]["comment"], calls[1][2]["comment"])
 
     def test_runtime_rbac_failure_writes_artifact_and_returns_failure(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -18,6 +18,7 @@ const GSA_CREDENTIAL_COMMAND: &str =
 const GSA_NATIVE_CREDENTIALS: &str =
     include_str!("../../../components/gsa/src/gmp/native-api/credentials.ts");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GVMD_GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
@@ -40,6 +41,72 @@ fn openapi_path_block(path: &str) -> String {
             }
         })
         .unwrap_or_else(|| tail.to_string())
+}
+
+#[test]
+fn credential_metadata_reads_have_no_public_gsad_aliases_but_download_remains() {
+    for native_marker in [
+        "fetchNativeCredential(this.http, id)",
+        "exportNativeCredentialMetadata(this.http, id)",
+    ] {
+        assert!(
+            GSA_CREDENTIAL_COMMAND.contains(native_marker),
+            "GSA credential command must retain native ownership: {native_marker}"
+        );
+    }
+
+    for retired in [
+        "get_credential_gmp",
+        "get_credentials_gmp",
+        "export_credential_gmp",
+        "export_credentials_gmp",
+    ] {
+        assert!(
+            !GSAD_GMP_C.contains(retired),
+            "retired credential metadata alias remains in gsad C: {retired}"
+        );
+        assert!(
+            !GSAD_GMP_HEADER.contains(retired),
+            "retired credential metadata declaration remains: {retired}"
+        );
+    }
+    for retired_dispatch in [
+        "ELSE (get_credential)",
+        "ELSE (get_credentials)",
+        "ELSE (export_credential)",
+        "ELSE (export_credentials)",
+    ] {
+        assert!(
+            !GSAD_GMP_C.contains(retired_dispatch),
+            "retired credential metadata dispatch remains: {retired_dispatch}"
+        );
+    }
+    for retired_token in [
+        "|(get_credential)",
+        "|(get_credentials)",
+        "|(export_credential)",
+        "|(export_credentials)",
+    ] {
+        assert!(
+            !GSAD_VALIDATOR_C.contains(retired_token),
+            "retired credential metadata validator token remains: {retired_token}"
+        );
+    }
+
+    for retained in [
+        "download_credential_gmp",
+        "ELSE (download_credential)",
+        "<get_credentials",
+    ] {
+        assert!(
+            GSAD_GMP_C.contains(retained),
+            "secret-bearing credential download dependency must remain until it is migrated: {retained}"
+        );
+    }
+    assert!(GSAD_GMP_HEADER.contains("download_credential_gmp"));
+    assert!(GSAD_VALIDATOR_C.contains("|(download_credential)"));
+    assert!(GVMD_GMP_C.contains("CLIENT_GET_CREDENTIALS"));
+    assert!(GMP_SCHEMA.contains("<name>get_credentials</name>"));
 }
 
 #[test]

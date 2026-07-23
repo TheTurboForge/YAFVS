@@ -162,10 +162,6 @@ get_config_family (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 
 static char *
-get_credential (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                const char *, gsad_command_response_data_t *);
-
-static char *
 get_override (gvm_connection_t *, gsad_credentials_t *, params_t *,
               const char *, gsad_command_response_data_t *);
 
@@ -2706,47 +2702,6 @@ create_credential_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Get one credential, envelope the result.
- *
- * @param[in]   connection         Connection to manager.
- * @param[in]   credentials        Username and password for authentication.
- * @param[in]   params             Request parameters.
- * @param[in]   extra_xml          Extra XML to insert inside page element.
- * @param[out]  response_data      Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-static char *
-get_credential (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                params_t *params, const char *extra_xml,
-                gsad_command_response_data_t *response_data)
-{
-  gmp_arguments_t *arguments = gmp_arguments_new ();
-  gmp_arguments_add (arguments, "targets", "1");
-  gmp_arguments_add (arguments, "scanners", "1");
-  return get_one (connection, "credential", credentials, params, extra_xml,
-                  arguments, response_data);
-}
-
-/**
- * @brief Get one credential, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_credential_gmp (gvm_connection_t *connection,
-                    gsad_credentials_t *credentials, params_t *params,
-                    gsad_command_response_data_t *response_data)
-{
-  return get_credential (connection, credentials, params, NULL, response_data);
-}
-
-/**
  * @brief Export a Credential in a defined format.
  *
  * @param[in]   connection     Connection to manager.
@@ -2923,65 +2878,6 @@ download_credential_gmp (gvm_connection_t *connection,
   g_free (login);
 
   return data;
-}
-
-/**
- * @brief Export a Credential.
- *
- * @param[in]   connection           Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Credential XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_credential_gmp (gvm_connection_t *connection,
-                       gsad_credentials_t *credentials, params_t *params,
-                       gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "credential", credentials, params,
-                          response_data);
-}
-
-/**
- * @brief Export a list of Credentials.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Credentials XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_credentials_gmp (gvm_connection_t *connection,
-                        gsad_credentials_t *credentials, params_t *params,
-                        gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "credential", credentials, params,
-                      response_data);
-}
-
-/**
- * @brief Get one or all credentials, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return 0 success, 1 failure.
- */
-char *
-get_credentials_gmp (gvm_connection_t *connection,
-                     gsad_credentials_t *credentials, params_t *params,
-                     gsad_command_response_data_t *response_data)
-{
-  return get_many (connection, "credentials", credentials, params, NULL,
-                   response_data);
 }
 
 /**
@@ -7365,8 +7261,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (export_asset)
   ELSE (export_assets)
   ELSE (download_credential)
-  ELSE (export_credential)
-  ELSE (export_credentials)
   ELSE (export_override)
   ELSE (export_overrides)
   ELSE (export_preference_file)
@@ -7382,8 +7276,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_config)
   ELSE (get_configs)
   ELSE (get_config_family)
-  ELSE (get_credential)
-  ELSE (get_credentials)
   ELSE (get_info)
   ELSE (get_override)
   ELSE (get_overrides)

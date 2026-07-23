@@ -11410,6 +11410,36 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("gvmd_socket_path", rbac_wrapper)
         self.assertNotIn('"--socket"', rbac_wrapper)
 
+    def test_runtime_rbac_native_login_parses_session_token(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def read(self):
+                return b"<response><token>native-session-token</token></response>"
+
+        class FakeOpener:
+            def __init__(self):
+                self.request = None
+
+            def open(self, request, timeout):
+                self.request = request
+                self.timeout = timeout
+                return FakeResponse()
+
+        client = runtime_rbac_smoke.NativeBrowserClient("https://127.0.0.1:19392", 17)
+        opener = FakeOpener()
+        client.opener = opener
+
+        client.login("admin", "test-password")
+
+        self.assertEqual(client.token, "native-session-token")
+        self.assertEqual(opener.request.get_method(), "POST")
+        self.assertEqual(opener.timeout, 17)
+
     def test_runtime_rbac_failure_writes_artifact_and_returns_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifact_dir = Path(tmp) / "artifacts"

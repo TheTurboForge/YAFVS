@@ -8,6 +8,7 @@ import EntityCommand from 'gmp/commands/entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import Credential, {
   type CredentialType,
   type CredentialElement,
@@ -18,6 +19,7 @@ import {type Element} from 'gmp/models/model';
 import {
   cloneNativeCredential,
   exportNativeCredentialMetadata,
+  fetchNativeCredential,
   patchNativeCredential,
 } from 'gmp/native-api/credentials';
 import {parseYesNo} from 'gmp/parser';
@@ -99,6 +101,11 @@ class CredentialCommand extends EntityCommand<
 
   async export({id}: EntityCommandParams) {
     return await exportNativeCredentialMetadata(this.http, id);
+  }
+
+  async get({id}: EntityCommandParams) {
+    const credential = await fetchNativeCredential(this.http, id);
+    return new Response(credential);
   }
 
   private createBase({

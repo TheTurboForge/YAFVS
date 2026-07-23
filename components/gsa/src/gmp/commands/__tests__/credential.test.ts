@@ -136,6 +136,55 @@ describe('CredentialCommand tests', () => {
     });
   });
 
+  test('should get a credential through the native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'credential/id',
+        name: 'SSH credential',
+        comment: 'native detail',
+        credential_type: 'usk',
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string, params?: Record<string, string | undefined>) =>
+        `https://yafvs.example/${path}${params?.token ? `?token=${params.token}` : ''}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new CredentialCommand(fakeHttp);
+
+    const result = await cmd.get({id: 'credential/id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/credentials/credential%2Fid',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/credentials/credential%2Fid?token=test-token',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data).toMatchObject({
+      id: 'credential/id',
+      name: 'SSH credential',
+      comment: 'native detail',
+    });
+  });
+
   test('should create KRB5 credential with empty kdcs', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

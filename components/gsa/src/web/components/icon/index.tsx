@@ -78,10 +78,7 @@ import Cpe from 'web/components/icon/svg/cpe.svg?react';
 import Cve from 'web/components/icon/svg/cve.svg?react';
 import DfnCertAdv from 'web/components/icon/svg/dfn_cert_adv.svg?react';
 import DlCsv from 'web/components/icon/svg/dl_csv.svg?react';
-import DlDeb from 'web/components/icon/svg/dl_deb.svg?react';
-import DlExe from 'web/components/icon/svg/dl_exe.svg?react';
 import DlKey from 'web/components/icon/svg/dl_key.svg?react';
-import DlRpm from 'web/components/icon/svg/dl_rpm.svg?react';
 import DlSvg from 'web/components/icon/svg/dl_svg.svg?react';
 import Host from 'web/components/icon/svg/host.svg?react';
 import Ldap from 'web/components/icon/svg/ldap.svg?react';
@@ -264,10 +261,7 @@ const getIcons = (): Record<string, IconComponent> => {
       false,
     ),
     DlCsv: createIcon(DlCsv, 'download-csv-icon', 'Download CSV Icon', false),
-    DlDeb: createIcon(DlDeb, 'download-deb-icon', 'Download DEB Icon', false),
-    DlExe: createIcon(DlExe, 'download-exe-icon', 'Download EXE Icon', false),
     DlKey: createIcon(DlKey, 'download-key-icon', 'Download Key Icon', false),
-    DlRpm: createIcon(DlRpm, 'download-rpm-icon', 'Download RPM Icon', false),
     DlSvg: createIcon(DlSvg, 'download-svg-icon', 'Download SVG Icon', false),
     Host: createIcon(Host, 'host-icon', 'Host Icon', false),
     Ldap: createIcon(Ldap, 'ldap-icon', 'LDAP Icon', false),
@@ -421,10 +415,7 @@ export const DfnCertAdvIcon = getIcons().DfnCertAdv;
 export const DiffIcon = getIcons().Diff;
 export const DisableIcon = getIcons().Disabled;
 export const DownloadCsvIcon = getIcons().DlCsv;
-export const DownloadDebIcon = getIcons().DlDeb;
-export const DownloadExeIcon = getIcons().DlExe;
 export const DownloadKeyIcon = getIcons().DlKey;
-export const DownloadRpmIcon = getIcons().DlRpm;
 export const DownloadSvgIcon = getIcons().DlSvg;
 export const DownloadIcon = getIcons().Download;
 export const EqualIcon = getIcons().Equal;

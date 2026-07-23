@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -43,12 +44,6 @@ describe('CredentialActions tests', () => {
     expect(screen.getByRole('button', {name: /edit/i})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: /clone/i})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: /export/i})).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', {name: /download rpm/i}),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', {name: /download deb/i}),
-    ).toBeInTheDocument();
     expect(
       screen.getByRole('button', {name: /download key/i}),
     ).toBeInTheDocument();
@@ -166,7 +161,7 @@ describe('CredentialActions tests', () => {
     expect(handleDownload).toHaveBeenCalledWith(credential);
   });
 
-  test('should allow to download credential installer', () => {
+  test('should allow to download a public key', () => {
     const {render} = rendererWithTableRow({capabilities: true});
     const credential = new Credential({
       id: '1',
@@ -182,18 +177,6 @@ describe('CredentialActions tests', () => {
         onCredentialInstallerDownloadClick={handleDownloadInstaller}
       />,
     );
-
-    const rpmIcon = screen.getByRole('button', {
-      name: /download rpm icon/i,
-    });
-    fireEvent.click(rpmIcon);
-    expect(handleDownloadInstaller).toHaveBeenCalledWith(credential, 'rpm');
-
-    const debIcon = screen.getByRole('button', {
-      name: /download deb icon/i,
-    });
-    fireEvent.click(debIcon);
-    expect(handleDownloadInstaller).toHaveBeenCalledWith(credential, 'deb');
 
     const keyIcon = screen.getByRole('button', {
       name: /download key icon/i,

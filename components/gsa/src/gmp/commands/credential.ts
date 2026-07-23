@@ -26,7 +26,7 @@ import {
 import {parseYesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 
-export type CredentialDownloadFormat = 'pem' | 'key' | 'rpm' | 'deb' | 'exe';
+export type CredentialDownloadFormat = 'pem' | 'key';
 
 interface CredentialCommandBaseArgs {
   authAlgorithm?: SNMPAuthAlgorithmType;

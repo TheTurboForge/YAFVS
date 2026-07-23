@@ -263,9 +263,6 @@ member1 (params_t *params, const char *string)
 /**
  * @brief Set a content type from a format string.
  *
- * For example set the content type to GSAD_CONTENT_TYPE_APP_DEB when given
- * format "deb".
- *
  * @param[out]  content_type  Return location for the newly set content type,
  *                            defaults to GSAD_CONTENT_TYPE_OCTET_STREAM.
  * @param[in]   format        Lowercase format string as in the respective
@@ -278,10 +275,6 @@ content_type_from_format_string (enum content_type *content_type,
   if (!format)
     *content_type = GSAD_CONTENT_TYPE_OCTET_STREAM;
 
-  else if (strcmp (format, "deb") == 0)
-    *content_type = GSAD_CONTENT_TYPE_APP_DEB;
-  else if (strcmp (format, "exe") == 0)
-    *content_type = GSAD_CONTENT_TYPE_APP_EXE;
   else if (strcmp (format, "html") == 0)
     *content_type = GSAD_CONTENT_TYPE_TEXT_HTML;
   else if (strcmp (format, "key") == 0)
@@ -290,8 +283,6 @@ content_type_from_format_string (enum content_type *content_type,
     *content_type = GSAD_CONTENT_TYPE_APP_NBE;
   else if (strcmp (format, "pdf") == 0)
     *content_type = GSAD_CONTENT_TYPE_APP_PDF;
-  else if (strcmp (format, "rpm") == 0)
-    *content_type = GSAD_CONTENT_TYPE_APP_RPM;
   else if (strcmp (format, "xml") == 0)
     *content_type = GSAD_CONTENT_TYPE_APP_XML;
   else
@@ -2748,62 +2739,6 @@ download_credential_gmp (gvm_connection_t *connection,
         response_data);
     }
 
-  if (strcmp (format, "rpm") == 0 || strcmp (format, "deb") == 0
-      || strcmp (format, "exe") == 0)
-    {
-      entity_t package_entity = NULL;
-
-      /* A base64 encoded package. */
-      if (read_entity_c (connection, &entity))
-        {
-          gsad_command_response_data_set_status_code (
-            response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-          return gsad_http_create_gsad_message (
-            credentials,
-            "An internal error occurred while getting a credential. "
-            "The credential is not available. "
-            "Diagnostics: Failure to receive response from manager daemon.",
-            response_data);
-        }
-
-      credential_entity = entity_child (entity, "credential");
-      if (credential_entity)
-        package_entity = entity_child (credential_entity, "package");
-      if (package_entity != NULL)
-        {
-          gsize len;
-          char *package_encoded = entity_text (package_entity);
-          if (strlen (package_encoded))
-            {
-              data = (gchar *) g_base64_decode (package_encoded, &len);
-              if (data == NULL)
-                {
-                  data = g_strdup ("");
-                  len = 0;
-                }
-            }
-          else
-            {
-              data = g_strdup ("");
-              len = 0;
-            }
-
-          gsad_command_response_data_set_content_length (response_data, len);
-        }
-      else
-        {
-          free_entity (entity);
-          gsad_command_response_data_set_status_code (
-            response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-          return gsad_http_create_gsad_message (
-            credentials,
-            "An internal error occurred while getting a credential. "
-            "The credential could not be delivered. "
-            "Diagnostics: Failure to receive credential from manager daemon.",
-            response_data);
-        }
-    }
-  else
     {
       entity_t key_entity = NULL;
 

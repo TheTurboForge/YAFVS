@@ -370,7 +370,7 @@ describe('CredentialComponent tests', () => {
     expect(onDownloadError).toHaveBeenCalledExactlyOnceWith(error);
   });
 
-  test('should allow downloading a credential installer', async () => {
+  test('should allow downloading a credential file', async () => {
     const onDownloaded = testing.fn();
     const onDownloadError = testing.fn();
     const gmp = createGmp();
@@ -384,7 +384,7 @@ describe('CredentialComponent tests', () => {
           <Button
             data-testid="button"
             onClick={() =>
-              downloadInstaller(new Credential({id: '123'}), 'rpm')
+              downloadInstaller(new Credential({id: '123'}), 'key')
             }
           />
         )}
@@ -394,15 +394,15 @@ describe('CredentialComponent tests', () => {
 
     fireEvent.click(screen.getByTestId('button'));
     await wait();
-    expect(gmp.credential.download).toHaveBeenCalledWith({id: '123'}, 'rpm');
+    expect(gmp.credential.download).toHaveBeenCalledWith({id: '123'}, 'key');
     expect(onDownloadError).not.toHaveBeenCalled();
     expect(onDownloaded).toHaveBeenCalledWith({
       data: 'some-data',
-      filename: 'credential-123.rpm',
+      filename: 'credential-123.pub',
     });
   });
 
-  test('should call onInstallerDownloadError when downloading a credential installer fails', async () => {
+  test('should call onInstallerDownloadError when downloading a credential file fails', async () => {
     const error = new Error('error');
     const onDownloaded = testing.fn();
     const onDownloadError = testing.fn();
@@ -419,7 +419,7 @@ describe('CredentialComponent tests', () => {
           <Button
             data-testid="button"
             onClick={() =>
-              downloadInstaller(new Credential({id: '123'}), 'rpm')
+              downloadInstaller(new Credential({id: '123'}), 'pem')
             }
           />
         )}

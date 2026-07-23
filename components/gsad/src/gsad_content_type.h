@@ -1,4 +1,5 @@
 /* Copyright (C) 2016-2021 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -16,13 +17,10 @@
  */
 enum content_type
 {
-  GSAD_CONTENT_TYPE_APP_DEB,
-  GSAD_CONTENT_TYPE_APP_EXE,
   GSAD_CONTENT_TYPE_APP_XHTML,
   GSAD_CONTENT_TYPE_APP_KEY,
   GSAD_CONTENT_TYPE_APP_NBE,
   GSAD_CONTENT_TYPE_APP_PDF,
-  GSAD_CONTENT_TYPE_APP_RPM,
   GSAD_CONTENT_TYPE_APP_XML,
   GSAD_CONTENT_TYPE_DONE,   ///< Special marker.
   GSAD_CONTENT_TYPE_STRING, ///< Special marker for using content type string.

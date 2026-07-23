@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -108,10 +109,10 @@ describe('CredentialTable tests', () => {
     fireEvent.click(editButton);
     expect(handleEdit).toHaveBeenCalledWith(credential);
 
-    const downloadRpmButton = screen.getByRole('button', {
-      name: /download rpm/i,
+    const downloadKeyButton = screen.getByRole('button', {
+      name: /download key/i,
     });
-    fireEvent.click(downloadRpmButton);
-    expect(handleDownloadInstaller).toHaveBeenCalledWith(credential, 'rpm');
+    fireEvent.click(downloadKeyButton);
+    expect(handleDownloadInstaller).toHaveBeenCalledWith(credential, 'key');
   });
 });

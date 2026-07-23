@@ -178,7 +178,8 @@ const CredentialComponent = ({
     cred: Credential,
     format: CredentialDownloadFormat,
   ) => {
-    return handleEntityDownloadInstaller(cred, {format, extension: format});
+    const extension = format === 'key' ? 'pub' : 'pem';
+    return handleEntityDownloadInstaller(cred, {format, extension});
   };
 
   const handleEntitySave = useEntitySave(

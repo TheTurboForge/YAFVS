@@ -646,7 +646,7 @@ describe('CredentialCommand tests', () => {
     expect(resp.data.id).toEqual('foo');
   });
 
-  test.each<CredentialDownloadFormat>(['pem', 'key', 'rpm', 'deb', 'exe'])(
+  test.each<CredentialDownloadFormat>(['pem', 'key'])(
     'should download credential as %s',
     async format => {
       const response = new ArrayBuffer(8);

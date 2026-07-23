@@ -14,6 +14,22 @@ BeforeEach (gsad_validator)
   gsad_init_validator ();
 }
 
+Ensure (gsad_validator, restrict_credential_download_formats)
+{
+  validator_t validator = gsad_get_validator ();
+
+  assert_that (gvm_validate (validator, "package_format", "key"),
+               is_equal_to (0));
+  assert_that (gvm_validate (validator, "package_format", "pem"),
+               is_equal_to (0));
+  assert_that (gvm_validate (validator, "package_format", "rpm"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "package_format", "deb"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "package_format", "exe"),
+               is_equal_to (2));
+}
+
 Ensure (gsad_validator, reject_removed_native_only_commands)
 {
   validator_t validator = gsad_get_validator ();
@@ -333,6 +349,8 @@ main (int argc, char **argv)
                          reject_removed_native_only_commands);
   add_test_with_context (suite, gsad_validator,
                          reject_removed_scan_config_commands);
+  add_test_with_context (suite, gsad_validator,
+                         restrict_credential_download_formats);
   add_test_with_context (suite, gsad_validator, validate_kdcs_name_and_value);
   add_test_with_context (suite, gsad_validator, validate_ca_pub);
   add_test_with_context (suite, gsad_validator,

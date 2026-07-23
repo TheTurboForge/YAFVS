@@ -1,4 +1,5 @@
 /* Copyright (C) 2016-2021 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -251,14 +252,6 @@ gsad_http_add_content_type_header (gsad_http_response_t *response,
 
   switch (*ct)
     {
-    case GSAD_CONTENT_TYPE_APP_DEB:
-      MHD_add_response_header (response, MHD_HTTP_HEADER_CONTENT_TYPE,
-                               "application/deb");
-      break;
-    case GSAD_CONTENT_TYPE_APP_EXE:
-      MHD_add_response_header (response, MHD_HTTP_HEADER_CONTENT_TYPE,
-                               "application/exe");
-      break;
     case GSAD_CONTENT_TYPE_APP_XHTML:
       MHD_add_response_header (response, MHD_HTTP_HEADER_CONTENT_TYPE,
                                "application/xhtml+xml");
@@ -274,10 +267,6 @@ gsad_http_add_content_type_header (gsad_http_response_t *response,
     case GSAD_CONTENT_TYPE_APP_PDF:
       MHD_add_response_header (response, MHD_HTTP_HEADER_CONTENT_TYPE,
                                "application/pdf");
-      break;
-    case GSAD_CONTENT_TYPE_APP_RPM:
-      MHD_add_response_header (response, MHD_HTTP_HEADER_CONTENT_TYPE,
-                               "application/rpm");
       break;
     case GSAD_CONTENT_TYPE_APP_XML:
       MHD_add_response_header (response, MHD_HTTP_HEADER_CONTENT_TYPE,

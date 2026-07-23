@@ -117,7 +117,6 @@ describe('CredentialDetailsPage tests', () => {
       'Owner:admin',
     );
 
-
     expect(
       screen.getByRole('row', {name: /^comment some comment/i}),
     ).toBeInTheDocument();
@@ -286,7 +285,6 @@ describe('CredentialDetailsPage tests', () => {
     expect(container).toHaveTextContent('No user tags available');
   });
 
-
   test('should call commands', async () => {
     const gmp = createGmp();
     const {render, store} = rendererWith({
@@ -311,20 +309,6 @@ describe('CredentialDetailsPage tests', () => {
     const deleteIcon = screen.getByTitle('Move Credential to trashcan');
     fireEvent.click(deleteIcon);
     expect(gmp.credential.delete).toHaveBeenCalledWith({id: credential.id});
-
-    const downloadDebIcon = screen.getByTitle('Download Debian (.deb) Package');
-    fireEvent.click(downloadDebIcon);
-    expect(gmp.credential.download).toHaveBeenCalledWith(
-      {id: credential.id},
-      'deb',
-    );
-
-    const downloadRpmIcon = screen.getByTitle('Download RPM (.rpm) Package');
-    fireEvent.click(downloadRpmIcon);
-    expect(gmp.credential.download).toHaveBeenCalledWith(
-      {id: credential.id},
-      'rpm',
-    );
 
     const downloadPublicKeyIcon = screen.getByTitle('Download Public Key');
     fireEvent.click(downloadPublicKeyIcon);

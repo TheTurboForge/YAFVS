@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -84,12 +85,6 @@ describe('CredentialTableRow tests', () => {
     expect(screen.getByRole('button', {name: /delete/i})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: /edit/i})).toBeInTheDocument();
     expect(screen.getByRole('button', {name: /clone/i})).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', {name: /download rpm/i}),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', {name: /download deb/i}),
-    ).toBeInTheDocument();
     expect(
       screen.getByRole('button', {name: /download key/i}),
     ).toBeInTheDocument();

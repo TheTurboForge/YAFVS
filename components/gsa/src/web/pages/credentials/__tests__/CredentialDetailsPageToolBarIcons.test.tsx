@@ -63,8 +63,8 @@ describe('CredentialDetailsPageToolBarIcons tests', () => {
     ).toBeInTheDocument();
     expect(screen.getByTitle('Export Credential as XML')).toBeInTheDocument();
     expect(
-      screen.getByTitle('Download Windows Executable (.exe)'),
-    ).toBeInTheDocument();
+      screen.queryByTitle('Download Windows Executable (.exe)'),
+    ).not.toBeInTheDocument();
 
     expect(screen.getByTestId('manual-link')).toHaveAttribute(
       'href',
@@ -126,20 +126,6 @@ describe('CredentialDetailsPageToolBarIcons tests', () => {
     const exportIcon = screen.getByTitle('Export Credential as XML');
     fireEvent.click(exportIcon);
     expect(handleCredentialDownloadClick).toHaveBeenCalledWith(credential);
-
-    const downloadDebIcon = screen.getByTitle('Download Debian (.deb) Package');
-    fireEvent.click(downloadDebIcon);
-    expect(handleCredentialInstallerDownloadClick).toHaveBeenCalledWith(
-      credential,
-      'deb',
-    );
-
-    const downloadRpmIcon = screen.getByTitle('Download RPM (.rpm) Package');
-    fireEvent.click(downloadRpmIcon);
-    expect(handleCredentialInstallerDownloadClick).toHaveBeenCalledWith(
-      credential,
-      'rpm',
-    );
 
     const downloadPublicKeyIcon = screen.getByTitle('Download Public Key');
     fireEvent.click(downloadPublicKeyIcon);
@@ -208,20 +194,6 @@ describe('CredentialDetailsPageToolBarIcons tests', () => {
     fireEvent.click(exportIcon);
     expect(handleCredentialDownloadClick).toHaveBeenCalledWith(credential);
 
-    const downloadDebIcon = screen.getByTitle('Download Debian (.deb) Package');
-    fireEvent.click(downloadDebIcon);
-    expect(handleCredentialInstallerDownloadClick).toHaveBeenCalledWith(
-      credential,
-      'deb',
-    );
-
-    const downloadRpmIcon = screen.getByTitle('Download RPM (.rpm) Package');
-    fireEvent.click(downloadRpmIcon);
-    expect(handleCredentialInstallerDownloadClick).toHaveBeenCalledWith(
-      credential,
-      'rpm',
-    );
-
     const downloadPublicKeyIcon = screen.getByTitle('Download Public Key');
     fireEvent.click(downloadPublicKeyIcon);
     expect(handleCredentialInstallerDownloadClick).toHaveBeenCalledWith(
@@ -279,20 +251,6 @@ describe('CredentialDetailsPageToolBarIcons tests', () => {
     const exportIcon = screen.getByTitle('Export Credential as XML');
     fireEvent.click(exportIcon);
     expect(handleCredentialDownloadClick).toHaveBeenCalledWith(credential);
-
-    const downloadDebIcon = screen.getByTitle('Download Debian (.deb) Package');
-    fireEvent.click(downloadDebIcon);
-    expect(handleCredentialInstallerDownloadClick).toHaveBeenCalledWith(
-      credential,
-      'deb',
-    );
-
-    const downloadRpmIcon = screen.getByTitle('Download RPM (.rpm) Package');
-    fireEvent.click(downloadRpmIcon);
-    expect(handleCredentialInstallerDownloadClick).toHaveBeenCalledWith(
-      credential,
-      'rpm',
-    );
 
     const downloadPublicKeyIcon = screen.getByTitle('Download Public Key');
     fireEvent.click(downloadPublicKeyIcon);

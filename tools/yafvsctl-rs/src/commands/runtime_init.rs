@@ -5,6 +5,9 @@
 
 use super::common::{metadata, output_tail, runtime_dir};
 use super::compose::{compose_command, runtime_lifecycle_environment};
+use super::foundational_schema::{
+    FOUNDATIONAL_SCHEMA_FINGERPRINT, FOUNDATIONAL_SCHEMA_SQL, foundational_schema_fingerprint_sql,
+};
 use super::runtime_setup::ensure_runtime_setup;
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
@@ -274,6 +277,82 @@ pub(crate) fn command_runtime_init_with(
                 findings,
             );
         }
+    }
+    let create_foundational_schema = psql(
+        repo_root,
+        runner,
+        &environment,
+        &database,
+        FOUNDATIONAL_SCHEMA_SQL,
+    );
+    findings.push(process_finding(
+        &create_foundational_schema,
+        "postgres.foundational-schema.create",
+        "Create/verify foundational schema",
+        80,
+        None,
+    ));
+    if !process_succeeded(&create_foundational_schema) {
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped while creating foundational schema.",
+            findings,
+        );
+    }
+    let foundational_fingerprint = psql(
+        repo_root,
+        runner,
+        &environment,
+        &database,
+        &foundational_schema_fingerprint_sql(),
+    );
+    if !process_succeeded(&foundational_fingerprint) {
+        findings.push(process_finding(
+            &foundational_fingerprint,
+            "postgres.foundational-schema",
+            "Foundational schema fingerprint query",
+            40,
+            None,
+        ));
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped while verifying foundational schema.",
+            findings,
+        );
+    }
+    let observed_fingerprint = psql_value(
+        foundational_fingerprint
+            .as_ref()
+            .map_or("", |output| &output.stdout),
+    );
+    findings.push(
+        Finding::new(
+            if observed_fingerprint == FOUNDATIONAL_SCHEMA_FINGERPRINT {
+                "pass"
+            } else {
+                "fail"
+            },
+            "postgres.foundational-schema",
+            if observed_fingerprint == FOUNDATIONAL_SCHEMA_FINGERPRINT {
+                "Foundational schema matches the fixed catalog contract.".to_string()
+            } else {
+                "Foundational schema does not match the fixed catalog contract.".to_string()
+            },
+        )
+        .with_details(json!({
+            "expected": FOUNDATIONAL_SCHEMA_FINGERPRINT,
+            "observed": observed_fingerprint,
+        })),
+    );
+    if has_failure(&findings) {
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped while verifying foundational schema.",
+            findings,
+        );
     }
     result(
         repo_root,
@@ -983,6 +1062,9 @@ mod tests {
         extension_create_success: bool,
         extension_status_success: bool,
         extension_version: &'static str,
+        foundational_create_success: bool,
+        foundational_fingerprint_success: bool,
+        foundational_fingerprint: String,
     }
 
     impl Runner {
@@ -995,6 +1077,9 @@ mod tests {
                 extension_create_success: true,
                 extension_status_success: true,
                 extension_version: "22.6\n",
+                foundational_create_success: true,
+                foundational_fingerprint_success: true,
+                foundational_fingerprint: format!("{FOUNDATIONAL_SCHEMA_FINGERPRINT}\n"),
             }
         }
 
@@ -1016,6 +1101,26 @@ mod tests {
                 return output(
                     if self.extension_status_success { 0 } else { 1 },
                     self.extension_version,
+                );
+            }
+            if joined.contains("CREATE TABLE IF NOT EXISTS meta") {
+                return output(
+                    if self.foundational_create_success {
+                        0
+                    } else {
+                        1
+                    },
+                    "",
+                );
+            }
+            if joined.contains("foundational_schema_items") {
+                return output(
+                    if self.foundational_fingerprint_success {
+                        0
+                    } else {
+                        1
+                    },
+                    &self.foundational_fingerprint,
                 );
             }
             output(0, "")
@@ -1103,6 +1208,14 @@ mod tests {
             .iter()
             .position(|call| call.ends_with("config --quiet"))
             .unwrap();
+        let foundational_create = joined
+            .iter()
+            .position(|call| call.contains("CREATE TABLE IF NOT EXISTS meta"))
+            .unwrap();
+        let foundational_fingerprint = joined
+            .iter()
+            .position(|call| call.contains("foundational_schema_items"))
+            .unwrap();
         let up = joined
             .iter()
             .position(|call| call.ends_with("up -d --build postgres"))
@@ -1135,6 +1248,17 @@ mod tests {
         assert!(
             role < uuid_create && uuid_create < pgcrypto_create && pgcrypto_create < pg_gvm_create
         );
+        assert!(
+            pg_gvm_create < foundational_create && foundational_create < foundational_fingerprint
+        );
+        let foundational_sql = calls[foundational_create]
+            .args
+            .iter()
+            .find(|argument| argument.contains("CREATE TABLE IF NOT EXISTS meta"))
+            .unwrap();
+        assert!(foundational_sql.trim_start().starts_with("BEGIN;"));
+        assert!(foundational_sql.trim_end().ends_with("COMMIT;"));
+        assert!(!foundational_sql.contains("database_version"));
         for extension in POSTGRES_EXTENSIONS {
             assert!(
                 joined
@@ -1186,6 +1310,70 @@ mod tests {
                 Some(&OsString::from("yafvs-dev"))
             );
         }
+    }
+
+    #[test]
+    fn foundational_schema_creation_failure_stops_before_attestation() {
+        let fixture = Fixture::new("foundational-create-failure");
+        let runner = Runner {
+            foundational_create_success: false,
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail", "{:?}", result.findings);
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped while creating foundational schema."
+        );
+        let calls = runner.calls.lock().unwrap();
+        assert!(calls.iter().any(|call| {
+            call.args
+                .join(" ")
+                .contains("CREATE TABLE IF NOT EXISTS meta")
+        }));
+        assert!(
+            !calls
+                .iter()
+                .any(|call| call.args.join(" ").contains("foundational_schema_items"))
+        );
+    }
+
+    #[test]
+    fn foundational_schema_mismatch_fails_closed() {
+        let fixture = Fixture::new("foundational-mismatch");
+        let runner = Runner {
+            foundational_fingerprint: "not-the-contract\n".into(),
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail", "{:?}", result.findings);
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped while verifying foundational schema."
+        );
+        assert!(result.findings.iter().any(|finding| {
+            finding.check == "postgres.foundational-schema"
+                && finding.status == "fail"
+                && finding.message.contains("does not match")
+        }));
+    }
+
+    #[test]
+    fn foundational_schema_attestation_query_failure_fails_closed() {
+        let fixture = Fixture::new("foundational-query-failure");
+        let runner = Runner {
+            foundational_fingerprint_success: false,
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail", "{:?}", result.findings);
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped while verifying foundational schema."
+        );
+        assert!(result.findings.iter().any(|finding| {
+            finding.check == "postgres.foundational-schema" && finding.status == "fail"
+        }));
     }
 
     #[test]

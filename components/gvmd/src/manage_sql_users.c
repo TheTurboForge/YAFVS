@@ -1166,45 +1166,6 @@ manage_delete_user (GSList *log_config, const db_conn_info_t *database,
 }
 
 /**
- * @brief List users.
- *
- * @param[in]  log_config  Log configuration.
- * @param[in]  database    Location of manage database.
- * @param[in]  role_name   Role name.
- * @param[in]  verbose     Whether to print UUID.
- *
- * @return 0 success, -1 error.
- */
-int
-manage_get_users (GSList *log_config, const db_conn_info_t *database,
-                  const gchar* role_name, int verbose)
-{
-  iterator_t users;
-  int ret;
-
-  g_info ("   Getting users.");
-
-  ret = manage_option_setup (log_config, database,
-                             0 /* avoid_db_check_inserts */);
-  if (ret)
-    return ret;
-
-  (void) role_name;
-  init_iterator (&users, "SELECT name, uuid FROM users;");
-  while (next (&users))
-    if (verbose)
-      printf ("%s %s\n", iterator_string (&users, 0), iterator_string (&users, 1));
-    else
-      printf ("%s\n", iterator_string (&users, 0));
-
-  cleanup_iterator (&users);
-
-  manage_option_cleanup ();
-
-  return 0;
-}
-
-/**
  * @brief Set the password of a user.
  *
  * @param[in]  name      Name of user.

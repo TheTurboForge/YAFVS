@@ -197,12 +197,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       </optdesc>
     </option>
     <option>
-      <p><opt>--get-users</opt></p>
-      <optdesc>
-        <p>List users and exit.</p>
-      </optdesc>
-    </option>
-    <option>
       <p><opt>--gnutls-priorities=<arg>PRIORITIES-STRING</arg></opt></p>
       <optdesc>
         <p>Sets the GnuTLS priorities for the Manager socket.</p>
@@ -413,7 +407,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     <option>
       <p><opt>--role=<arg>ROLE</arg></opt></p>
       <optdesc>
-        <p>Role for --create-user and --get-users.</p>
+        <p>Role for --create-user.</p>
       </optdesc>
     </option>
     <option>

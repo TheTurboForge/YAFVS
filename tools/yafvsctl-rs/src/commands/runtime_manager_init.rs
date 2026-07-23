@@ -156,7 +156,7 @@ fn manager_failure_summary(findings: &[Finding]) -> &'static str {
         "Manager initialization stopped at database migration."
     } else if failed("gvmd.migrate-version") {
         "Manager initialization stopped because the migrated database version does not match the source schema."
-    } else if failed("gvmd.get-users") || failed("gvmd.admin-uuid") {
+    } else if failed("manager.admin-uuid") {
         "Manager initialization stopped while verifying the development administrator."
     } else if failed("gvmd.create-admin") {
         "Manager initialization stopped at admin user creation."

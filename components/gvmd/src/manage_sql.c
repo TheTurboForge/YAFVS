@@ -4041,7 +4041,7 @@ init_manage_internal (GSList *log_config,
    *                         serve_client
    *                     fork two
    *                         gmp_auth, gmp_start_task_report.
-   *     --create-user --delete-user --get-users
+   *     --create-user --delete-user
    *         manage_create, ...
    *             init_manage_helper
    *     --encrypt/decrypt-all-credentials
@@ -4093,7 +4093,7 @@ init_manage_internal (GSList *log_config,
        * and init_manage_helper callers.  So there are only 2 callers:
        *
        *   1 the main process
-       *   2 a helper processes (--create-user, --get-users, etc) when the
+       *   2 a helper processes (--create-user, etc) when the
        *     main process is not running. */
 
       ret = check_db (check_encryption_key, avoid_db_check_inserts);

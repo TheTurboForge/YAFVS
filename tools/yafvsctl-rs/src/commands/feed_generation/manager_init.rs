@@ -197,21 +197,27 @@ pub(super) fn initialize_manager(
         return finish(StepStatus::Fail, findings, &secret_path);
     }
 
-    let attested_admin = database
-        .query_single_value(ADMIN_UUID_SQL)
-        .ok()
-        .flatten()
-        .filter(|value| uuid_in(value).as_deref() == Some(value.as_str()));
-    let attested_owner = attested_admin
+    let mut admin_uuid = match query_admin_uuid(&database) {
+        Ok(value) => value,
+        Err(_) => {
+            return failed(
+                findings,
+                "manager.admin-uuid",
+                "Development manager UUID could not be attested in the manager database.",
+                &secret_path,
+            );
+        }
+    };
+    let attested_owner = admin_uuid
         .as_ref()
         .and_then(|_| database.query_single_value(FEED_OWNER_SQL).ok().flatten());
-    if let (Some(admin_uuid), Some(owner_uuid)) = (&attested_admin, &attested_owner)
+    if let (Some(admin_uuid), Some(owner_uuid)) = (&admin_uuid, &attested_owner)
         && admin_uuid == owner_uuid
     {
         findings.push(
             Finding::new(
                 "pass",
-                "gvmd.get-users",
+                "manager.admin-uuid",
                 "Existing development administrator was attested directly in the manager database."
                     .into(),
             )
@@ -241,37 +247,6 @@ pub(super) fn initialize_manager(
         return finish(StepStatus::Pass, findings, &secret_path);
     }
 
-    let users = match run_gvmd(runtime, &["--get-users", "--verbose"], COMMAND_TIMEOUT) {
-        Ok(output) if output.success => output,
-        Ok(output) => {
-            findings.push(command_finding(
-                false,
-                "gvmd.get-users",
-                "Development manager user lookup",
-                output.exit_code,
-            ));
-            return finish(StepStatus::Fail, findings, &secret_path);
-        }
-        Err(()) => {
-            return failed(
-                findings,
-                "gvmd.get-users",
-                "Development manager user lookup could not be started.",
-                &secret_path,
-            );
-        }
-    };
-    let mut admin_uuid = parse_user_uuid(&users.stdout, ADMIN_USER);
-    findings.push(
-        command_finding(
-            true,
-            "gvmd.get-users",
-            "Development manager user lookup",
-            users.exit_code,
-        )
-        .with_details(json!({"admin_uuid_found": admin_uuid.is_some()})),
-    );
-
     if admin_uuid.is_none() {
         let create_user = match run_gvmd_with_admin_password(
             runtime,
@@ -298,29 +273,28 @@ pub(super) fn initialize_manager(
         if !create_user.success {
             return finish(StepStatus::Fail, findings, &secret_path);
         }
-        let users = match run_gvmd(runtime, &["--get-users", "--verbose"], COMMAND_TIMEOUT) {
-            Ok(output) if output.success => output,
-            _ => {
+        admin_uuid = match query_admin_uuid(&database) {
+            Ok(value) => value,
+            Err(_) => {
                 return failed(
                     findings,
-                    "gvmd.admin-uuid",
-                    "Development manager UUID lookup failed after user creation.",
+                    "manager.admin-uuid",
+                    "Development manager UUID could not be attested after user creation.",
                     &secret_path,
                 );
             }
         };
-        admin_uuid = parse_user_uuid(&users.stdout, ADMIN_USER);
         if admin_uuid.is_none() {
             return failed(
                 findings,
-                "gvmd.admin-uuid",
+                "manager.admin-uuid",
                 "Development manager UUID was absent after successful user creation.",
                 &secret_path,
             );
         }
         findings.push(Finding::new(
             "pass",
-            "gvmd.admin-uuid",
+            "manager.admin-uuid",
             "Development manager UUID was verified after user creation.".to_owned(),
         ));
     }
@@ -499,13 +473,6 @@ fn parse_source_database_version(cmake: &str) -> Option<u64> {
     })
 }
 
-fn parse_user_uuid(output: &str, username: &str) -> Option<String> {
-    output
-        .lines()
-        .filter(|line| line.split_whitespace().any(|token| token == username))
-        .find_map(uuid_in)
-}
-
 fn uuid_in(value: &str) -> Option<String> {
     value
         .split(|character: char| !(character.is_ascii_hexdigit() || character == '-'))
@@ -520,6 +487,20 @@ fn uuid_in(value: &str) -> Option<String> {
                     })
         })
         .map(str::to_ascii_lowercase)
+}
+
+fn query_admin_uuid(database: &DatabaseAttestationAdapter<'_>) -> Result<Option<String>, String> {
+    let value = database
+        .query_single_value(ADMIN_UUID_SQL)?
+        .ok_or_else(|| "manager administrator query returned no value".to_owned())?;
+    if value == "missing" {
+        return Ok(None);
+    }
+    if uuid_in(&value).as_deref() == Some(value.as_str()) {
+        Ok(Some(value))
+    } else {
+        Err("manager administrator query returned an invalid UUID".to_owned())
+    }
 }
 
 fn command_finding(passed: bool, check: &str, operation: &str, exit_code: Option<i32>) -> Finding {
@@ -754,8 +735,8 @@ mod tests {
             output(true, &format!("{SOURCE_DATABASE_VERSION}\n")),
             output(true, "missing\n"),
             output(true, ""),
-            output(true, ""),
-            output(true, &format!("admin {uuid}\n")),
+            output(true, &format!("{uuid}\n")),
+            output(true, "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\n"),
             output(true, ""),
             output(true, ""),
         ]);
@@ -767,16 +748,58 @@ mod tests {
 
         assert_eq!(outcome.status, StepStatus::Pass);
         let commands = runner.commands.lock().unwrap();
-        assert_eq!(commands.len(), 7);
+        assert_eq!(commands.len(), 6);
+        assert_eq!(
+            commands
+                .iter()
+                .filter(|command| command.iter().any(|argument| argument == ADMIN_UUID_SQL))
+                .count(),
+            2
+        );
         assert!(
-            commands[3]
+            commands
+                .iter()
+                .flatten()
+                .all(|argument| argument != "--get-users")
+        );
+        assert!(
+            commands[2]
                 .iter()
                 .any(|argument| argument.contains("--create-user=admin"))
         );
         assert!(
-            commands[5]
+            commands[4]
                 .iter()
                 .any(|argument| argument.contains("--user=admin"))
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_invalid_admin_database_attestation_without_creating_a_user() {
+        let (root, repo) = fixture();
+        let runner = Runner::new([
+            output(true, &format!("{SOURCE_DATABASE_VERSION}\n")),
+            output(true, "prefix 11111111-2222-3333-4444-555555555555 suffix\n"),
+        ]);
+        let environment = environment();
+        let images = images();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+
+        let outcome = initialize_manager(&repo, &runner, &runtime);
+
+        assert_eq!(outcome.status, StepStatus::Fail);
+        assert!(
+            outcome.findings.iter().any(|finding| {
+                finding.check == "manager.admin-uuid" && finding.status == "fail"
+            })
+        );
+        let commands = runner.commands.lock().unwrap();
+        assert_eq!(commands.len(), 2);
+        assert!(
+            commands.iter().flatten().all(|argument| {
+                argument != "--get-users" && !argument.contains("--create-user")
+            })
         );
         fs::remove_dir_all(root).unwrap();
     }
@@ -798,22 +821,6 @@ mod tests {
         assert!(runner.commands.lock().unwrap().is_empty());
         assert!(!runtime_secret_path(&repo, ADMIN_SECRET).exists());
         fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn parses_only_uuid_shaped_values_associated_with_the_admin() {
-        assert_eq!(
-            parse_user_uuid(
-                "other aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\nadmin 11111111-2222-3333-4444-555555555555",
-                "admin"
-            ),
-            Some("11111111-2222-3333-4444-555555555555".to_owned())
-        );
-        assert_eq!(parse_user_uuid("admin not-a-uuid", "admin"), None);
-        assert_eq!(
-            parse_user_uuid("notadmin 11111111-2222-3333-4444-555555555555", "admin"),
-            None
-        );
     }
 
     #[test]

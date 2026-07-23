@@ -9318,29 +9318,34 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("owner = (SELECT id FROM operator_owner)", sql_calls[2])
         self.assertTrue(all(item["status"] == "pass" for item in findings))
 
-    def test_direct_admin_operator_uuid_uses_pinned_app_images(self):
+    def test_direct_admin_operator_uuid_uses_database_attestation(self):
         root = Path("/tmp/TurboVAS")
         operator_uuid = "11111111-1111-1111-1111-111111111111"
-        image_ids = {"gvmd": "sha256:" + "a" * 64}
         users = yafvsctl.subprocess.CompletedProcess(
-            [], 0, f"admin {operator_uuid}\n", ""
+            [], 0, operator_uuid + "\n", ""
         )
 
         with unittest.mock.patch.object(
-            yafvsctl, "run_gvmd_oneoff", return_value=users
-        ) as run_gvmd:
-            result, parsed_uuid = yafvsctl.native_api_direct_admin_operator_uuid(
-                root, app_image_ids=image_ids
-            )
+            yafvsctl, "psql", return_value=users
+        ) as psql:
+            result, parsed_uuid = yafvsctl.native_api_direct_admin_operator_uuid(root)
 
         self.assertIs(result, users)
         self.assertEqual(parsed_uuid, operator_uuid)
-        run_gvmd.assert_called_once_with(
+        psql.assert_called_once_with(
             root,
-            ["--get-users", "--verbose"],
-            no_deps=False,
-            app_image_ids=image_ids,
+            "SELECT COALESCE((SELECT uuid::text FROM users WHERE name = 'admin' "
+            "ORDER BY id LIMIT 1), 'missing');",
         )
+
+    def test_direct_admin_operator_uuid_rejects_non_uuid_database_output(self):
+        root = Path("/tmp/TurboVAS")
+        users = yafvsctl.subprocess.CompletedProcess([], 0, "missing\n", "")
+
+        with unittest.mock.patch.object(yafvsctl, "psql", return_value=users):
+            _, parsed_uuid = yafvsctl.native_api_direct_admin_operator_uuid(root)
+
+        self.assertIsNone(parsed_uuid)
 
     def test_direct_native_api_write_smoke_uses_guarded_operator_and_cleans_up(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -11094,7 +11099,7 @@ class YAFVSCtlTests(unittest.TestCase):
             return_value=(None, "missing prepared receipt"),
         ), unittest.mock.patch.object(yafvsctl, "run_command") as run_command:
             result = yafvsctl.run_app_oneoff(
-                Path("/tmp"), "gvmd", ["gvmd", "--get-users"]
+                Path("/tmp"), "gvmd", ["gvmd", "--migrate"]
             )
 
         self.assertEqual(result.returncode, 2)

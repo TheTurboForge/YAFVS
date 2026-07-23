@@ -79,9 +79,6 @@ Sets the number of seconds to retry for if the feed is locked in contexts (like 
 \fB-f, --foreground\f1
 Run in foreground.
 .TP
-\fB--get-users\f1
-List users and exit.
-.TP
 \fB--gnutls-priorities=\fIPRIORITIES-STRING\fB\f1
 Sets the GnuTLS priorities for the Manager socket.
 .TP
@@ -172,7 +169,7 @@ Executable for automatically mapping scanner hosts to relays. If the option is e
 Path to an externally managed JSON file used to automatically update the relays of scanners. These will overwrite any relays set manually and remove the relays for scanners not listed in the file. 
 .TP
 \fB--role=\fIROLE\fB\f1
-Role for --create-user and --get-users.
+Role for --create-user.
 .TP
 \fB--scanner-connection-retry=\fINUMBER\fB\f1
 Number of auto retries if scanner connection is lost in a running task.

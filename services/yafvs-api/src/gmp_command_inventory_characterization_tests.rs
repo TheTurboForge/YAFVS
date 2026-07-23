@@ -97,7 +97,12 @@ fn advertised_gmp_commands_match_the_authenticated_parser() {
 fn retired_public_commands_keep_only_live_native_authority_keys() {
     let advertised = advertised_commands();
     let native_acl = native_acl_operations();
-    let retained_native = ["CREATE_PORT_LIST", "CREATE_REPORT_FORMAT", "EMPTY_TRASHCAN"];
+    let retained_native = [
+        "CREATE_PORT_LIST",
+        "CREATE_REPORT_FORMAT",
+        "EMPTY_TRASHCAN",
+        "GET_USERS",
+    ];
 
     for command in [
         "CREATE_FILTER",
@@ -113,6 +118,7 @@ fn retired_public_commands_keep_only_live_native_authority_keys() {
         "DELETE_SCOPE",
         "DESCRIBE_AUTH",
         "EMPTY_TRASHCAN",
+        "GET_USERS",
         "MODIFY_AUTH",
         "MODIFY_FILTER",
         "MODIFY_PORT_LIST",

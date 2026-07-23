@@ -2207,7 +2207,6 @@ gvmd (int argc, char** argv, char *env[])
   static gchar *encryption_key_type = NULL;
   static int encryption_key_length = 0;
   static gchar *set_encryption_key = NULL;
-  static gboolean get_users = FALSE;
   static gboolean foreground = FALSE;
   static gboolean print_version = FALSE;
   static int max_ips_per_target = MANAGE_MAX_HOSTS;
@@ -2400,10 +2399,6 @@ gvmd (int argc, char** argv, char *env[])
           &foreground,
           "Run in foreground.",
           NULL },
-        { "get-users", '\0', 0, G_OPTION_ARG_NONE,
-          &get_users,
-          "List users and exit.",
-          NULL },
         { "gnutls-priorities", '\0', 0, G_OPTION_ARG_STRING,
           &priorities,
           "Sets the GnuTLS priorities for the Manager socket.",
@@ -2568,7 +2563,7 @@ gvmd (int argc, char** argv, char *env[])
           "<file>" },
         { "role", '\0', 0, G_OPTION_ARG_STRING,
           &role,
-          "Role for --create-user and --get-users.",
+          "Role for --create-user.",
           "<role>" },
         { "scanner-connection-retry", '\0', 0, G_OPTION_ARG_INT,
           &scanner_connection_retry,
@@ -3338,24 +3333,6 @@ gvmd (int argc, char** argv, char *env[])
         return EXIT_FAILURE;
 
       ret = manage_delete_user (log_config, &database, delete_user, inheritor);
-      log_config_free ();
-      if (ret)
-        return EXIT_FAILURE;
-      return EXIT_SUCCESS;
-    }
-
-  if (get_users)
-    {
-      int ret;
-
-      setproctitle ("Getting users");
-
-      if (option_lock (&lockfile_checking))
-        return EXIT_FAILURE;
-
-      set_skip_update_nvti_cache (TRUE);
-      ret = manage_get_users (log_config, &database, role, verbose);
-      set_skip_update_nvti_cache (FALSE);
       log_config_free ();
       if (ret)
         return EXIT_FAILURE;

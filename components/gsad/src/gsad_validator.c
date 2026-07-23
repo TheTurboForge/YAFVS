@@ -93,7 +93,6 @@ gsad_init_validator ()
                      "|(get_task)"
                      "|(get_tasks)"
                      "|(get_user)"
-                     "|(get_users)"
                      "|(login)"
                      "|(move_task)"
                      "|(renew_session)"

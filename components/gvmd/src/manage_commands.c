@@ -64,7 +64,6 @@ command_t gmp_commands[]
     {"GET_SETTINGS", "Get all settings."},
     {"GET_TARGETS", "Get all targets."},
     {"GET_TASKS", "Get all tasks."},
-    {"GET_USERS", "Get all users."},
     {"GET_VERSION", "Get the Greenbone Management Protocol version."},
     {"HELP", "Get this help text."},
     {"MODIFY_ASSET", "Modify an existing asset."},
@@ -93,6 +92,7 @@ static const char *native_acl_operations[] = {
   "GET_FILTERS",
   "GET_REPORT_FORMATS",
   "GET_TAGS",
+  "GET_USERS",
   "MODIFY_SCHEDULE",
   "MODIFY_TAG",
   NULL

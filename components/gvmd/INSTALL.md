@@ -269,9 +269,9 @@ gvmd will only create these resources if a "Feed Import Owner" is configured:
 
     gvmd --modify-setting 78eceaec-3385-11ea-b237-28d24461215b --value <uuid_of_user>
 
-The UUIDs of all created users can be found using
-
-    gvmd --get-users --verbose
+YAFVS runtime initialization resolves the development administrator UUID
+directly from the manager database and configures this setting without the
+retired inherited user-listing CLI.
 
 ## Keeping the feeds up-to-date
 

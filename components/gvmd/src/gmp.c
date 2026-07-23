@@ -1265,26 +1265,6 @@ get_targets_data_reset (get_targets_data_t *data)
 }
 
 /**
- * @brief Command data for the get_users command.
- */
-typedef struct
-{
-  get_data_t get;    ///< Get args.
-} get_users_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_users_data_reset (get_users_data_t * data)
-{
-  get_data_reset (&data->get);
-  memset (data, 0, sizeof (get_users_data_t));
-}
-
-/**
  * @brief Command data for the modify_config command.
  */
 typedef struct
@@ -1828,7 +1808,6 @@ typedef union
   get_settings_data_t get_settings;                   ///< get_settings
   get_targets_data_t get_targets;                     ///< get_targets
   get_tasks_data_t get_tasks;                         ///< get_tasks
-  get_users_data_t get_users;                         ///< get_users
   help_data_t help;                                   ///< help
   modify_asset_data_t modify_asset;                   ///< modify_asset
   modify_config_data_t modify_config;                 ///< modify_config
@@ -2057,12 +2036,6 @@ static get_tasks_data_t *get_tasks_data
  = &(command_data.get_tasks);
 
 /**
- * @brief Parser callback data for GET_USERS.
- */
-static get_users_data_t *get_users_data
- = &(command_data.get_users);
-
-/**
  * @brief Parser callback data for HELP.
  */
 static help_data_t *help_data
@@ -2277,7 +2250,6 @@ typedef enum
   CLIENT_GET_SETTINGS,
   CLIENT_GET_TARGETS,
   CLIENT_GET_TASKS,
-  CLIENT_GET_USERS,
   CLIENT_GET_VERSION,
   CLIENT_GET_VERSION_AUTHENTIC,
   CLIENT_HELP,
@@ -3119,13 +3091,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
               }
 
             set_client_state (CLIENT_GET_TASKS);
-          }
-        else if (strcasecmp ("GET_USERS", element_name) == 0)
-          {
-            get_data_parse_attributes (&get_users_data->get, "user",
-                                       attribute_names,
-                                       attribute_values);
-            set_client_state (CLIENT_GET_USERS);
           }
         else if (strcasecmp ("GET_INFO", element_name) == 0)
           {
@@ -11702,87 +11667,6 @@ handle_get_tasks (gmp_parser_t *gmp_parser, GError **error)
 }
 
 /**
- * @brief Handle end of GET_USER element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_users (gmp_parser_t *gmp_parser, GError **error)
-{
-  iterator_t users;
-  int count, filtered, ret, first;
-
-  INIT_GET (user, User);
-
-  ret = init_user_iterator (&users, &get_users_data->get);
-  if (ret)
-    {
-      switch (ret)
-        {
-          case 1:
-            if (send_find_error_to_client ("get_users",
-                                           "user",
-                                           get_users_data->get.id,
-                                           gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          case 2:
-            if (send_find_error_to_client
-                  ("get_users", "filter", get_users_data->get.filt_id,
-                   gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          case -1:
-            SEND_TO_CLIENT_OR_FAIL
-              (XML_INTERNAL_ERROR ("get_users"));
-            break;
-        }
-      get_users_data_reset (get_users_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  SEND_GET_START ("user");
-  while (1)
-    {
-
-      ret = get_next (&users, &get_users_data->get, &first, &count,
-                      init_user_iterator);
-      if (ret == 1)
-        break;
-      if (ret == -1)
-        {
-          internal_error_send_to_client (error);
-          return;
-        }
-
-      SEND_GET_COMMON (user, &get_users_data->get, &users);
-
-      SENDF_TO_CLIENT_OR_FAIL ("<sources><source>%s</source></sources>"
-                               "</user>",
-                               user_iterator_method (&users)
-                                ? user_iterator_method (&users)
-                                : "file");
-      count++;
-    }
-  cleanup_iterator (&users);
-  filtered = get_users_data->get.id
-              ? 1
-              : user_count (&get_users_data->get);
-  SEND_GET_END ("user", &get_users_data->get, count, filtered);
-
-  get_users_data_reset (get_users_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
  * @brief Handle end of GET_VERSION element.
  *
  * @param[in]  gmp_parser   GMP parser.
@@ -12428,10 +12312,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         handle_get_tasks (gmp_parser, error);
         break;
 
-
-      case CLIENT_GET_USERS:
-        handle_get_users (gmp_parser, error);
-        break;
 
       case CLIENT_GET_VERSION:
       case CLIENT_GET_VERSION_AUTHENTIC:

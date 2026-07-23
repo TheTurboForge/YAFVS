@@ -66,9 +66,6 @@ manage_delete_user (GSList *, const db_conn_info_t *, const gchar *,
                     const gchar *);
 
 int
-manage_get_users (GSList *, const db_conn_info_t *, const gchar *, int);
-
-int
 manage_set_password (GSList *, const db_conn_info_t *, const gchar *,
                      const gchar *);
 

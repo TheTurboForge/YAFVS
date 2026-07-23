@@ -11328,17 +11328,16 @@ def native_scope_report_browser_target(repo_root: Path, check: str, success_mess
 
 def native_api_direct_admin_operator_uuid(
     repo_root: Path,
-    *,
-    app_image_ids: dict[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], str | None]:
-    returncode_only = run_gvmd_oneoff(
+    result = psql(
         repo_root,
-        ["--get-users", "--verbose"],
-        no_deps=False,
-        app_image_ids=app_image_ids,
+        "SELECT COALESCE((SELECT uuid::text FROM users WHERE name = 'admin' "
+        "ORDER BY id LIMIT 1), 'missing');",
     )
-    admin_uuid = parse_user_uuid(returncode_only.stdout, DEV_ADMIN_USER) if returncode_only.returncode == 0 else None
-    return returncode_only, admin_uuid
+    admin_uuid = psql_value(result) if result.returncode == 0 else None
+    if admin_uuid == "missing" or not admin_uuid or not UUID_PATTERN.fullmatch(admin_uuid):
+        admin_uuid = None
+    return result, admin_uuid
 
 
 def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -12849,10 +12848,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         )
     )
 
-    users, admin_uuid = native_api_direct_admin_operator_uuid(
-        repo_root,
-        app_image_ids=receipt["image_ids"] if receipt is not None else None,
-    )
+    users, admin_uuid = native_api_direct_admin_operator_uuid(repo_root)
     findings.append(
         finding(
             "pass" if admin_uuid else "fail",

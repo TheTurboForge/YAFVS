@@ -15,6 +15,14 @@ const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_NATIVE_API: &str = include_str!("../../../components/gsad/src/gsad_native_api.c");
 const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
+const GVMD: &str = include_str!("../../../components/gvmd/src/gvmd.c");
+const GVMD_GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
+const GVMD_MANAGE_USERS: &str = include_str!("../../../components/gvmd/src/manage_users.h");
+const GVMD_SQL_USERS: &str = include_str!("../../../components/gvmd/src/manage_sql_users.c");
+const GVMD_INSTALL: &str = include_str!("../../../components/gvmd/INSTALL.md");
+const GVMD_MANPAGE: &str = include_str!("../../../components/gvmd/docs/gvmd.8");
+const GVMD_MANPAGE_HTML: &str = include_str!("../../../components/gvmd/docs/gvmd.html");
+const GVMD_MANPAGE_XML: &str = include_str!("../../../components/gvmd/docs/gvmd.8.xml");
 
 fn openapi_path_block(path: &str) -> String {
     let marker = format!("  {path}:");
@@ -33,6 +41,26 @@ fn openapi_path_block(path: &str) -> String {
             }
         })
         .unwrap_or_else(|| tail.to_string())
+}
+
+#[test]
+fn user_inventory_is_native_and_legacy_user_inventory_transports_are_absent() {
+    assert!(GSA_USER_COMMAND.contains("gmp/native-api/users"));
+    for source in [GSAD_GMP, GSAD_GMP_HEADER, GSAD_VALIDATOR, GVMD, GVMD_GMP] {
+        assert!(!source.contains("get_users_gmp"));
+        assert!(!source.contains("GET_USERS"));
+        assert!(!source.contains("--get-users"));
+    }
+    assert!(!GVMD_MANAGE_USERS.contains("manage_get_users"));
+    for source in [
+        GVMD_INSTALL,
+        GVMD_MANPAGE,
+        GVMD_MANPAGE_HTML,
+        GVMD_MANPAGE_XML,
+    ] {
+        assert!(!source.contains("--get-users"));
+    }
+    assert!(GVMD_SQL_USERS.contains("\"get_users\""));
 }
 
 #[test]

@@ -6267,24 +6267,6 @@ get_user_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 }
 
 /**
- * @brief Get all users, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_users_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-               params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_many (connection, "users", credentials, params, NULL,
-                   response_data);
-}
-
-/**
  * @brief Create a user, get all users, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -8086,7 +8068,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_task)
   ELSE (get_tasks)
   ELSE (get_user)
-  ELSE (get_users)
   else if (!strcmp (cmd, "download_ssl_cert"))
   {
     gsad_command_response_data_set_content_type (response_data,

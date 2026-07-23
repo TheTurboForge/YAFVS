@@ -55,7 +55,6 @@ command_t gmp_commands[]
     {"MODIFY_SETTING", "Modify an existing setting."},
     {"MODIFY_TARGET", "Modify an existing target."},
     {"MODIFY_TASK", "Update an existing task."},
-    {"MOVE_TASK", "Assign task to another slave scanner, even while running."},
     {"START_TASK", "Manually start an existing task."},
     {"STOP_TASK", "Stop a running task."},
     {NULL, NULL}};

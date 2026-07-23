@@ -46,10 +46,6 @@ char *
 stop_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                gsad_command_response_data_t *);
 char *
-move_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-               gsad_command_response_data_t *);
-
-char *
 get_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
               gsad_command_response_data_t *);
 char *

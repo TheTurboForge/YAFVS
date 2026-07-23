@@ -75,7 +75,6 @@ const CAPABILITY_NAMES = [
   'modify_target',
   'modify_task',
   'modify_user',
-  'move_task',
   'start_task',
   'stop_task',
   'sync_config',

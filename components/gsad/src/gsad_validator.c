@@ -52,7 +52,6 @@ gsad_init_validator ()
                      "|(get_task)"
                      "|(get_tasks)"
                      "|(login)"
-                     "|(move_task)"
                      "|(renew_session)"
                      "|(save_asset)"
                      "|(save_setting)"

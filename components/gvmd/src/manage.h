@@ -853,9 +853,6 @@ start_task (const char *, char**);
 int
 stop_task (const char *);
 
-int
-move_task (const char*, const char*);
-
 
 
 /* Results. */

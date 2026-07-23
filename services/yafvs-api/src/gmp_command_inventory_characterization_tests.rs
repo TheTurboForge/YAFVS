@@ -18,6 +18,8 @@ const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_forma
 const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
+const GSA_CAPABILITIES: &str =
+    include_str!("../../../components/gsa/src/gmp/capabilities/capabilities.ts");
 const GSA_INFO_ENTITY: &str =
     include_str!("../../../components/gsa/src/gmp/commands/info-entity.ts");
 const GSA_INFO_ENTITIES: &str =
@@ -46,8 +48,17 @@ const TAGS: &str = include_str!("tags.rs");
 const TAG_PAYLOADS: &str = include_str!("tag_payloads.rs");
 const TAG_RESOURCE_HELPERS: &str = include_str!("tag_resource_helpers.rs");
 const MANAGE: &str = include_str!("../../../components/gvmd/src/manage.c");
+const MANAGE_HEADER: &str = include_str!("../../../components/gvmd/src/manage.h");
 const MANAGE_SQL_SECINFO: &str = include_str!("../../../components/gvmd/src/manage_sql_secinfo.c");
 const MANAGE_SQL_NVTS: &str = include_str!("../../../components/gvmd/src/manage_sql_nvts.c");
+const DIRECT_API_ROUTES: &str = include_str!("direct_api_routes.rs");
+const TASK_CONTROL: &str = include_str!("task_control.rs");
+const TASK_STOP: &str = include_str!("task_stop.rs");
+const TASK_WRITES: &str = include_str!("task_writes.rs");
+const TASK_WRITE_DB: &str = include_str!("task_write_db.rs");
+const GSA_NATIVE_TASKS: &str = include_str!("../../../components/gsa/src/gmp/native-api/tasks.ts");
+const GSA_TASK_COMMAND: &str =
+    include_str!("../../../components/gsa/src/gmp/native-api/task-command.ts");
 
 fn advertised_commands() -> BTreeSet<String> {
     let block = MANAGE_COMMANDS
@@ -428,6 +439,98 @@ fn advertised_gmp_commands_match_the_authenticated_parser() {
     assert_eq!(
         advertised, accepted,
         "GMP HELP must advertise exactly the authenticated public parser surface"
+    );
+}
+
+#[test]
+fn move_task_transport_and_manager_are_retired_while_native_task_controls_remain() {
+    assert!(!advertised_commands().contains("MOVE_TASK"));
+    assert!(!authenticated_parser_commands().contains("MOVE_TASK"));
+    for retired in [
+        "CLIENT_MOVE_TASK",
+        "move_task_data",
+        "strcasecmp (\"MOVE_TASK\"",
+        "move_task (",
+    ] {
+        assert!(
+            !GMP.contains(retired),
+            "retired gvmd MOVE_TASK parser surface remains: {retired}"
+        );
+    }
+    assert!(!MANAGE_COMMANDS.contains("{\"MOVE_TASK\","));
+    assert!(!GMP_SCHEMA.contains("<name>move_task</name>"));
+    assert!(!MANAGE.contains("move_task ("));
+    assert!(!MANAGE_HEADER.contains("move_task ("));
+    assert!(!GSA_CAPABILITIES.contains("'move_task'"));
+    for retired in ["move_task_gmp", "ELSE (move_task)"] {
+        assert!(
+            !GSAD_GMP.contains(retired),
+            "retired gsad MOVE_TASK bridge remains: {retired}"
+        );
+        assert!(!GSAD_GMP_HEADER.contains(retired));
+    }
+    assert!(!GSAD_VALIDATOR.contains("|(move_task)"));
+
+    for route in [
+        ".route(\"/api/v1/tasks/:task_id/start\", post(start_task))",
+        ".route(\"/api/v1/tasks/:task_id/stop\", post(stop_task))",
+    ] {
+        assert!(
+            DIRECT_API_ROUTES.contains(route),
+            "native route missing: {route}"
+        );
+    }
+    for retained in [
+        "ensure_task_is_startable(&task)?",
+        "insert_task_start_report(&tx, &task, task_owner_id).await?",
+        "insert_task_start_scan_queue(&tx, report_internal_id).await?",
+        "mark_task_start_requested(&tx, task.internal_id).await?",
+    ] {
+        assert!(
+            TASK_CONTROL.contains(retained),
+            "native task start semantic missing: {retained}"
+        );
+    }
+    for retained in [
+        "request_task_stop(",
+        "operator.user_uuid()",
+        "b\"0 stopped\" | b\"2 inactive\"",
+        "b\"1 requested\"",
+        "b\"-2 scanner_status\" | b\"-3 scanner_stop\"",
+    ] {
+        assert!(
+            TASK_STOP.contains(retained),
+            "native task stop semantic missing: {retained}"
+        );
+    }
+    assert_eq!(
+        TASK_WRITES
+            .matches(
+                "load_assignable_task_scanner(&tx, &request.scanner_id, operator_owner_id).await?",
+            )
+            .count(),
+        2,
+        "native task create and configuration replacement must validate scanner assignment"
+    );
+    for retained in [
+        "execute_task_create_transaction(",
+        "execute_task_replace_transaction(",
+        "scanner.internal_id",
+    ] {
+        assert!(
+            TASK_WRITES.contains(retained),
+            "native scanner assignment semantic missing: {retained}"
+        );
+    }
+    assert!(TASK_WRITE_DB.contains("scanner type that can run scan tasks"));
+    assert!(GSA_NATIVE_TASKS.contains("api/v1/tasks/${encodeURIComponent(id)}/start"));
+    assert!(GSA_NATIVE_TASKS.contains("api/v1/tasks/${encodeURIComponent(id)}/stop"));
+    assert!(
+        GSA_TASK_COMMAND.contains("scannerId: requiredTaskReference(scanner_id, 'scanner_id')")
+    );
+    assert!(
+        GSA_TASK_COMMAND
+            .contains("scannerId: requiredTaskReference(args.scanner_id, 'scanner_id')")
     );
 }
 

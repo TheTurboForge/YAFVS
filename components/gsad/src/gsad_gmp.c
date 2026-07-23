@@ -2052,74 +2052,6 @@ start_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 }
 
 /**
- * @brief Reassign a task to a new GMP slave.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-move_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-               params_t *params, gsad_command_response_data_t *response_data)
-{
-  gchar *command, *html;
-  const char *task_id, *slave_id;
-  int ret;
-  entity_t entity;
-
-  slave_id = params_value (params, "slave_id");
-  task_id = params_value (params, "task_id");
-
-  command = g_strdup_printf ("<move_task task_id=\"%s\" slave_id=\"%s\"/>",
-                             task_id ? task_id : "", slave_id ? slave_id : "");
-
-  entity = NULL;
-  ret = gmp (connection, credentials, NULL, &entity, response_data, command);
-  g_free (command);
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while moving a task. "
-        "The task was not moved. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while moving a task. "
-        "It is unclear whether the task has been moved or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while moving a task. "
-        "It is unclear whether the task has been moved or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Move Task", response_data);
-
-  free_entity (entity);
-  return html;
-}
-
-/**
  * @brief Get all tasks, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -6481,7 +6413,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_report)
   ELSE (delete_target)
   ELSE (delete_task)
-  ELSE (move_task)
   ELSE (renew_session)
   ELSE (save_asset)
   ELSE (save_setting)

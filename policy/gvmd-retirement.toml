@@ -91,10 +91,11 @@ evidence = [
   "services/yafvs-api/src/read_api_routes.rs::native_api_router",
   "services/yafvs-api/src/alert_writes.rs::restore_alert",
   "services/yafvs-api/src/alert_writes.rs::hard_delete_alert",
+  "services/yafvs-api/src/user_account_contract_tests.rs::legacy_user_lifecycle_is_native_only_not_public_gmp_transport",
 ]
 independent_authority = ["api/openapi/yafvs-v1.yaml::x-yafvs-inherited-still-owns"]
 dependencies = ["login-session-account-auth", "team-authority-permissions"]
-notes = "Finish retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
+notes = "Native user inventory and create/modify/delete lifecycle are authoritative, and their dedicated public GMP/XML transports are retired. Finish the remaining retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
 
 [[responsibilities]]
 id = "team-authority-permissions"
@@ -301,7 +302,7 @@ kind = "product"
 status = "inventoried"
 evidence = ["components/gsa/src/gmp/gmp.ts::class Gmp"]
 replacement = ["crud-query-api-surface", "login-session-account-auth"]
-notes = "Separate harmless internal module names from command methods that still issue legacy requests. Trashcan inventory and every retained per-resource lifecycle are native-only; the superseded gsad get_trash aliases are retired."
+notes = "Separate harmless internal module names from command methods that still issue legacy requests. User inventory and create/modify/delete lifecycle, Trashcan inventory, and every retained per-resource lifecycle are native-only; the superseded gsad aliases and user-management bridges are retired."
 
 [[callers]]
 id = "gsad-gmp-route"
@@ -309,7 +310,7 @@ kind = "product"
 status = "inventoried"
 evidence = ["components/gsad/src/gsad_http_handler_functions.c::gsad_http_handle_gmp_get"]
 replacement = ["crud-query-api-surface"]
-notes = "Remove the live /gmp GET/POST bridge after GSA has no legacy request path."
+notes = "The public user inventory and create/modify/delete bridges are retired. Remove the remaining live /gmp GET/POST bridge after GSA has no legacy request path."
 
 [[callers]]
 id = "gsad-manager-socket-auth"

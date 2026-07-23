@@ -94,10 +94,11 @@ evidence = [
   "services/yafvs-api/src/alert_write_characterization_tests.rs::gsad_and_gsa_alert_definition_paths_are_native_only",
   "services/yafvs-api/src/user_account_contract_tests.rs::legacy_user_lifecycle_is_native_only_not_public_gmp_transport",
   "services/yafvs-api/src/schedule_characterization_tests.rs::native_gsa_owns_schedule_commands_and_gmp_transport_is_retired",
+  "services/yafvs-api/src/credential_contract_tests.rs::credential_metadata_reads_have_no_public_gsad_aliases_but_download_remains",
 ]
 independent_authority = ["api/openapi/yafvs-v1.yaml::x-yafvs-inherited-still-owns"]
 dependencies = ["login-session-account-auth", "team-authority-permissions"]
-notes = "Native user, alert, and schedule reads, exports, and retained lifecycle operations are authoritative, and their dedicated public GMP/XML transports are retired. Schedule execution and task coupling remain separately inherited until the manager-worker owns them. Finish the remaining retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
+notes = "Native user, alert, and schedule reads, exports, and retained lifecycle operations are authoritative, and their dedicated public GMP/XML transports are retired. Native credential list, detail, and metadata export are authoritative, and the stale public gsad metadata aliases are retired; secret-bearing download and remaining credential lifecycle operations still retain explicitly characterized inherited paths. Schedule execution and task coupling remain separately inherited until the manager-worker owns them. Finish the remaining retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
 
 [[responsibilities]]
 id = "team-authority-permissions"

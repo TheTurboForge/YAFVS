@@ -17,8 +17,12 @@ const GSAD_NATIVE_API: &str = include_str!("../../../components/gsad/src/gsad_na
 const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GVMD: &str = include_str!("../../../components/gvmd/src/gvmd.c");
 const GVMD_GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
+const GVMD_GMP_SCHEMA: &str =
+    include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
+const GVMD_MANAGE_COMMANDS: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
 const GVMD_MANAGE_USERS: &str = include_str!("../../../components/gvmd/src/manage_users.h");
 const GVMD_SQL_USERS: &str = include_str!("../../../components/gvmd/src/manage_sql_users.c");
+const GVMD_YAFVS_CONTROL: &str = include_str!("../../../components/gvmd/src/yafvs_control.c");
 const GVMD_INSTALL: &str = include_str!("../../../components/gvmd/INSTALL.md");
 const GVMD_MANPAGE: &str = include_str!("../../../components/gvmd/docs/gvmd.8");
 const GVMD_MANPAGE_HTML: &str = include_str!("../../../components/gvmd/docs/gvmd.html");
@@ -41,6 +45,82 @@ fn openapi_path_block(path: &str) -> String {
             }
         })
         .unwrap_or_else(|| tail.to_string())
+}
+
+#[test]
+fn legacy_user_lifecycle_is_native_only_not_public_gmp_transport() {
+    for command in ["CREATE_USER", "MODIFY_USER", "DELETE_USER"] {
+        assert!(
+            !GVMD_MANAGE_COMMANDS.contains(&format!("{{\"{command}\"")),
+            "public GMP HELP must not advertise {command}"
+        );
+        assert!(
+            GVMD_MANAGE_COMMANDS.contains(&format!("\"{command}\",")),
+            "native ACL inventory must retain {command}"
+        );
+    }
+
+    for retired in ["create_user", "modify_user", "delete_user"] {
+        assert!(
+            !GSAD_GMP.contains(&format!("{retired}_gmp")),
+            "gsad must not bridge {retired}"
+        );
+        assert!(
+            !GSAD_GMP_HEADER.contains(&format!("{retired}_gmp")),
+            "gsad must not declare {retired} bridge"
+        );
+        assert!(
+            !GSAD_GMP.contains(&format!("ELSE ({retired})")),
+            "gsad must not dispatch {retired}"
+        );
+        assert!(
+            !GSAD_VALIDATOR.contains(&format!("|({retired})")),
+            "gsad validator must not accept {retired}"
+        );
+        assert!(
+            !GVMD_GMP_SCHEMA.contains(&format!("<name>{retired}</name>")),
+            "GMP XML schema must not define {retired}"
+        );
+    }
+    for command in ["CREATE_USER", "MODIFY_USER", "DELETE_USER"] {
+        assert!(
+            !GVMD_GMP.contains(command),
+            "authenticated GMP parser must not accept {command}"
+        );
+    }
+    for historical_record in [
+        "<command>CREATE_TASK, CREATE_USER, GET_TASKS, GET_USERS, MODIFY_TASK, MODIFY_USER</command>",
+        "<command>CREATE_USER, MODIFY_USER</command>",
+    ] {
+        assert!(
+            GVMD_GMP_SCHEMA.contains(historical_record),
+            "retiring live commands must not rewrite protocol history: {historical_record}"
+        );
+    }
+
+    for native_call in [
+        "createNativeUser(",
+        "cloneNativeUser(",
+        "patchNativeUser(",
+        "deleteNativeUser(",
+    ] {
+        assert!(GSA_USER_COMMAND.contains(native_call));
+    }
+    assert!(GSAD_NATIVE_API.contains("USER_MANAGEMENT_USERS_PATH"));
+    assert!(GSAD_NATIVE_API.contains("USER_MANAGEMENT_USER_PREFIX"));
+    for control_command in ["user-create", "user-clone", "user-modify", "user-delete"] {
+        assert!(GVMD_YAFVS_CONTROL.contains(control_command));
+    }
+    for manager_function in [
+        "create_user (",
+        "copy_user (",
+        "modify_user (",
+        "delete_user (",
+    ] {
+        assert!(GVMD_SQL_USERS.contains(manager_function));
+    }
+    assert!(GVMD.contains("\"create-user\""));
+    assert!(GVMD.contains("\"delete-user\""));
 }
 
 #[test]

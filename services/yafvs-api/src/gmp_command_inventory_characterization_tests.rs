@@ -98,10 +98,13 @@ fn retired_public_commands_keep_only_live_native_authority_keys() {
     let advertised = advertised_commands();
     let native_acl = native_acl_operations();
     let retained_native = [
+        "CREATE_USER",
         "CREATE_PORT_LIST",
         "CREATE_REPORT_FORMAT",
+        "DELETE_USER",
         "EMPTY_TRASHCAN",
         "GET_USERS",
+        "MODIFY_USER",
     ];
 
     for command in [
@@ -111,11 +114,13 @@ fn retired_public_commands_keep_only_live_native_authority_keys() {
         "CREATE_REPORT",
         "CREATE_REPORT_FORMAT",
         "CREATE_SCOPE",
+        "CREATE_USER",
         "DELETE_FILTER",
         "DELETE_PORT_LIST",
         "DELETE_PORT_RANGE",
         "DELETE_REPORT_FORMAT",
         "DELETE_SCOPE",
+        "DELETE_USER",
         "DESCRIBE_AUTH",
         "EMPTY_TRASHCAN",
         "GET_USERS",
@@ -124,6 +129,7 @@ fn retired_public_commands_keep_only_live_native_authority_keys() {
         "MODIFY_PORT_LIST",
         "MODIFY_REPORT_FORMAT",
         "MODIFY_SCOPE",
+        "MODIFY_USER",
         "SYNC_CONFIG",
         "VERIFY_REPORT_FORMAT",
     ] {

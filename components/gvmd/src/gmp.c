@@ -36,9 +36,6 @@
  *
  * If data has to be stored, it goes to \ref command_data (_t) , which is a
  * union.
- * More specific incarnations of this union are e.g. \ref create_user_data (_t)
- * , where the data to create a new user is stored (until the end element of
- * that command is reached).
  *
  * For implementing new commands that have to store data (e.g. not
  * "\<help_extended/\>"), \ref command_data has to be freed and NULL'ed in case
@@ -635,39 +632,6 @@ create_task_data_reset (create_task_data_t *data)
 /* Command data passed between parser callbacks. */
 
 /**
- * @brief Command data for the create_user command.
- */
-typedef struct
-{
-  char *copy;             ///< UUID of resource to copy.
-  char *name;             ///< User name.
-  char *password;         ///< Password.
-  char *comment;          ///< Comment.
-  gchar *current_source;  ///< Current source, for collecting sources.
-  array_t *sources;       ///< Sources.
-} create_user_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-create_user_data_reset (create_user_data_t * data)
-{
-  g_free (data->copy);
-  g_free (data->name);
-  g_free (data->password);
-  g_free (data->comment);
-  if (data->sources)
-    {
-      array_free (data->sources);
-    }
-  g_free (data->current_source);
-  memset (data, 0, sizeof (create_user_data_t));
-}
-
-/**
  * @brief Command data for the delete_asset command.
  */
 typedef struct
@@ -844,34 +808,6 @@ delete_task_data_reset (delete_task_data_t *data)
   free (data->task_id);
 
   memset (data, 0, sizeof (delete_task_data_t));
-}
-
-/**
- * @brief Command data for the delete_user command.
- */
-typedef struct
-{
-  char *name;         ///< Name of user to delete.
-  char *user_id;      ///< ID of user to delete.
-  int ultimate;       ///< Boolean.  Whether to remove entirely or to trashcan.
-  char *inheritor_id;   ///< ID of user that will inherit owned objects.
-  char *inheritor_name; ///< Name of user that will inherit owned objects.
-} delete_user_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_user_data_reset (delete_user_data_t *data)
-{
-  free (data->name);
-  free (data->user_id);
-  free (data->inheritor_id);
-  free (data->inheritor_name);
-
-  memset (data, 0, sizeof (delete_user_data_t));
 }
 
 /**
@@ -1417,41 +1353,6 @@ modify_credential_data_reset (modify_credential_data_t *data)
 }
 
 /**
- * @brief Command data for the modify_user command.
- */
-typedef struct
-{
-  gchar *name;               ///< User name.
-  gchar *new_name;           ///< New user name.
-  gchar *password;           ///< Password.
-  gchar *comment;            ///< Comment.
-  array_t *sources;          ///< Sources.
-  gchar *current_source;     ///< Current source, for collecting sources.
-  gchar *user_id;            ///< ID of user.
-} modify_user_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-modify_user_data_reset (modify_user_data_t * data)
-{
-  g_free (data->name);
-  g_free (data->new_name);
-  g_free (data->user_id);
-  g_free (data->password);
-  g_free (data->comment);
-  if (data->sources)
-    {
-      array_free (data->sources);
-    }
-  g_free (data->current_source);
-  memset (data, 0, sizeof (modify_user_data_t));
-}
-
-/**
  * @brief Command data for the modify_setting command.
  */
 typedef struct
@@ -1780,7 +1681,6 @@ typedef union
   create_credential_data_t create_credential;         ///< create_credential
   create_target_data_t create_target;                 ///< create_target
   create_task_data_t create_task;                     ///< create_task
-  create_user_data_t create_user;                     ///< create_user
   delete_asset_data_t delete_asset;                   ///< delete_asset
   delete_credential_data_t delete_credential;         ///< delete_credential
   delete_config_data_t delete_config;                 ///< delete_config
@@ -1789,7 +1689,6 @@ typedef union
   delete_schedule_data_t delete_schedule;             ///< delete_schedule
   delete_target_data_t delete_target;                 ///< delete_target
   delete_task_data_t delete_task;                     ///< delete_task
-  delete_user_data_t delete_user;                     ///< delete_user
   get_aggregates_data_t get_aggregates;               ///< get_aggregates
   get_configs_data_t get_configs;                     ///< get_configs
   get_alerts_data_t get_alerts;                       ///< get_alerts
@@ -1815,7 +1714,6 @@ typedef union
   modify_setting_data_t modify_setting;               ///< modify_setting
   modify_target_data_t modify_target;                 ///< modify_target
   modify_task_data_t modify_task;                     ///< modify_task
-  modify_user_data_t modify_user;                     ///< modify_user
   move_task_data_t move_task;                         ///< move_task
   start_task_data_t start_task;                       ///< start_task
   stop_task_data_t stop_task;                         ///< stop_task
@@ -1867,12 +1765,6 @@ static create_task_data_t *create_task_data
  = (create_task_data_t*) &(command_data.create_task);
 
 /**
- * @brief Parser callback data for CREATE_USER.
- */
-static create_user_data_t *create_user_data
- = &(command_data.create_user);
-
-/**
  * @brief Parser callback data for DELETE_ASSET.
  */
 static delete_asset_data_t *delete_asset_data
@@ -1920,12 +1812,6 @@ static delete_target_data_t *delete_target_data
  */
 static delete_task_data_t *delete_task_data
  = (delete_task_data_t*) &(command_data.delete_task);
-
-/**
- * @brief Parser callback data for DELETE_USER.
- */
-static delete_user_data_t *delete_user_data
- = (delete_user_data_t*) &(command_data.delete_user);
 
 /**
  * @brief Parser callback data for GET_AGGREGATES.
@@ -2072,11 +1958,6 @@ static modify_task_data_t *modify_task_data
  = &(command_data.modify_task);
 
 /**
- * @brief Parser callback data for MODIFY_USER.
- */
-static modify_user_data_t *modify_user_data = &(command_data.modify_user);
-
-/**
  * @brief Parser callback data for MOVE_TASK.
  */
 static move_task_data_t *move_task_data = &(command_data.move_task);
@@ -2213,13 +2094,6 @@ typedef enum
   CLIENT_CREATE_TASK_SCHEDULE_PERIODS,
   CLIENT_CREATE_TASK_TARGET,
   CLIENT_CREATE_TASK_USAGE_TYPE,
-  CLIENT_CREATE_USER,
-  CLIENT_CREATE_USER_COMMENT,
-  CLIENT_CREATE_USER_COPY,
-  CLIENT_CREATE_USER_NAME,
-  CLIENT_CREATE_USER_PASSWORD,
-  CLIENT_CREATE_USER_SOURCES,
-  CLIENT_CREATE_USER_SOURCES_SOURCE,
   CLIENT_DELETE_ALERT,
   CLIENT_DELETE_ASSET,
   CLIENT_DELETE_CONFIG,
@@ -2228,7 +2102,6 @@ typedef enum
   CLIENT_DELETE_SCHEDULE,
   CLIENT_DELETE_TARGET,
   CLIENT_DELETE_TASK,
-  CLIENT_DELETE_USER,
   CLIENT_GET_AGGREGATES,
   CLIENT_GET_AGGREGATES_DATA_COLUMN,
   CLIENT_GET_AGGREGATES_SORT,
@@ -2317,13 +2190,6 @@ typedef enum
   CLIENT_MODIFY_TASK_SCHEDULE_PERIODS,
   CLIENT_MODIFY_TASK_TARGET,
   CLIENT_MODIFY_TASK_SCANNER,
-  CLIENT_MODIFY_USER,
-  CLIENT_MODIFY_USER_COMMENT,
-  CLIENT_MODIFY_USER_NAME,
-  CLIENT_MODIFY_USER_NEW_NAME,
-  CLIENT_MODIFY_USER_PASSWORD,
-  CLIENT_MODIFY_USER_SOURCES,
-  CLIENT_MODIFY_USER_SOURCES_SOURCE,
   CLIENT_MOVE_TASK,
   CLIENT_START_TASK,
   CLIENT_STOP_TASK,
@@ -2528,8 +2394,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             create_task_data->alerts = make_array ();
             set_client_state (CLIENT_CREATE_TASK);
           }
-        else if (strcasecmp ("CREATE_USER", element_name) == 0)
-          set_client_state (CLIENT_CREATE_USER);
         else if (strcasecmp ("DELETE_ALERT", element_name) == 0)
           {
             const gchar* attribute;
@@ -2618,20 +2482,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             else
               delete_task_data->ultimate = 0;
             set_client_state (CLIENT_DELETE_TASK);
-          }
-        else if (strcasecmp ("DELETE_USER", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "name",
-                              &delete_user_data->name);
-            append_attribute (attribute_names, attribute_values, "user_id",
-                              &delete_user_data->user_id);
-            append_attribute (attribute_names, attribute_values,
-                              "inheritor_id",
-                              &delete_user_data->inheritor_id);
-            append_attribute (attribute_names, attribute_values,
-                              "inheritor_name",
-                              &delete_user_data->inheritor_name);
-            set_client_state (CLIENT_DELETE_USER);
           }
         else if (strcasecmp ("GET_AGGREGATES", element_name) == 0)
           {
@@ -3170,12 +3020,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             modify_task_data->alerts = make_array ();
             set_client_state (CLIENT_MODIFY_TASK);
           }
-        else if (strcasecmp ("MODIFY_USER", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "user_id",
-                              &modify_user_data->user_id);
-            set_client_state (CLIENT_MODIFY_USER);
-          }
         else if (strcasecmp ("MOVE_TASK", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values, "task_id",
@@ -3707,38 +3551,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         ELSE_READ_OVER;
 
-
-      case CLIENT_MODIFY_USER:
-        if (strcasecmp ("COMMENT", element_name) == 0)
-          {
-            gvm_free_string_var (&modify_user_data->comment);
-            gvm_append_string (&modify_user_data->comment, "");
-            set_client_state (CLIENT_MODIFY_USER_COMMENT);
-          }
-        else if (strcasecmp ("NAME", element_name) == 0)
-          {
-            gvm_free_string_var (&modify_user_data->name);
-            gvm_append_string (&modify_user_data->name, "");
-            set_client_state (CLIENT_MODIFY_USER_NAME);
-          }
-        else if (strcasecmp ("NEW_NAME", element_name) == 0)
-          {
-            gvm_free_string_var (&modify_user_data->new_name);
-            gvm_append_string (&modify_user_data->new_name, "");
-            set_client_state (CLIENT_MODIFY_USER_NEW_NAME);
-          }
-        else if (strcasecmp ("PASSWORD", element_name) == 0)
-          {
-            gvm_free_string_var (&modify_user_data->password);
-            gvm_append_string (&modify_user_data->password, "");
-            set_client_state (CLIENT_MODIFY_USER_PASSWORD);
-          }
-        else if (strcasecmp ("SOURCES", element_name) == 0)
-          {
-            modify_user_data->sources = make_array ();
-            set_client_state (CLIENT_MODIFY_USER_SOURCES);
-          }
-        ELSE_READ_OVER;
 
       case CLIENT_MODIFY_TARGET:
         if (strcasecmp ("EXCLUDE_HOSTS", element_name) == 0)
@@ -12139,100 +11951,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         set_client_state (CLIENT_AUTHENTIC);
         break;
 
-      case CLIENT_DELETE_USER:
-        if (delete_user_data->user_id || delete_user_data->name)
-          switch (delete_user (delete_user_data->user_id,
-                               delete_user_data->name,
-                               1,
-                               delete_user_data->inheritor_id,
-                               delete_user_data->inheritor_name))
-            {
-              case 0:
-                SEND_TO_CLIENT_OR_FAIL (XML_OK ("delete_user"));
-                log_event ("user", "User", delete_user_data->user_id,
-                           "deleted");
-                break;
-              case 2:
-                if (send_find_error_to_client ("delete_user",
-                                               "user",
-                                               delete_user_data->user_id
-                                                ? delete_user_data->user_id
-                                                : delete_user_data->name,
-                                               gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                log_event_fail ("user", "User", delete_user_data->user_id,
-                                "deleted");
-                break;
-              case 3:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("delete_user",
-                                    "Attempt to delete a predefined"
-                                    " user"));
-                break;
-              case 4:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("delete_user",
-                                    "User has an active task"));
-                break;
-              case 5:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("delete_user",
-                                    "Attempt to delete current user"));
-                break;
-              case 6:
-                if (send_find_error_to_client ("delete_user", "inheriting user",
-                                               delete_user_data->inheritor_id,
-                                               gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 7:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("delete_user",
-                                    "Inheritor is the same as the deleted"
-                                    " user."));
-                break;
-              case 8:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("delete_user",
-                                    "Invalid inheritor."));
-                break;
-              case 9:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("delete_user",
-                                    "Resources owned by the user are still"
-                                    " in use by others."));
-                break;
-              case 10:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("delete_user",
-                                    "User is Feed Import Owner"));
-                break;
-              case 99:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("delete_user",
-                                    "Permission denied"));
-                log_event_fail ("user", "User", delete_user_data->user_id,
-                                "deleted");
-                break;
-              default:
-                SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("delete_user"));
-                log_event_fail ("user", "User", delete_user_data->user_id,
-                                "deleted");
-            }
-        else
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("delete_user",
-                              "A user_id attribute is required"));
-        delete_user_data_reset (delete_user_data);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
-
       case CLIENT_GET_AGGREGATES:
         handle_get_aggregates (gmp_parser, error);
         break;
@@ -13579,136 +13297,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         break;
       CLOSE (CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE, VALUE);
 
-      case CLIENT_CREATE_USER:
-        {
-          gchar *errdesc;
-          user_t new_user;
-
-          errdesc = NULL;
-          if (create_user_data->copy)
-            switch (copy_user (create_user_data->name,
-                               NULL,
-                               create_user_data->copy,
-                               &new_user))
-              {
-                case 0:
-                  {
-                    char *uuid;
-                    uuid = user_uuid (new_user);
-                    SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_user"),
-                                             uuid);
-                    log_event ("user", "User", uuid, "created");
-                    free (uuid);
-                    break;
-                  }
-                case 1:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_user",
-                                      "User exists already"));
-                    log_event_fail ("user", "User", NULL, "created");
-                  break;
-                case 2:
-                  if (send_find_error_to_client ("create_user", "user",
-                                                 create_user_data->copy,
-                                                 gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                    log_event_fail ("user", "User", NULL, "created");
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_user",
-                                      "Permission denied"));
-                  log_event_fail ("user", "User", NULL, "created");
-                  break;
-                case -1:
-                default:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_INTERNAL_ERROR ("create_user"));
-                  log_event_fail ("user", "User", NULL, "created");
-                  break;
-              }
-          else if (create_user_data->name == NULL
-              || strlen (create_user_data->name) == 0)
-            SEND_TO_CLIENT_OR_FAIL (XML_ERROR_SYNTAX
-                                    ("create_user",
-                                     "A name is required"));
-          else
-            switch (create_user
-                     (create_user_data->name,
-                      create_user_data->password
-                        ? create_user_data->password : "",
-                      create_user_data->comment
-                        ? create_user_data->comment : "",
-                      create_user_data->sources,
-                      &errdesc,
-                      &new_user))
-              {
-                case 0:
-                  {
-                    char *uuid;
-                    uuid = user_uuid (new_user);
-                    SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_user"),
-                                             uuid);
-                    log_event ("user", "User", create_user_data->name, "created");
-                    free (uuid);
-                    break;
-                  }
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_user",
-                                      "Permission denied"));
-                  log_event_fail ("user", "User", NULL, "created");
-                  break;
-                case -2:
-                  SEND_TO_CLIENT_OR_FAIL (XML_ERROR_SYNTAX
-                                          ("create_user", "User already exists"));
-                  log_event_fail ("user", "User", NULL, "created");
-                  break;
-                case -3:
-                case -4:
-                  SEND_TO_CLIENT_OR_FAIL (XML_ERROR_SYNTAX
-                                          ("create_user", "Error in SOURCE"));
-                  log_event_fail ("user", "User", NULL, "created");
-                  break;
-                case -1:
-                  if (errdesc)
-                    {
-                      char *buf = make_xml_error_syntax ("create_user", errdesc);
-                      SEND_TO_CLIENT_OR_FAIL (buf);
-                      g_free (buf);
-                      break;
-                    }
-                  /* Fall through.  */
-                default:
-                  SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_user"));
-                  log_event_fail ("user", "User", NULL, "created");
-                  break;
-              }
-          create_user_data_reset (create_user_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          g_free (errdesc);
-          break;
-        }
-      CLOSE (CLIENT_CREATE_USER, COMMENT);
-      CLOSE (CLIENT_CREATE_USER, COPY);
-      CLOSE (CLIENT_CREATE_USER, NAME);
-      CLOSE (CLIENT_CREATE_USER, PASSWORD);
-      case CLIENT_CREATE_USER_SOURCES:
-        array_terminate (create_user_data->sources);
-        set_client_state (CLIENT_CREATE_USER);
-        break;
-      case CLIENT_CREATE_USER_SOURCES_SOURCE:
-        if (create_user_data->current_source)
-          array_add (create_user_data->sources,
-                     g_strdup (create_user_data->current_source));
-        g_free (create_user_data->current_source);
-        create_user_data->current_source = NULL;
-        set_client_state (CLIENT_CREATE_USER_SOURCES);
-        break;
-
 
       case CLIENT_LOGOUT:
         {
@@ -14706,103 +14294,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         break;
       CLOSE (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE, VALUE);
 
-      case CLIENT_MODIFY_USER:
-        {
-          if ((modify_user_data->name == NULL
-               && modify_user_data->user_id == NULL)
-              || (modify_user_data->name
-                  && (strlen (modify_user_data->name) == 0))
-              || (modify_user_data->user_id
-                  && (strlen (modify_user_data->user_id) == 0)))
-            SEND_TO_CLIENT_OR_FAIL (XML_ERROR_SYNTAX
-                                    ("modify_user",
-                                     "A NAME or user_id is required"));
-          else
-            {
-              gchar *errdesc;
-
-              errdesc = NULL;
-
-              switch (modify_user
-                      (modify_user_data->user_id,
-                       &modify_user_data->name,
-                       modify_user_data->new_name,
-                       (modify_user_data->password
-                         /* Leave the password as it is when omitted. */
-                         ? modify_user_data->password : NULL),
-                       modify_user_data->comment,
-                       modify_user_data->sources,
-                       &errdesc))
-                {
-                  case 0:
-                    SEND_TO_CLIENT_OR_FAIL (XML_OK ("modify_user"));
-                    break;
-                  case 2:
-                    if (send_find_error_to_client
-                         ("modify_user", "user",
-                          modify_user_data->user_id ?: modify_user_data->name,
-                          gmp_parser))
-                      {
-                        error_send_to_client (error);
-                        return;
-                      }
-                    break;
-                  case 7:
-                    SEND_TO_CLIENT_OR_FAIL
-                     (XML_ERROR_SYNTAX ("modify_user",
-                                        "Error in user name"));
-                    log_event_fail ("user", "User", NULL, "modified");
-                    break;
-                  case 8:
-                    SEND_TO_CLIENT_OR_FAIL (XML_ERROR_SYNTAX
-                                            ("modify_user",
-                                             "User with name exists already"));
-                    log_event_fail ("user", "User", NULL, "modified");
-                    break;
-                  case 99:
-                    SEND_TO_CLIENT_OR_FAIL
-                     (XML_ERROR_SYNTAX ("modify_user",
-                                        "Permission denied"));
-                    break;
-                  case -3:
-                  case -4:
-                    SEND_TO_CLIENT_OR_FAIL (XML_ERROR_SYNTAX
-                                            ("modify_user", "Error in SOURCES"));
-                    break;
-                  case -1:
-                    if (errdesc)
-                      {
-                        char *buf = make_xml_error_syntax ("modify_user", errdesc);
-                        SEND_TO_CLIENT_OR_FAIL (buf);
-                        g_free (buf);
-                        break;
-                      }
-                  /* Fall through.  */
-                  default:
-                    SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("modify_user"));
-                    break;
-                }
-              g_free (errdesc);
-            }
-          modify_user_data_reset (modify_user_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-      CLOSE (CLIENT_MODIFY_USER, COMMENT);
-      CLOSE (CLIENT_MODIFY_USER, NAME);
-      CLOSE (CLIENT_MODIFY_USER, NEW_NAME);
-      CLOSE (CLIENT_MODIFY_USER, PASSWORD);
-      case CLIENT_MODIFY_USER_SOURCES:
-        array_terminate (modify_user_data->sources);
-        set_client_state (CLIENT_MODIFY_USER);
-        break;
-      case CLIENT_MODIFY_USER_SOURCES_SOURCE:
-        array_add (modify_user_data->sources,
-                   g_strdup (modify_user_data->current_source));
-        g_free (modify_user_data->current_source);
-        modify_user_data->current_source = NULL;
-        set_client_state (CLIENT_MODIFY_USER_SOURCES);
-        break;
 
       case CLIENT_MOVE_TASK:
         if (move_task_data->task_id == NULL
@@ -15290,21 +14781,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
       APPEND (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_VALUE,
               &modify_task_data->preference->value);
 
-      APPEND (CLIENT_MODIFY_USER_COMMENT,
-              &modify_user_data->comment);
-
-      APPEND (CLIENT_MODIFY_USER_NAME,
-              &modify_user_data->name);
-
-      APPEND (CLIENT_MODIFY_USER_NEW_NAME,
-              &modify_user_data->new_name);
-
-      APPEND (CLIENT_MODIFY_USER_PASSWORD,
-              &modify_user_data->password);
-
-      APPEND (CLIENT_MODIFY_USER_SOURCES_SOURCE,
-              &modify_user_data->current_source);
-
 
       APPEND (CLIENT_CREATE_ASSET_ASSET_COMMENT,
               &create_asset_data->comment);
@@ -15460,21 +14936,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
       APPEND (CLIENT_CREATE_TASK_USAGE_TYPE,
               &create_task_data->usage_type);
 
-
-      APPEND (CLIENT_CREATE_USER_COMMENT,
-              &create_user_data->comment);
-
-      APPEND (CLIENT_CREATE_USER_COPY,
-              &create_user_data->copy);
-
-      APPEND (CLIENT_CREATE_USER_NAME,
-              &create_user_data->name);
-
-      APPEND (CLIENT_CREATE_USER_PASSWORD,
-              &create_user_data->password);
-
-      APPEND (CLIENT_CREATE_USER_SOURCES_SOURCE,
-              &create_user_data->current_source);
 
       case CLIENT_GET_AGGREGATES_DATA_COLUMN:
         {

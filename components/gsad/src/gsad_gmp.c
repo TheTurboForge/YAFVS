@@ -6212,24 +6212,6 @@ export_schedules_gmp (gvm_connection_t *connection,
 /* Users. */
 
 /**
- * @brief Delete a user, get all users, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-delete_user_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                 params_t *params, gsad_command_response_data_t *response_data)
-{
-  return move_resource_to_trash (connection, "user", credentials, params,
-                                 response_data);
-}
-
-/**
  * @brief Get one user, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -6264,258 +6246,6 @@ get_user_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
               params_t *params, gsad_command_response_data_t *response_data)
 {
   return get_user (connection, credentials, params, NULL, response_data);
-}
-
-/**
- * @brief Create a user, get all users, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-create_user_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                 params_t *params, gsad_command_response_data_t *response_data)
-{
-  const char *name, *password, *auth_method, *comment;
-  int ret;
-  GString *string;
-  gchar *buf, *html;
-  entity_t entity;
-
-  name = params_value (params, "login");
-  password = params_value (params, "password");
-  auth_method = params_value (params, "auth_method");
-  comment = params_value (params, "comment");
-
-  CHECK_VARIABLE_INVALID (name, "Create User");
-
-  if (auth_method && strcmp (auth_method, "1") == 0)
-    {
-      CHECK_VARIABLE_INVALID (password, "Create User");
-    }
-
-  if (params_given (params, "comment"))
-    {
-      CHECK_VARIABLE_INVALID (comment, "Create User");
-    }
-
-  string = g_string_new ("<create_user>");
-  buf = g_markup_printf_escaped ("<name>%s</name>"
-                                 "<password>%s</password>",
-                                 name, password ? password : "");
-  g_string_append (string, buf);
-  g_free (buf);
-
-  if (auth_method && !strcmp (auth_method, "1"))
-    g_string_append (string,
-                     "<sources><source>ldap_connect</source></sources>");
-  else if (auth_method && !strcmp (auth_method, "2"))
-    g_string_append (string,
-                     "<sources><source>radius_connect</source></sources>");
-
-  if (comment)
-    xml_string_append (string, "<comment>%s</comment>", comment);
-
-  g_string_append (string, "</create_user>");
-  buf = g_string_free (string, FALSE);
-
-  entity = NULL;
-  ret = gmp (connection, credentials, NULL, &entity, response_data, buf);
-  g_free (buf);
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new user. "
-        "No new user was created. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new user. "
-        "It is unclear whether the user has been created or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new user. "
-        "It is unclear whether the user has been created or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  if (entity_attribute (entity, "id"))
-    params_add (params, "user_id", entity_attribute (entity, "id"));
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Create User", response_data);
-  free_entity (entity);
-  return html;
-}
-
-/**
- * @brief Modify a user, get all users, envelope the result.
- *
- * @param[in]  connection       Connection to manager.
- * @param[in]  credentials      Username and password for authentication.
- * @param[in]  params           Request parameters.
- * @param[out] response_data    Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-save_user_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-               params_t *params, gsad_command_response_data_t *response_data)
-{
-  int ret;
-  gchar *html, *buf;
-  const char *user_id, *login, *old_login, *modify_password, *password;
-  const char *comment;
-  entity_t entity;
-  GString *command;
-  gsad_user_t *current_user;
-
-  login = params_value (params, "login");
-  old_login = params_value (params, "old_login");
-  modify_password = params_value (params, "modify_password");
-  password = params_value (params, "password");
-  user_id = params_value (params, "user_id");
-  comment = params_value (params, "comment");
-
-  CHECK_VARIABLE_INVALID (user_id, "Save User");
-  CHECK_VARIABLE_INVALID (modify_password, "Save User");
-  CHECK_VARIABLE_INVALID (login, "Save User");
-  CHECK_VARIABLE_INVALID (old_login, "Save User");
-
-  if (modify_password && str_equal (modify_password, "1"))
-    CHECK_VARIABLE_INVALID (password, "Save User");
-
-  if (params_given (params, "comment"))
-    CHECK_VARIABLE_INVALID (comment, "Save User");
-
-  command = g_string_new ("");
-  buf = g_markup_printf_escaped ("<modify_user user_id=\"%s\">"
-                                 "<password modify=\"%s\">"
-                                 "%s</password>",
-                                 user_id, modify_password,
-                                 password ? password : "");
-  g_string_append (command, buf);
-  g_free (buf);
-
-  current_user = gsad_credentials_get_user (credentials);
-
-  if (login
-      && current_user
-      && strcmp (login, gsad_user_get_username (current_user)))
-    {
-      buf = g_markup_printf_escaped ("<new_name>%s</new_name>", login);
-      g_string_append (command, buf);
-      g_free (buf);
-    }
-
-  if (modify_password && !strcmp (modify_password, "2"))
-    g_string_append (command,
-                     "<sources><source>ldap_connect</source></sources>");
-  else if (modify_password && !strcmp (modify_password, "3"))
-    g_string_append (command,
-                     "<sources><source>radius_connect</source></sources>");
-  else
-    g_string_append (command, "<sources><source>file</source></sources>");
-
-  if (comment)
-    xml_string_append (command, "<comment>%s</comment>", comment);
-
-  g_string_append (command, "</modify_user>");
-
-  entity = NULL;
-  ret =
-    gmp (connection, credentials, NULL, &entity, response_data, command->str);
-  g_string_free (command, TRUE);
-
-  switch (ret)
-    {
-    case 0:
-      if (gmp_success (entity) == 1)
-        {
-          if (!str_equal (modify_password, "0")
-              || !str_equal (old_login, login))
-            {
-              if (current_user)
-                gsad_session_remove_other_sessions (
-                  gsad_user_get_token (current_user), old_login);
-            }
-
-          if (current_user
-              && str_equal (old_login, gsad_user_get_username (current_user)))
-            {
-              gsad_user_set_username (current_user, login);
-
-              if (str_equal (modify_password, "1"))
-                gsad_user_set_password (current_user, password);
-            }
-        }
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a user. "
-        "The user was not saved. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a user. "
-        "It is unclear whether the user has been saved or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a user. "
-        "It is unclear whether the user has been saved or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  if (gmp_success (entity)
-      && (str_equal (modify_password, "2") || !str_equal (modify_password, "3"))
-      && current_user
-      && str_equal (old_login, gsad_user_get_username (current_user)))
-    {
-      free_entity (entity);
-
-      gsad_command_response_data_set_status_code (response_data,
-                                                  MHD_HTTP_UNAUTHORIZED);
-      return gsad_http_create_gsad_message (
-        credentials, "Authentication method changed. Please login with ",
-        response_data);
-    }
-  else
-    html = response_from_entity (connection, credentials, params, entity,
-                                 "Save User", response_data);
-  free_entity (entity);
-  return html;
 }
 
 /**
@@ -8286,7 +8016,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (create_host)
   ELSE (create_task)
   ELSE (create_target)
-  ELSE (create_user)
   ELSE (delete_asset)
   ELSE (delete_alert)
   ELSE (delete_config)
@@ -8295,7 +8024,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_schedule)
   ELSE (delete_target)
   ELSE (delete_task)
-  ELSE (delete_user)
   ELSE (move_task)
   ELSE (renew_session)
   ELSE (save_asset)
@@ -8305,7 +8033,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (save_credential)
   ELSE (save_target)
   ELSE (save_task)
-  ELSE (save_user)
   ELSE (start_task)
   ELSE (stop_task)
   ELSE (sync_feed)

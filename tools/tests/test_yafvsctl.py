@@ -8388,7 +8388,43 @@ class YAFVSCtlTests(unittest.TestCase):
             runtime_credential_smoke.BROWSER_SCRIPT,
         )
         self.assertIn(
-            "name => !Array.from(document.querySelectorAll('tbody tr'))",
+            "getByText(credentialName, {exact: true})",
+            runtime_credential_smoke.BROWSER_SCRIPT,
+        )
+        self.assertIn(
+            "replace(/([?&](?:token|access_token)=)",
+            runtime_credential_smoke.BROWSER_SCRIPT,
+        )
+        self.assertNotIn(
+            "innerText.includes(name)",
+            runtime_credential_smoke.BROWSER_SCRIPT,
+        )
+        self.assertNotIn(
+            "message: String(error && error.stack",
+            runtime_credential_smoke.BROWSER_SCRIPT,
+        )
+        for title in (
+            "Download Windows Executable (.exe)",
+            "Download Public Key",
+            "Download RPM (.rpm) Package",
+            "Download Debian (.deb) Package",
+        ):
+            self.assertIn(title, runtime_credential_smoke.BROWSER_SCRIPT)
+        for contract_anchor in (
+            "Username + SSH Key",
+            "input[name=\"privateKey\"]",
+            "setInputFiles(config.sshPrivateKeyPath)",
+            "page.waitForResponse",
+            "response.headers()",
+            "headers['content-type']",
+            "headers['content-disposition']",
+            "MAX_DOWNLOAD_BYTES",
+            "hasExpectedSignature",
+            "containsConfiguredSecret",
+        ):
+            self.assertIn(contract_anchor, runtime_credential_smoke.BROWSER_SCRIPT)
+        self.assertNotIn(
+            "fs.writeFileSync(output, bytes",
             runtime_credential_smoke.BROWSER_SCRIPT,
         )
 
@@ -8455,6 +8491,13 @@ class YAFVSCtlTests(unittest.TestCase):
             artifact = (root / "artifacts" / "credential-smoke-wrapper.json").read_text(
                 encoding="utf-8"
             )
+            config = json.loads(
+                (root / "artifacts" / "credential-smoke-config.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(config["sshCredentialName"], "test-ssh")
+            self.assertTrue(config["sshPrivateKeyPath"].endswith("/id_ed25519"))
             for secret in ("environment-password", "admin-secret"):
                 self.assertNotIn(secret, serialized)
                 self.assertNotIn(secret, artifact)
@@ -8490,7 +8533,10 @@ class YAFVSCtlTests(unittest.TestCase):
                 unittest.mock.patch.object(
                     runtime_credential_smoke.subprocess,
                     "run",
-                    return_value=completed,
+                    side_effect=[
+                        subprocess.CompletedProcess([], 0, ""),
+                        completed,
+                    ],
                 ),
                 unittest.mock.patch.dict(
                     os.environ,
@@ -8548,6 +8594,112 @@ class YAFVSCtlTests(unittest.TestCase):
                 "credential-smoke.credential-password",
             )
             paths.assert_not_called()
+
+    def test_runtime_credential_smoke_fails_before_node_without_ssh_keygen(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            password_file = root / "admin-password"
+            password_file.write_text("admin\n", encoding="utf-8")
+            args = runtime_credential_smoke.build_parser().parse_args(
+                [
+                    "--base-url",
+                    "https://127.0.0.1:19392",
+                    "--username",
+                    "admin",
+                    "--password-file",
+                    str(password_file),
+                    "--artifact-dir",
+                    str(root / "artifacts"),
+                    "--credential-name",
+                    "test",
+                ]
+            )
+            with (
+                unittest.mock.patch.object(
+                    runtime_credential_smoke,
+                    "playwright_node_path_candidates",
+                    return_value=["/tmp/node_modules"],
+                ),
+                unittest.mock.patch.object(
+                    runtime_credential_smoke.shutil, "which", return_value=None
+                ),
+                unittest.mock.patch.object(
+                    runtime_credential_smoke.subprocess, "run"
+                ) as run,
+                unittest.mock.patch.dict(
+                    os.environ,
+                    {
+                        "YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD": "credential-password"
+                    },
+                    clear=False,
+                ),
+            ):
+                result = runtime_credential_smoke.run_credential_smoke(args)
+
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(
+                result["findings"][0]["check"], "credential-smoke.ssh-keygen"
+            )
+            run.assert_not_called()
+
+    def test_runtime_credential_smoke_bounds_node_timeout_and_redacts_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            password_file = root / "admin-password"
+            password_file.write_text("admin-secret\n", encoding="utf-8")
+            args = runtime_credential_smoke.build_parser().parse_args(
+                [
+                    "--base-url",
+                    "https://127.0.0.1:19392",
+                    "--username",
+                    "admin",
+                    "--password-file",
+                    str(password_file),
+                    "--artifact-dir",
+                    str(root / "artifacts"),
+                    "--credential-name",
+                    "test",
+                ]
+            )
+            timeout = subprocess.TimeoutExpired(
+                cmd=["node"],
+                timeout=120,
+                output="admin-secret environment-password",
+            )
+            with (
+                unittest.mock.patch.object(
+                    runtime_credential_smoke,
+                    "playwright_node_path_candidates",
+                    return_value=["/tmp/node_modules"],
+                ),
+                unittest.mock.patch.object(
+                    runtime_credential_smoke.subprocess,
+                    "run",
+                    side_effect=[
+                        subprocess.CompletedProcess([], 0, ""),
+                        timeout,
+                    ],
+                ),
+                unittest.mock.patch.dict(
+                    os.environ,
+                    {
+                        "YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD": "environment-password"
+                    },
+                    clear=False,
+                ),
+            ):
+                result = runtime_credential_smoke.run_credential_smoke(args)
+
+            artifact = (
+                root / "artifacts" / "credential-smoke-wrapper.json"
+            ).read_text(encoding="utf-8")
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(
+                result["findings"][0]["check"], "credential-smoke.timeout"
+            )
+            for secret in ("environment-password", "admin-secret"):
+                self.assertNotIn(secret, json.dumps(result))
+                self.assertNotIn(secret, artifact)
 
     def test_runtime_browser_smoke_checks_metrics_tabs(self):
         source = (Path(__file__).resolve().parents[1] / "runtime_browser_smoke.py").read_text(encoding="utf-8")

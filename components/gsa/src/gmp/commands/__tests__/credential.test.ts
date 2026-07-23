@@ -5,7 +5,9 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import CredentialCommand from 'gmp/commands/credential';
+import CredentialCommand, {
+  type CredentialDownloadFormat,
+} from 'gmp/commands/credential';
 import {createHttp, createActionResultResponse} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 import {
@@ -643,24 +645,27 @@ describe('CredentialCommand tests', () => {
     expect(resp.data.id).toEqual('foo');
   });
 
-  test('should download credential', async () => {
-    const response = new ArrayBuffer(8);
-    const fakeHttp = createHttp(response);
+  test.each<CredentialDownloadFormat>(['pem', 'key', 'rpm', 'deb', 'exe'])(
+    'should download credential as %s',
+    async format => {
+      const response = new ArrayBuffer(8);
+      const fakeHttp = createHttp(response);
 
-    const cmd = new CredentialCommand(fakeHttp);
-    const resp = await cmd.download({id: '1'}, 'pem');
+      const cmd = new CredentialCommand(fakeHttp);
+      const resp = await cmd.download({id: '1'}, format);
 
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'download_credential',
-        package_format: 'pem',
-        credential_id: '1',
-      },
-      responseType: 'arraybuffer',
-    });
+      expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+        args: {
+          cmd: 'download_credential',
+          package_format: format,
+          credential_id: '1',
+        },
+        responseType: 'arraybuffer',
+      });
 
-    expect(resp).toEqual(response);
-  });
+      expect(resp).toBe(response);
+    },
+  );
 
   test('should get element from root', () => {
     const fakeHttp = createHttp();

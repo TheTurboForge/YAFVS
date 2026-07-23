@@ -9,7 +9,7 @@
 
 pub const DATABASE_VERSION: &str = "288";
 pub const SCHEMA_FINGERPRINT: &str =
-    "c9b9aed02c7ac9313957f17adfe1a6658f18b63c7600731e64d5bb2dd7135d62";
+    "e9b055d29c0207f86f1c0d813bc5605ec3ab2ec83e9c01141881926867fc9854";
 
 pub const DATABASE_VERSION_SQL: &str =
     "SELECT value FROM meta WHERE name = 'database_version' LIMIT 1;";
@@ -20,13 +20,25 @@ FROM (
         'column|%I|%I|%s|%s|%s|%s',
         table_name,
         column_name,
-        ordinal_position,
+        normalized_position,
         udt_name,
         is_nullable,
         coalesce(column_default, '')
     ) AS item
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
+    FROM (
+        SELECT
+            table_name,
+            column_name,
+            row_number() OVER (
+                PARTITION BY table_name
+                ORDER BY ordinal_position
+            ) AS normalized_position,
+            udt_name,
+            is_nullable,
+            column_default
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+    ) AS columns
 
     UNION ALL
 
@@ -71,6 +83,7 @@ mod tests {
     fn scalar_fingerprint_query_wraps_the_canonical_inventory() {
         let sql = public_schema_fingerprint_sql();
         assert!(sql.contains(PUBLIC_SCHEMA_ITEMS_SQL.trim().trim_end_matches(';')));
+        assert!(sql.contains("row_number() OVER"));
         assert!(sql.contains("string_agg(item || E'\\n', '' ORDER BY item)"));
         assert!(sql.contains("digest("));
     }

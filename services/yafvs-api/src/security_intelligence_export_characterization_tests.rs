@@ -126,7 +126,7 @@ fn database_288_removes_only_empty_legacy_export_state() {
     assert_eq!(DATABASE_VERSION, "288");
     assert_eq!(
         SCHEMA_FINGERPRINT,
-        "c9b9aed02c7ac9313957f17adfe1a6658f18b63c7600731e64d5bb2dd7135d62"
+        "e9b055d29c0207f86f1c0d813bc5605ec3ab2ec83e9c01141881926867fc9854"
     );
     assert!(DATABASE_COMPATIBILITY.contains("public_schema_fingerprint_sql"));
     assert!(MANAGER_INIT.contains("public_schema_fingerprint_sql"));

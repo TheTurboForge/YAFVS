@@ -157,13 +157,6 @@ char *
 export_preference_file_gmp (gvm_connection_t *, gsad_credentials_t *,
                             params_t *, gsad_command_response_data_t *);
 char *
-get_port_list_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                   gsad_command_response_data_t *);
-char *
-get_port_lists_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                    gsad_command_response_data_t *);
-
-char *
 get_overrides_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 char *

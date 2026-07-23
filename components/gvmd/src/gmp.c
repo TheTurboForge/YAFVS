@@ -889,27 +889,6 @@ get_overrides_data_reset (get_overrides_data_t *data)
 }
 
 /**
- * @brief Command data for the get_port_lists command.
- */
-typedef struct
-{
-  int targets;         ///< Boolean. Include targets that use Port List or not.
-  get_data_t get;      ///< Get args.
-} get_port_lists_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_port_lists_data_reset (get_port_lists_data_t *data)
-{
-  get_data_reset (&data->get);
-  memset (data, 0, sizeof (get_port_lists_data_t));
-}
-
-/**
  * @brief Command data for the get_preferences command.
  */
 typedef struct
@@ -1428,7 +1407,6 @@ typedef union
   get_info_data_t get_info;                           ///< get_info
   get_nvts_data_t get_nvts;                           ///< get_nvts
   get_overrides_data_t get_overrides;                 ///< get_overrides
-  get_port_lists_data_t get_port_lists;               ///< get_port_lists
   get_preferences_data_t get_preferences;             ///< get_preferences
   get_reports_data_t get_reports;                     ///< get_reports
   get_resource_names_data_t get_resource_names;       ///< get_resource_names
@@ -1551,12 +1529,6 @@ static get_nvts_data_t *get_nvts_data
  */
 static get_overrides_data_t *get_overrides_data
  = &(command_data.get_overrides);
-
-/**
- * @brief Parser callback data for GET_PORT_LISTS.
- */
-static get_port_lists_data_t *get_port_lists_data
- = &(command_data.get_port_lists);
 
 /**
  * @brief Parser callback data for GET_PREFERENCES.
@@ -1766,7 +1738,6 @@ typedef enum
   CLIENT_GET_INFO,
   CLIENT_GET_NVTS,
   CLIENT_GET_OVERRIDES,
-  CLIENT_GET_PORT_LISTS,
   CLIENT_GET_PREFERENCES,
   CLIENT_GET_REPORTS,
   CLIENT_GET_RESOURCE_NAMES,
@@ -2321,21 +2292,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
               get_overrides_data->result = 0;
 
             set_client_state (CLIENT_GET_OVERRIDES);
-          }
-        else if (strcasecmp ("GET_PORT_LISTS", element_name) == 0)
-          {
-            const gchar* attribute;
-
-            get_data_parse_attributes (&get_port_lists_data->get,
-                                       "port_list",
-                                       attribute_names,
-                                       attribute_values);
-            if (find_attribute (attribute_names, attribute_values,
-                                "targets", &attribute))
-              get_port_lists_data->targets = strcmp (attribute, "0");
-            else
-              get_port_lists_data->targets = 0;
-            set_client_state (CLIENT_GET_PORT_LISTS);
           }
         else if (strcasecmp ("GET_PREFERENCES", element_name) == 0)
           {
@@ -7873,164 +7829,6 @@ handle_get_overrides (gmp_parser_t *gmp_parser, GError **error)
 }
 
 /**
- * @brief Handle end of GET_PORT_LISTS element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_port_lists (gmp_parser_t *gmp_parser, GError **error)
-{
-  iterator_t port_lists;
-  int count, filtered, ret, first;
-
-  INIT_GET (port_list, Port List);
-
-  ret = init_port_list_iterator (&port_lists,
-                                  &get_port_lists_data->get);
-  if (ret)
-    {
-      switch (ret)
-        {
-          case 1:
-            if (send_find_error_to_client ("get_port_lists",
-                                           "port_list",
-                                           get_port_lists_data->get.id,
-                                           gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          case 2:
-            if (send_find_error_to_client
-                  ("get_port_lists", "filter",
-                   get_port_lists_data->get.filt_id, gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          case -1:
-            SEND_TO_CLIENT_OR_FAIL
-              (XML_INTERNAL_ERROR ("get_port_lists"));
-            break;
-        }
-      get_port_lists_data_reset (get_port_lists_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  SEND_GET_START ("port_list");
-  while (1)
-    {
-      ret = get_next (&port_lists, &get_port_lists_data->get, &first,
-                      &count, init_port_list_iterator);
-      if (ret == 1)
-        break;
-      if (ret == -1)
-        {
-          internal_error_send_to_client (error);
-          return;
-        }
-
-      SEND_GET_COMMON (port_list, &get_port_lists_data->get,
-                        &port_lists);
-
-      if (resource_id_deprecated ("port_list",
-                                  get_iterator_uuid (&port_lists)))
-        {
-          SENDF_TO_CLIENT_OR_FAIL ("<deprecated>1</deprecated>");
-        }
-
-      SENDF_TO_CLIENT_OR_FAIL ("<port_count>"
-                               "<all>%i</all>"
-                               "<tcp>%i</tcp>"
-                               "<udp>%i</udp>"
-                               "</port_count>"
-                               "<predefined>%i</predefined>",
-                               port_list_iterator_count_all (&port_lists),
-                               port_list_iterator_count_tcp (&port_lists),
-                               port_list_iterator_count_udp (&port_lists),
-                               port_list_iterator_predefined (&port_lists));
-
-      if (get_port_lists_data->get.details)
-        {
-          iterator_t ranges;
-
-          SEND_TO_CLIENT_OR_FAIL ("<port_ranges>");
-
-          init_port_range_iterator (&ranges,
-                                    get_iterator_resource (&port_lists),
-                                    0, 1, NULL);
-          while (next (&ranges))
-            SENDF_TO_CLIENT_OR_FAIL
-             ("<port_range id=\"%s\">"
-              "<start>%s</start>"
-              "<end>%s</end>"
-              "<type>%s</type>"
-              "<comment>%s</comment>"
-              "</port_range>",
-              port_range_iterator_uuid (&ranges),
-              port_range_iterator_start (&ranges),
-              port_range_iterator_end (&ranges)
-                ? port_range_iterator_end (&ranges)
-                : port_range_iterator_start (&ranges),
-              port_range_iterator_type (&ranges),
-              port_range_iterator_comment (&ranges));
-          cleanup_iterator (&ranges);
-
-          SENDF_TO_CLIENT_OR_FAIL ("</port_ranges>");
-        }
-
-      if (get_port_lists_data->targets)
-        {
-          iterator_t targets;
-
-          SEND_TO_CLIENT_OR_FAIL ("<targets>");
-
-          init_port_list_target_iterator (&targets,
-                                          get_iterator_resource
-                                            (&port_lists), 0);
-          while (next (&targets))
-            {
-              if (port_list_target_iterator_readable (&targets) == 0)
-                /* Only show targets the user may see. */
-                continue;
-
-              SENDF_TO_CLIENT_OR_FAIL
-               ("<target id=\"%s\">"
-                "<name>%s</name>",
-                port_list_target_iterator_uuid (&targets),
-                port_list_target_iterator_name (&targets));
-              if (port_list_target_iterator_readable (&targets))
-                SEND_TO_CLIENT_OR_FAIL ("</target>");
-              else
-                SEND_TO_CLIENT_OR_FAIL ("<permissions/>"
-                                        "</target>");
-            }
-
-          cleanup_iterator (&targets);
-
-          SEND_TO_CLIENT_OR_FAIL ("</targets>");
-        }
-
-      SEND_TO_CLIENT_OR_FAIL ("</port_list>");
-
-      count++;
-    }
-
-  cleanup_iterator (&port_lists);
-  filtered = get_port_lists_data->get.id
-              ? 1
-              : port_list_count (&get_port_lists_data->get);
-  SEND_GET_END ("port_list", &get_port_lists_data->get, count, filtered);
-
-  get_port_lists_data_reset (get_port_lists_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
  * @brief Handle end of GET_PREFERENCES element.
  *
  * @param[in]  gmp_parser   GMP parser.
@@ -10945,10 +10743,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
       case CLIENT_GET_OVERRIDES:
         handle_get_overrides (gmp_parser, error);
-        break;
-
-      case CLIENT_GET_PORT_LISTS:
-        handle_get_port_lists (gmp_parser, error);
         break;
 
       case CLIENT_GET_PREFERENCES:

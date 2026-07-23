@@ -56,8 +56,6 @@ gsad_init_validator ()
                      "|(get_info)"
                      "|(get_override)"
                      "|(get_overrides)"
-                     "|(get_port_list)"
-                     "|(get_port_lists)"
                      "|(get_report)"
                      "|(get_reports)"
                      "|(get_resource_names)"

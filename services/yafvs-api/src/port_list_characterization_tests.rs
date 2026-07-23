@@ -8,7 +8,18 @@ use crate::direct_api::direct_api_v1_method_is_allowed;
 
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const MANAGE_PORT_LISTS: &str = include_str!("../../../components/gvmd/src/manage_port_lists.c");
+const MANAGE_PORT_LISTS_SQL: &str =
+    include_str!("../../../components/gvmd/src/manage_sql_port_lists.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSAD_GMP_H: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
+const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
+const GVMD_GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
+const GVMD_MANAGE_COMMANDS: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
+const GVMD_GMP_SCHEMA: &str =
+    include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
+const GSA_CAPABILITIES: &str =
+    include_str!("../../../components/gsa/src/gmp/capabilities/capabilities.ts");
+const NATIVE_PORT_LIST_WRITES: &str = include_str!("port_list_writes.rs");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -19,6 +30,53 @@ fn inherited_function(source: &str, name: &str) -> String {
     let tail = &source[start..];
     let end = tail.find("\n/**").unwrap_or(tail.len());
     tail[..end].to_string()
+}
+
+#[test]
+fn get_port_lists_transport_is_retired_while_native_port_list_ownership_remains() {
+    for source in [
+        GSAD_GMP_C,
+        GSAD_GMP_H,
+        GSAD_VALIDATOR,
+        GVMD_GMP,
+        GVMD_GMP_SCHEMA,
+    ] {
+        assert!(!source.contains("GET_PORT_LISTS"));
+        assert!(!source.contains("get_port_lists_gmp"));
+        assert!(!source.contains("get_port_list_gmp"));
+    }
+    assert!(GSA_CAPABILITIES.contains("'get_port_lists'"));
+    assert!(GVMD_MANAGE_COMMANDS.contains("\"GET_PORT_LISTS\",\n"));
+    let native_acl = inherited_function(GVMD_MANAGE_COMMANDS, "valid_gmp_command");
+    assert!(native_acl.contains("native_acl_operations"));
+
+    let bulk_export = inherited_function(GSAD_GMP_C, "bulk_export_gmp");
+    assert!(bulk_export.contains("g_ascii_strcasecmp (type, \"port_list\") == 0"));
+
+    for retained in [
+        "init_port_list_iterator",
+        "find_port_list_with_permission",
+        "create_port_list_no_acl",
+        "create_port_list_unique",
+        "insert_port_range",
+        "sync_port_lists_with_feed",
+        "parse_port_list_entity",
+    ] {
+        assert!(
+            GVMD_GMP.contains(retained)
+                || MANAGE_PORT_LISTS.contains(retained)
+                || MANAGE_PORT_LISTS_SQL.contains(retained),
+            "retained shared/feed port-list helper missing: {retained}"
+        );
+    }
+    assert!(GVMD_GMP.contains("CLIENT_CREATE_TARGET_PORT_RANGE"));
+    for retained in [
+        "pub(crate) async fn create_port_list",
+        "pub(crate) async fn import_port_list",
+        "pub(crate) async fn restore_port_list",
+    ] {
+        assert!(NATIVE_PORT_LIST_WRITES.contains(retained));
+    }
 }
 
 #[test]

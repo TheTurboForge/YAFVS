@@ -166,10 +166,6 @@ get_override (gvm_connection_t *, gsad_credentials_t *, params_t *,
               const char *, gsad_command_response_data_t *);
 
 static char *
-get_port_list (gvm_connection_t *, gsad_credentials_t *, params_t *,
-               const char *, gsad_command_response_data_t *);
-
-static char *
 get_target (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
             gsad_command_response_data_t *);
 
@@ -5328,69 +5324,6 @@ get_resource_names_gmp (gvm_connection_t *connection,
 /* Port lists. */
 
 /**
- * @brief Get one port_list, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[in]  extra_xml      Extra XML to insert inside page element.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-static char *
-get_port_list (gvm_connection_t *connection, gsad_credentials_t *credentials,
-               params_t *params, const char *extra_xml,
-               gsad_command_response_data_t *response_data)
-{
-  gmp_arguments_t *arguments;
-  arguments = gmp_arguments_new ();
-
-  gmp_arguments_add (arguments, "targets", "1");
-  gmp_arguments_add (arguments, "details", "1");
-
-  return get_one (connection, "port_list", credentials, params, extra_xml,
-                  arguments, response_data);
-}
-
-/**
- * @brief Get one port_list, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_port_list_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  return get_port_list (connection, credentials, params, NULL, response_data);
-}
-
-/**
- * @brief Get all port_lists, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_port_lists_gmp (gvm_connection_t *connection,
-                    gsad_credentials_t *credentials, params_t *params,
-                    gsad_command_response_data_t *response_data)
-{
-  return get_many (connection, "port_lists", credentials, params, NULL,
-                   response_data);
-}
-
-/**
  * @brief Modify a port list, get all port list, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -6771,8 +6704,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_info)
   ELSE (get_override)
   ELSE (get_overrides)
-  ELSE (get_port_list)
-  ELSE (get_port_lists)
   ELSE (get_report)
   ELSE (get_reports)
   ELSE (get_resource_names)

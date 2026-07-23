@@ -728,25 +728,35 @@ describe('CredentialCommand tests', () => {
     expect(result).toBe(response);
   });
 
-  test('should keep KEY downloads inherited without native capability', async () => {
+  test('should keep KEY downloads native without a capability flag', async () => {
     const response = new ArrayBuffer(8);
-    const fetchMock = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      arrayBuffer: testing.fn().mockResolvedValue(response),
+      ok: true,
+      status: 200,
+    });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn((path: string) => path);
+    fakeHttp.session = createSession();
     const cmd = new CredentialCommand(fakeHttp);
 
     const result = await cmd.download({id: '1'}, 'key');
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'download_credential',
-        package_format: 'key',
-        credential_id: '1',
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'api/v1/credentials/1/public-key',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/key',
+        },
       },
-      responseType: 'arraybuffer',
-    });
-    expect(result).toBe(response);
+    );
+    expect(result.data).toBe(response);
   });
 
   test('should get element from root', () => {

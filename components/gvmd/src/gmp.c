@@ -6687,9 +6687,7 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
     {
       if (strlen (data_format))
         {
-          if (strcasecmp (data_format, "key") == 0)
-            format = CREDENTIAL_FORMAT_KEY;
-          else if (strcasecmp (data_format, "pem") == 0)
+          if (strcasecmp (data_format, "pem") == 0)
             format = CREDENTIAL_FORMAT_PEM;
           else
             format = CREDENTIAL_FORMAT_ERROR;
@@ -6705,7 +6703,7 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
       SEND_TO_CLIENT_OR_FAIL
         (XML_ERROR_SYNTAX ("get_credentials",
                            "Format attribute should"
-                           " be 'key' or 'pem'"));
+                           " be 'pem'"));
       get_credentials_data_reset (get_credentials_data);
       set_client_state (CLIENT_AUTHENTIC);
       return;
@@ -6919,23 +6917,6 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
 
       switch (format)
         {
-          case CREDENTIAL_FORMAT_KEY:
-            {
-              if (public_key && strcmp (public_key, ""))
-                {
-                  SENDF_TO_CLIENT_OR_FAIL
-                    ("<public_key>%s</public_key>", public_key);
-                }
-              else
-                {
-                  char *pub;
-                  pub = gvm_ssh_public_from_private (private_key, password);
-                  SENDF_TO_CLIENT_OR_FAIL
-                    ("<public_key>%s</public_key>", pub ?: "");
-                  g_free (pub);
-                }
-              break;
-            }
           case CREDENTIAL_FORMAT_PEM:
             {
               SENDF_TO_CLIENT_OR_FAIL

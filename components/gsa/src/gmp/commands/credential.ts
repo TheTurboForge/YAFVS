@@ -223,7 +223,7 @@ class CredentialCommand extends EntityCommand<
   }
 
   async download({id}, format: CredentialDownloadFormat = 'pem') {
-    if (format === 'key' && canUseNativeApi(this.http)) {
+    if (format === 'key') {
       return new Response(await fetchNativeCredentialPublicKey(this.http, id));
     }
 

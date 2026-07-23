@@ -17781,20 +17781,14 @@ gboolean
 credential_iterator_format_available (iterator_t* iterator,
                                       credential_format_t format)
 {
-  const char *type, *private_key;
+  const char *type;
 
   type = credential_iterator_type (iterator);
-  private_key = credential_iterator_private_key (iterator);
 
   switch (format)
     {
       case CREDENTIAL_FORMAT_NONE:
         return TRUE;
-      case CREDENTIAL_FORMAT_KEY:
-        if (strcasecmp (type, "usk") == 0 && private_key)
-          return TRUE;
-        else
-          return FALSE;
       case CREDENTIAL_FORMAT_PEM:
         if (strcasecmp (type, "cc") == 0)
           return TRUE;
@@ -17819,10 +17813,6 @@ credential_iterator_formats_xml (iterator_t* iterator)
   GString *xml;
 
   xml = g_string_new ("<formats>");
-
-  if (credential_iterator_format_available (iterator,
-                                            CREDENTIAL_FORMAT_KEY))
-    g_string_append (xml, "<format>key</format>");
 
   if (credential_iterator_format_available (iterator,
                                             CREDENTIAL_FORMAT_PEM))

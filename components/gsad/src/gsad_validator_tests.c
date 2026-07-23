@@ -19,7 +19,7 @@ Ensure (gsad_validator, restrict_credential_download_formats)
   validator_t validator = gsad_get_validator ();
 
   assert_that (gvm_validate (validator, "package_format", "key"),
-               is_equal_to (0));
+               is_equal_to (2));
   assert_that (gvm_validate (validator, "package_format", "pem"),
                is_equal_to (0));
   assert_that (gvm_validate (validator, "package_format", "rpm"),

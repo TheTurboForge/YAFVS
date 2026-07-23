@@ -94,7 +94,7 @@ evidence = [
   "services/yafvs-api/src/alert_write_characterization_tests.rs::gsad_and_gsa_alert_definition_paths_are_native_only",
   "services/yafvs-api/src/user_account_contract_tests.rs::legacy_user_lifecycle_is_native_only_not_public_gmp_transport",
   "services/yafvs-api/src/schedule_characterization_tests.rs::native_gsa_owns_schedule_commands_and_gmp_transport_is_retired",
-  "services/yafvs-api/src/credential_contract_tests.rs::credential_metadata_reads_have_no_public_gsad_aliases_but_download_remains",
+  "services/yafvs-api/src/credential_contract_tests.rs::credential_metadata_reads_have_no_public_gsad_aliases_but_pem_download_remains",
   "services/yafvs-api/src/credential_contract_tests.rs::credential_live_delete_is_native_only_but_secret_download_remains_inherited",
   "services/yafvs-api/src/credential_writes_tests.rs::credential_delete_moves_live_state_to_trash_atomically_and_opaquely",
   "services/yafvs-api/src/scope_report_mutation_characterization_tests.rs::native_scope_reads_replace_public_gmp_scope_metadata_transport",

@@ -2740,9 +2740,9 @@ download_credential_gmp (gvm_connection_t *connection,
     }
 
     {
-      entity_t key_entity = NULL;
+      entity_t certificate_entity = NULL;
 
-      /* A key or certificate. */
+      /* A client certificate. SSH public keys use the native API. */
       if (read_entity_c (connection, &entity))
         {
           gsad_command_response_data_set_status_code (
@@ -2757,15 +2757,10 @@ download_credential_gmp (gvm_connection_t *connection,
 
       credential_entity = entity_child (entity, "credential");
       if (credential_entity)
+        certificate_entity = entity_child (credential_entity, "certificate");
+      if (certificate_entity != NULL)
         {
-          if (strcmp (format, "pem") == 0)
-            key_entity = entity_child (credential_entity, "certificate");
-          else
-            key_entity = entity_child (credential_entity, "public_key");
-        }
-      if (key_entity != NULL)
-        {
-          data = g_strdup (entity_text (key_entity));
+          data = g_strdup (entity_text (certificate_entity));
           entity_t login_entity = entity_child (credential_entity, "login");
           if (login_entity)
             login = g_strdup (entity_text (login_entity));
@@ -2802,7 +2797,7 @@ download_credential_gmp (gvm_connection_t *connection,
   content_disposition =
     g_strdup_printf ("attachment; filename=credential-%s.%s",
                      (login && strcmp (login, "")) ? login : credential_id,
-                     (strcmp (format, "key") == 0 ? "pub" : format));
+                     format);
   content_type_from_format_string (&content_type, format);
 
   gsad_command_response_data_set_content_disposition (response_data,

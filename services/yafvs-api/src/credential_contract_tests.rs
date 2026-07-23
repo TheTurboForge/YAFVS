@@ -156,7 +156,7 @@ fn credential_live_delete_is_native_only_but_secret_download_remains_inherited()
 }
 
 #[test]
-fn credential_metadata_reads_have_no_public_gsad_aliases_but_download_remains() {
+fn credential_metadata_reads_have_no_public_gsad_aliases_but_pem_download_remains() {
     for native_marker in [
         "fetchNativeCredential(this.http, id)",
         "exportNativeCredentialMetadata(this.http, id)",
@@ -219,6 +219,42 @@ fn credential_metadata_reads_have_no_public_gsad_aliases_but_download_remains() 
     assert!(GSAD_VALIDATOR_C.contains("|(download_credential)"));
     assert!(GVMD_GMP_C.contains("CLIENT_GET_CREDENTIALS"));
     assert!(GMP_SCHEMA.contains("<name>get_credentials</name>"));
+
+    assert!(
+        GSA_CREDENTIAL_COMMAND.contains("if (format === 'key')"),
+        "GSA must route SSH public-key download through the native API unconditionally"
+    );
+    assert!(
+        !GSA_CREDENTIAL_COMMAND.contains("format === 'key' && canUseNativeApi"),
+        "GSA must not fall back to inherited KEY transport"
+    );
+    assert!(GSAD_VALIDATOR_C.contains("\"package_format\", \"^pem$\""));
+    assert!(!GSAD_VALIDATOR_C.contains("pem|key"));
+    let inherited_download = GSAD_GMP_C
+        .split_once("download_credential_gmp (")
+        .expect("retained PEM download handler")
+        .1
+        .split_once("return data;")
+        .expect("PEM download handler boundary")
+        .0;
+    assert!(inherited_download.contains("entity_child (credential_entity, \"certificate\")"));
+    assert!(!inherited_download.contains("entity_child (credential_entity, \"public_key\")"));
+    assert!(!inherited_download.contains("\"pub\""));
+
+    for retired in [
+        "CREDENTIAL_FORMAT_KEY",
+        "Format attribute should\"\\n                           \" be 'key' or 'pem'",
+        "\"<public_key>%s</public_key>\"",
+    ] {
+        assert!(
+            !GVMD_GMP_C.contains(retired),
+            "retired inherited credential KEY response remains: {retired}"
+        );
+    }
+    assert!(!GVMD_MANAGE_HEADER.contains("CREDENTIAL_FORMAT_KEY"));
+    assert!(!GVMD_MANAGE_SQL.contains("<format>key</format>"));
+    assert!(!GMP_SCHEMA.contains("format=\"key\""));
+    assert!(!GMP_SCHEMA.contains("<format>key</format>"));
 }
 
 #[test]

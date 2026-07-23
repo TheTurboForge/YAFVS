@@ -1692,7 +1692,6 @@ nvt_severity_iterator_value (iterator_t *);
 typedef enum
 {
   CREDENTIAL_FORMAT_NONE = 0,   /// normal XML output
-  CREDENTIAL_FORMAT_KEY = 1,    /// public key
   CREDENTIAL_FORMAT_PEM = 5,    /// Certificate PEM
   CREDENTIAL_FORMAT_ERROR = -1  /// Error / Invalid format
 } credential_format_t;

@@ -229,7 +229,7 @@ gsad_init_validator ()
   gvm_validator_add (validator, "oid", "^([0-9.]{1,80}|CVE-[-0-9]{1,14})$");
   gvm_validator_add (validator, "page", "^[_[:alnum:] ]+$");
   gvm_validator_add (validator, "page_size", "^[0-9]+$");
-  gvm_validator_add (validator, "package_format", "^(pem|key)$");
+  gvm_validator_add (validator, "package_format", "^pem$");
   gvm_validator_add (validator, "password", "^.*$");
   gvm_validator_add (validator, "password:value", "(?s)^.*$");
   gvm_validator_add (validator, "port", "^.*$");

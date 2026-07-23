@@ -1341,7 +1341,7 @@ fn tag_asset_read_sql_is_metadata_and_resource_count_only() {
     }
     assert!(payloads.contains("row.get::<_, bool>(\"human_owned\")"));
     assert!(payloads.contains("tag_resource_direct_write_type_is_supported(&resource_type)"));
-    assert!(payloads.contains("in_use: false"));
+    assert!(payloads.contains("in_use: tag_asset_in_use(resource_count)"));
 }
 
 #[test]

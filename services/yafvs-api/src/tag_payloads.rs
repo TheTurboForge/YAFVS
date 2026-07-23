@@ -93,8 +93,10 @@ pub(crate) fn tag_asset_from_row(row: &Row) -> TagAssetItem {
         active: row.get::<_, i32>("active_int") != 0,
         value,
         writable,
-        // Deleting a tag moves its assignments to trash in the same transaction.
-        in_use: false,
+        // Usage reports assignment state. Deletion eligibility is represented
+        // independently by `writable`; assigned writable tags can move their
+        // assignments to trash in the delete transaction.
+        in_use: tag_asset_in_use(resource_count),
         orphan: false,
         trash: false,
         permissions: vec![
@@ -105,6 +107,22 @@ pub(crate) fn tag_asset_from_row(row: &Row) -> TagAssetItem {
         ],
         created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
         modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
+    }
+}
+
+fn tag_asset_in_use(resource_count: i64) -> bool {
+    resource_count > 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tag_asset_in_use;
+
+    #[test]
+    fn tag_usage_matches_assignment_count_without_controlling_deletion() {
+        assert!(!tag_asset_in_use(0));
+        assert!(tag_asset_in_use(1));
+        assert!(tag_asset_in_use(2));
     }
 }
 

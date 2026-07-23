@@ -146,7 +146,7 @@ fn dedicated_get_tags_xml_transport_is_retired_without_losing_shared_semantics()
     assert!(GSA_CAPABILITIES.contains("'get_tags'"));
     assert!(TAG_PAYLOADS.contains("row.get::<_, bool>(\"human_owned\")"));
     assert!(TAG_PAYLOADS.contains("tag_resource_direct_write_type_is_supported"));
-    assert!(TAG_PAYLOADS.contains("in_use: false"));
+    assert!(TAG_PAYLOADS.contains("in_use: tag_asset_in_use(resource_count)"));
 
     let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     assert!(!repo.join("components/gvmd/src/manage_tags.c").exists());

@@ -17,16 +17,16 @@ use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::time::Duration;
+use yafvs_domain::{
+    DATABASE_VERSION, DATABASE_VERSION_SQL, SCHEMA_FINGERPRINT, public_schema_fingerprint_sql,
+};
 
 const ADMIN_USER: &str = "admin";
 const ADMIN_PASSWORD: &str = "admin";
 const ADMIN_PASSWORD_ENV: &str = "YAFVS_GVMD_ADMIN_PASSWORD";
 const ADMIN_SECRET: &str = "gvmd-admin-password";
 const FEED_IMPORT_OWNER_SETTING: &str = "78eceaec-3385-11ea-b237-28d24461215b";
-const SOURCE_DATABASE_VERSION: u64 = 288;
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(300);
-const DATABASE_VERSION_SQL: &str =
-    "SELECT COALESCE((SELECT value FROM meta WHERE name = 'database_version'), 'missing');";
 const ADMIN_UUID_SQL: &str = "SELECT COALESCE((SELECT uuid::text FROM users WHERE name = 'admin' ORDER BY id LIMIT 1), 'missing');";
 const FEED_OWNER_SQL: &str = "SELECT COALESCE((SELECT value FROM settings WHERE uuid = '78eceaec-3385-11ea-b237-28d24461215b'), 'missing');";
 
@@ -87,7 +87,10 @@ pub(super) fn initialize_manager(
         .with_path(&secret_path.display().to_string()),
     );
 
-    let expected_version = SOURCE_DATABASE_VERSION;
+    let expected_version = DATABASE_VERSION;
+    let expected_version_number = expected_version
+        .parse::<u64>()
+        .expect("shared database schema version is numeric");
     let database = DatabaseAttestationAdapter::new(repo_root, runner);
     let observed_before = match database.query_single_value(DATABASE_VERSION_SQL) {
         Ok(Some(version)) => version,
@@ -100,10 +103,18 @@ pub(super) fn initialize_manager(
             );
         }
     };
-    if observed_before
-        .parse::<u64>()
-        .is_ok_and(|version| version > expected_version)
-    {
+    let observed_before_number = match observed_before.parse::<u64>() {
+        Ok(version) => version,
+        Err(_) => {
+            return failed(
+                findings,
+                "gvmd.migrate-version-preflight",
+                "Manager database schema version is not a valid number.",
+                &secret_path,
+            );
+        }
+    };
+    if observed_before_number > expected_version_number {
         return failed(
             findings,
             "gvmd.migrate-version",
@@ -111,7 +122,7 @@ pub(super) fn initialize_manager(
             &secret_path,
         );
     }
-    let migration_required = observed_before != expected_version.to_string();
+    let migration_required = observed_before_number < expected_version_number;
     if migration_required {
         let migrate = match run_gvmd(runtime, &["--migrate"], COMMAND_TIMEOUT) {
             Ok(output) => output,
@@ -146,19 +157,6 @@ pub(super) fn initialize_manager(
         if !migrate.success {
             return finish(StepStatus::Fail, findings, &secret_path);
         }
-    } else {
-        findings.push(
-            Finding::new(
-                "pass",
-                "gvmd.migrate",
-                "Manager database migration was skipped because the schema is current.".into(),
-            )
-            .with_details(json!({
-                "attempts": 0,
-                "previous_version": observed_before,
-                "skipped": true,
-            })),
-        );
     }
 
     let observed_version = if migration_required {
@@ -174,9 +172,9 @@ pub(super) fn initialize_manager(
             }
         }
     } else {
-        observed_before
+        observed_before.clone()
     };
-    let version_matches = observed_version == expected_version.to_string();
+    let version_matches = observed_version == expected_version;
     findings.push(
         Finding::new(
             if version_matches { "pass" } else { "fail" },
@@ -195,6 +193,63 @@ pub(super) fn initialize_manager(
     );
     if !version_matches {
         return finish(StepStatus::Fail, findings, &secret_path);
+    }
+
+    let observed_schema_fingerprint =
+        match database.query_single_value(&public_schema_fingerprint_sql()) {
+            Ok(Some(fingerprint)) => fingerprint,
+            Err(_) => {
+                return failed(
+                    findings,
+                    "gvmd.migrate-schema",
+                    "Manager database schema fingerprint could not be read safely.",
+                    &secret_path,
+                );
+            }
+            Ok(None) => {
+                return failed(
+                    findings,
+                    "gvmd.migrate-schema",
+                    "Manager database schema fingerprint query returned no value.",
+                    &secret_path,
+                );
+            }
+        };
+    let schema_matches = schema_contract_matches(&observed_version, &observed_schema_fingerprint);
+    findings.push(
+        Finding::new(
+            if schema_matches { "pass" } else { "fail" },
+            "gvmd.migrate-schema",
+            if schema_matches {
+                "Manager database schema fingerprint matches the shared version 288 contract."
+            } else {
+                "Manager database schema fingerprint does not match the shared version 288 contract."
+            }
+            .to_owned(),
+        )
+        .with_details(json!({
+            "expected": SCHEMA_FINGERPRINT,
+            "observed": observed_schema_fingerprint,
+        })),
+    );
+    if !schema_matches {
+        return finish(StepStatus::Fail, findings, &secret_path);
+    }
+
+    if !migration_required {
+        findings.push(
+            Finding::new(
+                "pass",
+                "gvmd.migrate",
+                "Manager database migration was skipped because the shared schema contract is current."
+                    .into(),
+            )
+            .with_details(json!({
+                "attempts": 0,
+                "previous_version": observed_before,
+                "skipped": true,
+            })),
+        );
     }
 
     let mut admin_uuid = match query_admin_uuid(&database) {
@@ -359,6 +414,10 @@ pub(super) fn initialize_manager(
         findings,
         &secret_path,
     )
+}
+
+fn schema_contract_matches(database_version: &str, fingerprint: &str) -> bool {
+    database_version == DATABASE_VERSION && fingerprint == SCHEMA_FINGERPRINT
 }
 
 #[derive(Clone, Copy)]
@@ -622,13 +681,11 @@ mod tests {
     }
 
     #[test]
-    fn attests_initialized_manager_without_repeating_mutations() {
+    fn current_schema_fingerprint_mismatch_stops_before_manager_mutation() {
         let (root, repo) = fixture();
-        let uuid = "11111111-2222-3333-4444-555555555555";
         let runner = Runner::new([
-            output(true, &format!("{SOURCE_DATABASE_VERSION}\n")),
-            output(true, &format!("{uuid}\n")),
-            output(true, &format!("{uuid}\n")),
+            output(true, &format!("{DATABASE_VERSION}\n")),
+            output(true, "unexpected-schema-item\n"),
         ]);
         let environment = environment();
         let images = images();
@@ -636,28 +693,60 @@ mod tests {
 
         let outcome = initialize_manager(&repo, &runner, &runtime);
 
-        assert_eq!(outcome.status, StepStatus::Pass);
+        assert_eq!(outcome.status, StepStatus::Fail);
         let commands = runner.commands.lock().unwrap();
-        assert_eq!(commands.len(), 3);
         assert!(
             commands
                 .iter()
                 .all(|command| command.iter().any(|argument| argument == "psql"))
         );
-        assert!(
-            commands
-                .iter()
-                .flatten()
-                .all(|argument| argument != "--migrate")
-        );
+        assert!(commands.iter().flatten().all(|argument| {
+            argument != "--migrate"
+                && !argument.contains("--create-user")
+                && !argument.contains("--modify-setting")
+                && !argument.contains("--user=admin")
+        }));
         assert_eq!(
             outcome
                 .findings
                 .iter()
-                .find(|finding| finding.check == "gvmd.migrate")
-                .and_then(|finding| finding.details.as_ref())
-                .map(|details| &details["skipped"]),
-            Some(&json!(true))
+                .find(|finding| finding.check == "gvmd.migrate-schema")
+                .map(|finding| finding.status.as_str()),
+            Some("fail")
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn migration_result_with_the_wrong_version_stops_before_manager_mutation() {
+        let (root, repo) = fixture();
+        let runner = Runner::new([
+            output(true, "286\n"),
+            output(true, ""),
+            output(true, "287\n"),
+        ]);
+        let environment = environment();
+        let images = images();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+
+        let outcome = initialize_manager(&repo, &runner, &runtime);
+
+        assert_eq!(outcome.status, StepStatus::Fail);
+        assert!(outcome.findings.iter().any(|finding| {
+            finding.check == "gvmd.migrate-version" && finding.status == "fail"
+        }));
+        assert!(
+            runner
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .flatten()
+                .all(|argument| {
+                    !argument.contains("--create-user")
+                        && !argument.contains("--modify-setting")
+                        && !argument.contains("--user=admin")
+                })
         );
         fs::remove_dir_all(root).unwrap();
     }
@@ -728,11 +817,49 @@ mod tests {
     }
 
     #[test]
-    fn creates_missing_admin_then_requires_its_uuid() {
+    fn attests_current_schema_without_repeating_manager_mutations() {
+        let (root, repo) = fixture();
+        let uuid = "11111111-2222-3333-4444-555555555555";
+        let runner = Runner::new([
+            output(true, &format!("{DATABASE_VERSION}\n")),
+            output(true, &format!("{SCHEMA_FINGERPRINT}\n")),
+            output(true, &format!("{uuid}\n")),
+            output(true, &format!("{uuid}\n")),
+        ]);
+        let environment = environment();
+        let images = images();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+
+        let outcome = initialize_manager(&repo, &runner, &runtime);
+
+        assert_eq!(outcome.status, StepStatus::Pass);
+        let commands = runner.commands.lock().unwrap();
+        assert!(commands.iter().flatten().all(|argument| {
+            argument != "--migrate"
+                && argument != "--get-users"
+                && !argument.contains("--create-user")
+                && !argument.contains("--user=admin")
+                && !argument.contains("--modify-setting")
+        }));
+        assert_eq!(
+            outcome
+                .findings
+                .iter()
+                .find(|finding| finding.check == "gvmd.migrate")
+                .and_then(|finding| finding.details.as_ref())
+                .map(|details| &details["skipped"]),
+            Some(&json!(true))
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn creates_missing_admin_only_after_schema_attestation() {
         let (root, repo) = fixture();
         let uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
         let runner = Runner::new([
-            output(true, &format!("{SOURCE_DATABASE_VERSION}\n")),
+            output(true, &format!("{DATABASE_VERSION}\n")),
+            output(true, &format!("{SCHEMA_FINGERPRINT}\n")),
             output(true, "missing\n"),
             output(true, ""),
             output(true, &format!("{uuid}\n")),
@@ -748,7 +875,6 @@ mod tests {
 
         assert_eq!(outcome.status, StepStatus::Pass);
         let commands = runner.commands.lock().unwrap();
-        assert_eq!(commands.len(), 6);
         assert_eq!(
             commands
                 .iter()
@@ -762,24 +888,25 @@ mod tests {
                 .flatten()
                 .all(|argument| argument != "--get-users")
         );
-        assert!(
-            commands[2]
+        assert!(commands.iter().any(|command| {
+            command
                 .iter()
                 .any(|argument| argument.contains("--create-user=admin"))
-        );
-        assert!(
-            commands[4]
+        }));
+        assert!(commands.iter().any(|command| {
+            command
                 .iter()
                 .any(|argument| argument.contains("--user=admin"))
-        );
+        }));
         fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
-    fn rejects_invalid_admin_database_attestation_without_creating_a_user() {
+    fn rejects_invalid_admin_attestation_after_schema_attestation() {
         let (root, repo) = fixture();
         let runner = Runner::new([
-            output(true, &format!("{SOURCE_DATABASE_VERSION}\n")),
+            output(true, &format!("{DATABASE_VERSION}\n")),
+            output(true, &format!("{SCHEMA_FINGERPRINT}\n")),
             output(true, "prefix 11111111-2222-3333-4444-555555555555 suffix\n"),
         ]);
         let environment = environment();
@@ -794,12 +921,14 @@ mod tests {
                 finding.check == "manager.admin-uuid" && finding.status == "fail"
             })
         );
-        let commands = runner.commands.lock().unwrap();
-        assert_eq!(commands.len(), 2);
         assert!(
-            commands.iter().flatten().all(|argument| {
-                argument != "--get-users" && !argument.contains("--create-user")
-            })
+            runner
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .flatten()
+                .all(|argument| argument != "--get-users" && !argument.contains("--create-user"))
         );
         fs::remove_dir_all(root).unwrap();
     }
@@ -831,7 +960,140 @@ mod tests {
         .unwrap();
         assert_eq!(
             parse_source_database_version(&source),
-            Some(SOURCE_DATABASE_VERSION)
+            Some(DATABASE_VERSION.parse().unwrap())
         );
+    }
+
+    #[test]
+    fn malformed_schema_version_fails_before_migration_or_manager_mutation() {
+        let (root, repo) = fixture();
+        let runner = Runner::new([output(true, "not-a-version\n")]);
+        let environment = environment();
+        let images = images();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+
+        let outcome = initialize_manager(&repo, &runner, &runtime);
+
+        assert_eq!(outcome.status, StepStatus::Fail);
+        assert!(outcome.findings.iter().any(|finding| {
+            finding.check == "gvmd.migrate-version-preflight" && finding.status == "fail"
+        }));
+        assert!(
+            runner
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .flatten()
+                .all(|argument| {
+                    argument != "--migrate"
+                        && !argument.contains("--create-user")
+                        && !argument.contains("--user=admin")
+                        && !argument.contains("--modify-setting")
+                })
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn newer_schema_version_fails_closed_before_manager_mutation() {
+        let (root, repo) = fixture();
+        let runner = Runner::new([output(true, "289\n")]);
+        let environment = environment();
+        let images = images();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+
+        let outcome = initialize_manager(&repo, &runner, &runtime);
+
+        assert_eq!(outcome.status, StepStatus::Fail);
+        assert!(
+            runner
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .flatten()
+                .all(|argument| {
+                    argument != "--migrate"
+                        && !argument.contains("--create-user")
+                        && !argument.contains("--user=admin")
+                        && !argument.contains("--modify-setting")
+                })
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn migrated_database_requires_the_shared_schema_fingerprint_before_mutation() {
+        let (root, repo) = fixture();
+        let runner = Runner::new([
+            output(true, "286\n"),
+            output(true, ""),
+            output(true, DATABASE_VERSION),
+            output(true, "unexpected-schema-item\n"),
+        ]);
+        let environment = environment();
+        let images = images();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+
+        let outcome = initialize_manager(&repo, &runner, &runtime);
+
+        assert_eq!(outcome.status, StepStatus::Fail);
+        assert!(
+            outcome.findings.iter().any(|finding| {
+                finding.check == "gvmd.migrate-schema" && finding.status == "fail"
+            })
+        );
+        assert!(
+            runner
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .flatten()
+                .all(|argument| {
+                    !argument.contains("--create-user")
+                        && !argument.contains("--modify-setting")
+                        && !argument.contains("--user=admin")
+                })
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn migrated_database_matching_shared_contract_is_accepted() {
+        let (root, repo) = fixture();
+        let uuid = "11111111-2222-3333-4444-555555555555";
+        let runner = Runner::new([
+            output(true, "286\n"),
+            output(true, ""),
+            output(true, &format!("{DATABASE_VERSION}\n")),
+            output(true, &format!("{SCHEMA_FINGERPRINT}\n")),
+            output(true, &format!("{uuid}\n")),
+            output(true, &format!("{uuid}\n")),
+        ]);
+        let environment = environment();
+        let images = images();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+
+        let outcome = initialize_manager(&repo, &runner, &runtime);
+
+        assert_eq!(outcome.status, StepStatus::Pass);
+        assert_eq!(
+            runner
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|command| command.iter().any(|argument| argument == "--migrate"))
+                .count(),
+            1
+        );
+        assert!(
+            outcome.findings.iter().any(|finding| {
+                finding.check == "gvmd.migrate-schema" && finding.status == "pass"
+            })
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 }

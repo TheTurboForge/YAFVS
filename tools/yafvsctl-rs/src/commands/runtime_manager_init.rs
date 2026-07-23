@@ -154,8 +154,12 @@ fn manager_failure_summary(findings: &[Finding]) -> &'static str {
     };
     if failed("gvmd.migrate") {
         "Manager initialization stopped at database migration."
+    } else if failed("gvmd.migrate-version-preflight") {
+        "Manager initialization stopped because the database schema version could not be verified."
     } else if failed("gvmd.migrate-version") {
         "Manager initialization stopped because the migrated database version does not match the source schema."
+    } else if failed("gvmd.migrate-schema") {
+        "Manager initialization stopped because the database schema does not match the shared Rust contract."
     } else if failed("manager.admin-uuid") {
         "Manager initialization stopped while verifying the development administrator."
     } else if failed("gvmd.create-admin") {
@@ -345,5 +349,15 @@ mod tests {
             "Manager initialization stopped at admin password update."
         );
         assert!(!manager_failure_summary(&findings).contains("completed"));
+
+        let preflight = vec![Finding::new(
+            "fail",
+            "gvmd.migrate-version-preflight",
+            "failed".into(),
+        )];
+        assert!(manager_failure_summary(&preflight).contains("could not be verified"));
+
+        let fingerprint = vec![Finding::new("fail", "gvmd.migrate-schema", "failed".into())];
+        assert!(manager_failure_summary(&fingerprint).contains("shared Rust contract"));
     }
 }

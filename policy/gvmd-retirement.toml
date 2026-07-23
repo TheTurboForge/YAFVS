@@ -116,12 +116,16 @@ notes = "Preserve trusted-team authority and attribution semantics at the native
 [[responsibilities]]
 id = "schema-migrations"
 target_owner = "manager-worker"
-status = "inventoried"
+status = "migrating"
 weight = 5
-evidence = ["components/gvmd/src/manage_migrators.c::manage_migrate"]
+evidence = [
+  "crates/yafvs-domain/src/database_schema.rs::const DATABASE_VERSION",
+  "services/yafvs-api/src/database_compatibility.rs::inspect_database_compatibility",
+  "tools/yafvsctl-rs/src/commands/feed_generation/manager_init.rs::initialize_manager",
+]
 independent_authority = ["components/gvmd/src/manage_migrators.c::database_migrators"]
 dependencies = []
-notes = "Move schema-version ownership and ordered transactional migrations into a native Rust migration component."
+notes = "Rust owns one shared v288 compatibility version, public-schema inventory, and exact fingerprint used by the API write gate and runtime initialization. Current and post-migration databases must match it before manager/account mutations. Historical upgrades and fresh schema creation remain inherited transitional responsibilities; future YAFVS migration execution and bootstrap must move natively without mechanically porting every historical upstream transition."
 
 [[responsibilities]]
 id = "database-bootstrap-functions"
@@ -376,7 +380,7 @@ kind = "tooling"
 status = "retired"
 evidence = [
   "tools/yafvsctl-rs/src/commands/feed_generation/manager_init.rs::const ADMIN_UUID_SQL",
-  "tools/yafvsctl-rs/src/commands/feed_generation/manager_init.rs::rejects_invalid_admin_database_attestation_without_creating_a_user",
+  "tools/yafvsctl-rs/src/commands/feed_generation/manager_init.rs::rejects_invalid_admin_attestation_after_schema_attestation",
 ]
 replacement = ["runtime-initialization-health"]
 notes = "Rust manager initialization now discovers the development administrator UUID through a strict scalar database attestation before and after retained empty-database creation. Query failure or malformed output fails closed; the gvmd --get-users call is deleted."

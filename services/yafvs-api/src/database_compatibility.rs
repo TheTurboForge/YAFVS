@@ -10,50 +10,11 @@ use axum::{
 };
 use deadpool_postgres::Pool;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
+use yafvs_domain::{
+    DATABASE_VERSION, DATABASE_VERSION_SQL, SCHEMA_FINGERPRINT, public_schema_fingerprint_sql,
+};
 
 use crate::{app_state::AppState, errors::ApiError};
-
-const EXPECTED_DATABASE_VERSION: &str = "288";
-const EXPECTED_SCHEMA_FINGERPRINT: &str =
-    "c9b9aed02c7ac9313957f17adfe1a6658f18b63c7600731e64d5bb2dd7135d62";
-
-const DATABASE_VERSION_SQL: &str =
-    "SELECT value FROM meta WHERE name = 'database_version' LIMIT 1;";
-const SCHEMA_FINGERPRINT_SQL: &str = r#"
-SELECT item
-FROM (
-    SELECT format(
-        'column|%I|%I|%s|%s|%s|%s',
-        table_name,
-        column_name,
-        ordinal_position,
-        udt_name,
-        is_nullable,
-        coalesce(column_default, '')
-    ) AS item
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
-
-    UNION ALL
-
-    SELECT format(
-        'constraint|%s|%s|%s',
-        conrelid::regclass::text,
-        contype,
-        pg_get_constraintdef(oid, true)
-    )
-    FROM pg_constraint
-    WHERE connamespace = 'public'::regnamespace
-
-    UNION ALL
-
-    SELECT format('index|%s|%s|%s', tablename, indexname, indexdef)
-    FROM pg_indexes
-    WHERE schemaname = 'public'
-) AS fingerprint
-ORDER BY item;
-"#;
 
 #[derive(Clone, Debug, Serialize)]
 pub(crate) struct DatabaseCompatibility {
@@ -68,9 +29,9 @@ pub(crate) struct DatabaseCompatibility {
 
 impl DatabaseCompatibility {
     fn inspected(database_version: Option<String>, schema_fingerprint: Option<String>) -> Self {
-        let reason = if database_version.as_deref() != Some(EXPECTED_DATABASE_VERSION) {
+        let reason = if database_version.as_deref() != Some(DATABASE_VERSION) {
             "database-version-mismatch"
-        } else if schema_fingerprint.as_deref() != Some(EXPECTED_SCHEMA_FINGERPRINT) {
+        } else if schema_fingerprint.as_deref() != Some(SCHEMA_FINGERPRINT) {
             "schema-fingerprint-mismatch"
         } else {
             "matched"
@@ -85,8 +46,8 @@ impl DatabaseCompatibility {
             reason,
             database_version,
             schema_fingerprint,
-            expected_database_version: EXPECTED_DATABASE_VERSION,
-            expected_schema_fingerprint: EXPECTED_SCHEMA_FINGERPRINT,
+            expected_database_version: DATABASE_VERSION,
+            expected_schema_fingerprint: SCHEMA_FINGERPRINT,
         }
     }
 
@@ -97,8 +58,8 @@ impl DatabaseCompatibility {
             reason: "inspection-failed",
             database_version: None,
             schema_fingerprint: None,
-            expected_database_version: EXPECTED_DATABASE_VERSION,
-            expected_schema_fingerprint: EXPECTED_SCHEMA_FINGERPRINT,
+            expected_database_version: DATABASE_VERSION,
+            expected_schema_fingerprint: SCHEMA_FINGERPRINT,
         }
     }
 
@@ -131,27 +92,17 @@ pub(crate) async fn inspect_database_compatibility(pool: &Pool) -> DatabaseCompa
             return DatabaseCompatibility::inspection_failed();
         }
     };
-    let rows = match client.query(SCHEMA_FINGERPRINT_SQL, &[]).await {
-        Ok(rows) => rows,
+    let schema_fingerprint = match client
+        .query_one(&public_schema_fingerprint_sql(), &[])
+        .await
+    {
+        Ok(row) => Some(row.get::<_, String>(0)),
         Err(error) => {
             tracing::warn!(%error, "database schema compatibility inspection failed");
             return DatabaseCompatibility::inspection_failed();
         }
     };
-    let items = rows
-        .into_iter()
-        .map(|row| row.get::<_, String>(0))
-        .collect::<Vec<_>>();
-    DatabaseCompatibility::inspected(database_version, Some(schema_fingerprint(&items)))
-}
-
-fn schema_fingerprint(items: &[String]) -> String {
-    let mut hasher = Sha256::new();
-    for item in items {
-        hasher.update(item.as_bytes());
-        hasher.update(b"\n");
-    }
-    format!("{:x}", hasher.finalize())
+    DatabaseCompatibility::inspected(database_version, schema_fingerprint)
 }
 
 fn method_may_mutate(method: &Method) -> bool {
@@ -176,21 +127,21 @@ mod tests {
     #[test]
     fn exact_database_version_and_schema_are_required_for_writes() {
         let matched = DatabaseCompatibility::inspected(
-            Some(EXPECTED_DATABASE_VERSION.to_string()),
-            Some(EXPECTED_SCHEMA_FINGERPRINT.to_string()),
+            Some(DATABASE_VERSION.to_string()),
+            Some(SCHEMA_FINGERPRINT.to_string()),
         );
         assert!(matched.writes_compatible());
         assert_eq!(matched.reason(), "matched");
 
         let wrong_version = DatabaseCompatibility::inspected(
             Some("286".to_string()),
-            Some(EXPECTED_SCHEMA_FINGERPRINT.to_string()),
+            Some(SCHEMA_FINGERPRINT.to_string()),
         );
         assert!(!wrong_version.writes_compatible());
         assert_eq!(wrong_version.reason(), "database-version-mismatch");
 
         let wrong_schema = DatabaseCompatibility::inspected(
-            Some(EXPECTED_DATABASE_VERSION.to_string()),
+            Some(DATABASE_VERSION.to_string()),
             Some("unknown".to_string()),
         );
         assert!(!wrong_schema.writes_compatible());
@@ -210,14 +161,5 @@ mod tests {
         assert!(method_may_mutate(&Method::PUT));
         assert!(method_may_mutate(&Method::PATCH));
         assert!(method_may_mutate(&Method::DELETE));
-    }
-
-    #[test]
-    fn schema_fingerprint_is_stable_and_line_delimited() {
-        let items = vec!["a".to_string(), "b".to_string()];
-        assert_eq!(
-            schema_fingerprint(&items),
-            "911169ddaaf146aff539f58c26c489af3b892dff0fe283c1c264c65ae5aa59a2"
-        );
     }
 }

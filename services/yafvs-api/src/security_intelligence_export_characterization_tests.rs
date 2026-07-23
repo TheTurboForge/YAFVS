@@ -4,6 +4,7 @@
 // YAFVS-Derivation: original
 
 use std::path::Path;
+use yafvs_domain::{DATABASE_VERSION, SCHEMA_FINGERPRINT};
 
 const GVM_LIBS_CMAKE: &str = include_str!("../../../components/gvm-libs/CMakeLists.txt");
 const GVMD_CMAKE: &str = include_str!("../../../components/gvmd/CMakeLists.txt");
@@ -121,13 +122,14 @@ fn ordinary_scan_finalization_remains_without_export_queueing() {
 
 #[test]
 fn database_288_removes_only_empty_legacy_export_state() {
-    assert!(GVMD_CMAKE.contains("set(GVMD_DATABASE_VERSION 288)"));
-    assert!(DATABASE_COMPATIBILITY.contains("EXPECTED_DATABASE_VERSION: &str = \"288\""));
-    assert!(MANAGER_INIT.contains("SOURCE_DATABASE_VERSION: u64 = 288"));
-    assert!(
-        DATABASE_COMPATIBILITY
-            .contains("c9b9aed02c7ac9313957f17adfe1a6658f18b63c7600731e64d5bb2dd7135d62")
+    assert!(GVMD_CMAKE.contains(&format!("set(GVMD_DATABASE_VERSION {DATABASE_VERSION})")));
+    assert_eq!(DATABASE_VERSION, "288");
+    assert_eq!(
+        SCHEMA_FINGERPRINT,
+        "c9b9aed02c7ac9313957f17adfe1a6658f18b63c7600731e64d5bb2dd7135d62"
     );
+    assert!(DATABASE_COMPATIBILITY.contains("public_schema_fingerprint_sql"));
+    assert!(MANAGER_INIT.contains("public_schema_fingerprint_sql"));
     assert!(!MANAGE_PG.contains("CREATE TABLE IF NOT EXISTS report_exports"));
     assert!(!MANAGE_PG.contains("CREATE TABLE IF NOT EXISTS integration_configs"));
 

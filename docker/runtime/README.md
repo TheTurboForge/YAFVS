@@ -142,10 +142,15 @@ certificate directories and does not rotate existing certificates.
 and creates or verifies the `dba` role, role grant, and `pg-gvm` extension. It
 must not delete or recreate existing runtime data.
 
-`runtime-manager-init` runs the `gvmd` database migration, creates or verifies a
-local development admin user, stores the local development password under the
-runtime `secrets/` directory, aligns it to the `admin` / `admin` development
-default, and sets the feed import owner when possible.
+`runtime-manager-init` verifies the shared Rust version-288 schema contract
+before manager/account initialization. An exact current schema skips migration;
+an explicitly older schema temporarily receives one `gvmd --migrate` attempt
+and must then match both the shared version and full schema fingerprint. Newer,
+malformed, or same-version-but-different schemas fail closed. Fresh schema
+creation remains inherited for now. After attestation, the command creates or
+verifies a local development admin user, stores the local development password
+under the runtime `secrets/` directory, aligns it to the `admin` / `admin`
+development default, and sets the feed import owner when possible.
 
 `runtime-scanner-redis-init` starts the dedicated scanner Redis service, writes
 the ignored development OpenVAS config under runtime state, and verifies that

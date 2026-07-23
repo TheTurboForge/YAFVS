@@ -43,7 +43,10 @@ Validation should scale with the change class. These are minimums, not a ceiling
 
 ## Database Or Migration
 
-- migration/version verification
+- shared Rust version and full-schema-fingerprint verification
+- malformed/newer/same-version-different-schema fail-closed checks
+- pre- and post-migration attestation while the inherited migration bridge
+  remains
 - new-schema and existing-state behavior where feasible
 - runtime manager init when safe and non-destructive in the current context
 - checks proving removed tables/columns or new tables/columns match the plan

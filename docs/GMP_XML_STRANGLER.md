@@ -44,6 +44,17 @@ drift; independent Rust and C positive allowlists remain fail-closed enforcement
 boundaries and are checked against the contract rather than generated into a
 broader runtime surface.
 
+Database-schema transfer is also incremental. Rust now owns one shared
+compatibility contract for the current version-288 public schema: the native
+API uses it to gate writes, and runtime initialization verifies the same exact
+version and schema fingerprint before manager/account initialization can
+continue. Historical upgrades from older inherited schemas still use one
+temporary `gvmd --migrate` bridge and must match the Rust contract afterward.
+Fresh database creation and the historical migration implementation remain
+inherited for now; neither is claimed as native ownership. Future YAFVS schema
+evolution is intended to begin from this attested baseline rather than by
+mechanically porting every historical upstream transition.
+
 The first live proof is the Rust `yafvs-api` sidecar for
 raw report reads, scope-report collections, target/task reads, scanner metadata,
 saved filters, tags, scan configs, overrides, port lists, schedules, report formats, and report metrics, currently raw report list/detail/result rows/hosts,

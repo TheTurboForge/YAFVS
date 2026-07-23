@@ -126,10 +126,18 @@ future design explicitly says otherwise.
 
 Checks to consider:
 
-- migrations and schema version checks;
+- the shared Rust schema version and full public-schema fingerprint;
+- fail-closed behavior for malformed, newer, or same-version-but-different
+  schemas;
+- the temporary inherited migration bridge for an explicitly supported older
+  schema, including exact Rust-contract attestation after migration;
 - `runtime-data-state --json`;
 - fixture tests for report/scope/metric correctness;
 - query/performance snapshots before optimizing or materializing new state.
+
+The version-288 Rust contract currently attests compatibility; it does not yet
+create a fresh database. Historical schema upgrades and fresh bootstrap remain
+transitional `gvmd` responsibilities until replaced explicitly.
 
 ### `gvmd` To OSPD/OpenVAS
 

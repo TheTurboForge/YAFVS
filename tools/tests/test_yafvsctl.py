@@ -8418,11 +8418,27 @@ class YAFVSCtlTests(unittest.TestCase):
             "response.headers()",
             "headers['content-type']",
             "headers['content-disposition']",
-            "MAX_DOWNLOAD_BYTES",
+            "MAX_DECLARED_DOWNLOAD_BYTES",
+            "MAX_DECODED_DOWNLOAD_BYTES",
+            "declaredContentLength",
+            "bytes.length === 80",
+            "bytes.length === 431",
             "hasExpectedSignature",
             "containsConfiguredSecret",
+            "credential-smoke.${fixture.kind}.collision",
+            "recordOwnedFixture(owned)",
+            "credential-smoke-state.json",
+            "config.cleanupOnly",
+            "listedId !== fixture.id",
         ):
             self.assertIn(contract_anchor, runtime_credential_smoke.BROWSER_SCRIPT)
+        helper_source = CREDENTIAL_SMOKE_PATH.read_text(encoding="utf-8")
+        for process_anchor in (
+            "def run_node_process(",
+            "os.killpg",
+            "def timeout_cleanup(",
+        ):
+            self.assertIn(process_anchor, helper_source)
         self.assertNotIn(
             "fs.writeFileSync(output, bytes",
             runtime_credential_smoke.BROWSER_SCRIPT,
@@ -8468,8 +8484,13 @@ class YAFVSCtlTests(unittest.TestCase):
                 unittest.mock.patch.object(
                     runtime_credential_smoke.subprocess,
                     "run",
+                    return_value=subprocess.CompletedProcess([], 0, ""),
+                ),
+                unittest.mock.patch.object(
+                    runtime_credential_smoke,
+                    "run_node_process",
                     return_value=completed,
-                ) as run,
+                ) as node_run,
                 unittest.mock.patch.dict(
                     os.environ,
                     {
@@ -8482,7 +8503,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
             self.assertEqual(result["status"], "pass")
             self.assertEqual(
-                run.call_args.kwargs["env"][
+                node_run.call_args.kwargs["env"][
                     "YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD"
                 ],
                 "environment-password",
@@ -8533,10 +8554,12 @@ class YAFVSCtlTests(unittest.TestCase):
                 unittest.mock.patch.object(
                     runtime_credential_smoke.subprocess,
                     "run",
-                    side_effect=[
-                        subprocess.CompletedProcess([], 0, ""),
-                        completed,
-                    ],
+                    return_value=subprocess.CompletedProcess([], 0, ""),
+                ),
+                unittest.mock.patch.object(
+                    runtime_credential_smoke,
+                    "run_node_process",
+                    return_value=completed,
                 ),
                 unittest.mock.patch.dict(
                     os.environ,
@@ -8661,11 +8684,48 @@ class YAFVSCtlTests(unittest.TestCase):
                     "test",
                 ]
             )
-            timeout = subprocess.TimeoutExpired(
-                cmd=["node"],
-                timeout=120,
-                output="admin-secret environment-password",
-            )
+            node_calls = 0
+
+            def run_node(command, *, env, timeout):
+                nonlocal node_calls
+                node_calls += 1
+                state_path = root / "artifacts" / "credential-smoke-state.json"
+                if node_calls == 1:
+                    state_path.write_text(
+                        json.dumps(
+                            {
+                                "fixtures": [
+                                    {
+                                        "kind": "up",
+                                        "name": "test",
+                                        "id": "00000000-0000-4000-8000-000000000001",
+                                    }
+                                ]
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                    raise subprocess.TimeoutExpired(
+                        cmd=command,
+                        timeout=timeout,
+                        output="admin-secret environment-password",
+                    )
+                state_path.write_text(
+                    json.dumps({"fixtures": []}), encoding="utf-8"
+                )
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    json.dumps(
+                        {
+                            "status": "pass",
+                            "summary": "Owned timeout fixtures were cleaned.",
+                            "artifacts": [],
+                        }
+                    )
+                    + "\n",
+                )
+
             with (
                 unittest.mock.patch.object(
                     runtime_credential_smoke,
@@ -8675,10 +8735,12 @@ class YAFVSCtlTests(unittest.TestCase):
                 unittest.mock.patch.object(
                     runtime_credential_smoke.subprocess,
                     "run",
-                    side_effect=[
-                        subprocess.CompletedProcess([], 0, ""),
-                        timeout,
-                    ],
+                    return_value=subprocess.CompletedProcess([], 0, ""),
+                ),
+                unittest.mock.patch.object(
+                    runtime_credential_smoke,
+                    "run_node_process",
+                    side_effect=run_node,
                 ),
                 unittest.mock.patch.dict(
                     os.environ,
@@ -8696,6 +8758,16 @@ class YAFVSCtlTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertEqual(
                 result["findings"][0]["check"], "credential-smoke.timeout"
+            )
+            self.assertEqual(node_calls, 2)
+            self.assertEqual(result["details"]["cleanup"]["status"], "pass")
+            self.assertEqual(
+                json.loads(
+                    (
+                        root / "artifacts" / "credential-smoke-state.json"
+                    ).read_text(encoding="utf-8")
+                )["fixtures"],
+                [],
             )
             for secret in ("environment-password", "admin-secret"):
                 self.assertNotIn(secret, json.dumps(result))

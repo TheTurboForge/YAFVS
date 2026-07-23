@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -28,7 +29,12 @@ const loginPassword = process.env.YAFVS_CREDENTIAL_SMOKE_LOGIN_PASSWORD || '';
 const credentialPassword = process.env.YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD || '';
 const findings = [];
 const artifacts = [];
-const MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024;
+const MAX_DECLARED_DOWNLOAD_BYTES = 64 * 1024 * 1024;
+const MAX_DECODED_DOWNLOAD_BYTES = 64 * 1024 * 1024;
+const statePath = artifactPath('credential-smoke-state.json');
+let ownedFixtures = Array.isArray(config.cleanupFixtures)
+  ? config.cleanupFixtures.filter(fixture => fixture && fixture.name && fixture.kind)
+  : [];
 const DOWNLOAD_CONTRACTS = {
   exe: {
     title: 'Download Windows Executable (.exe)',
@@ -69,6 +75,23 @@ function artifactPath(name) {
   return path.join(config.artifactDir, name);
 }
 
+function persistOwnedFixtures() {
+  fs.writeFileSync(statePath, JSON.stringify({fixtures: ownedFixtures}, null, 2) + '\n');
+  if (!artifacts.includes(statePath)) artifacts.push(statePath);
+}
+
+function recordOwnedFixture(fixture) {
+  ownedFixtures = ownedFixtures.filter(existing => existing.name !== fixture.name);
+  ownedFixtures.push(fixture);
+  persistOwnedFixtures();
+}
+
+function forgetOwnedFixture(fixture) {
+  ownedFixtures = ownedFixtures.filter(existing =>
+    fixture.id ? existing.id !== fixture.id : existing.name !== fixture.name);
+  persistOwnedFixtures();
+}
+
 async function screenshot(page, name) {
   const target = artifactPath(`${name}.png`);
   await page.screenshot({path: target, fullPage: true}).catch(() => null);
@@ -88,6 +111,13 @@ async function fillFirst(page, selectors, value) {
     }
   }
   return false;
+}
+
+function declaredContentLength(headers) {
+  const raw = headers['content-length'];
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) ? value : null;
 }
 
 async function clickFirst(page, candidates) {
@@ -116,6 +146,37 @@ async function credentialRow(page, credentialName) {
 async function credentialRowVisible(page, credentialName) {
   const row = await credentialRow(page, credentialName);
   return await row.count() > 0 && await row.isVisible().catch(() => false);
+}
+
+async function loadCredentialId(page, credentialName) {
+  const listResponse = page.waitForResponse(isCredentialListResponse, {
+    timeout: config.timeoutMs,
+  }).catch(() => null);
+  await gotoStable(page, '/credentials');
+  return await credentialIdFromResponse(await listResponse, credentialName);
+}
+
+function isCredentialListResponse(response) {
+  try {
+    const url = new URL(response.url());
+    return response.request().method() === 'GET'
+      && url.pathname.endsWith('/api/v1/credentials')
+      && response.status() === 200;
+  } catch {
+    return false;
+  }
+}
+
+async function credentialIdFromResponse(response, credentialName) {
+  if (!response) return null;
+  const payload = await response.json().catch(() => null);
+  const matches = payload && Array.isArray(payload.items)
+    ? payload.items.filter(item => item && item.name === credentialName && typeof item.id === 'string')
+    : [];
+  return matches.length === 1
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(matches[0].id)
+    ? matches[0].id
+    : null;
 }
 
 async function login(page) {
@@ -161,19 +222,23 @@ async function selectCredentialType(page, label) {
 
 async function createCredential(page, fixture) {
   await gotoStable(page, '/credentials');
+  if (await credentialRowVisible(page, fixture.name)) {
+    add('fail', `credential-smoke.${fixture.kind}.collision`, 'Refusing to create or delete a credential because the disposable fixture name already exists.', {credentialName: fixture.name});
+    return null;
+  }
   await screenshot(page, `credentials-before-create-${fixture.kind}-${config.urlIndex}`);
   const newClicked = await clickFirst(page, [
     page.getByTitle('New Credential').first(),
     page.getByRole('button', {name: /new credential/i}).first(),
   ]);
   add(newClicked ? 'pass' : 'fail', `credential-smoke.${fixture.kind}.new-button`, newClicked ? 'Opened the New Credential dialog.' : 'Could not find the New Credential action.');
-  if (!newClicked) return false;
+  if (!newClicked) return null;
 
   await page.locator('input[name="name"]').first().waitFor({state: 'visible', timeout: config.timeoutMs});
   if (fixture.typeLabel) {
     const selected = await selectCredentialType(page, fixture.typeLabel);
     add(selected ? 'pass' : 'fail', `credential-smoke.${fixture.kind}.type`, selected ? `Selected ${fixture.typeLabel}.` : `Could not select ${fixture.typeLabel}.`);
-    if (!selected) return false;
+    if (!selected) return null;
   }
   await page.locator('input[name="name"]').first().fill(fixture.name);
   await page.locator('input[name="credentialLogin"]').first().fill(config.credentialLogin);
@@ -185,20 +250,32 @@ async function createCredential(page, fixture) {
     const acceptsKey = await privateKey.count() && await privateKey.isEnabled().catch(() => false);
     if (acceptsKey) await privateKey.setInputFiles(config.sshPrivateKeyPath);
     add(acceptsKey ? 'pass' : 'fail', 'credential-smoke.usk.private-key', acceptsKey ? 'Attached an ephemeral SSH private key.' : 'Could not attach the ephemeral SSH private key.');
-    if (!acceptsKey) return false;
+    if (!acceptsKey) return null;
   }
   await screenshot(page, `credential-dialog-filled-${fixture.kind}-${config.urlIndex}`);
-  await clickFirst(page, [
+  const listResponse = page.waitForResponse(isCredentialListResponse, {
+    timeout: config.timeoutMs,
+  }).catch(() => null);
+  const saved = await clickFirst(page, [
     page.getByRole('button', {name: /^Save$/i}).first(),
     page.locator('button').filter({hasText: /^Save$/i}).first(),
   ]);
+  if (!saved) {
+    add('fail', `credential-smoke.${fixture.kind}.save`, 'Could not find the credential Save action.');
+    return null;
+  }
   await page.waitForLoadState('networkidle', {timeout: Math.min(config.timeoutMs, 5000)}).catch(() => null);
   await (await credentialRow(page, fixture.name)).waitFor({state: 'visible', timeout: config.timeoutMs}).catch(() => null);
   await screenshot(page, `credentials-after-create-${fixture.kind}-${config.urlIndex}`);
   const noNameError = await assertNoCredentialNameError(page, `credential-smoke.${fixture.kind}.create-name-validation`);
-  const created = await credentialRowVisible(page, fixture.name);
-  add(created ? 'pass' : 'fail', `credential-smoke.${fixture.kind}.created-visible`, created ? 'Temporary credential is visible after save.' : 'Temporary credential is not visible after save.', {credentialName: fixture.name});
-  return noNameError && created;
+  const created = noNameError && await credentialRowVisible(page, fixture.name);
+  const id = created ? await credentialIdFromResponse(await listResponse, fixture.name) : null;
+  const identified = created && Boolean(id);
+  add(identified ? 'pass' : 'fail', `credential-smoke.${fixture.kind}.created-visible`, identified ? 'Temporary credential is visible after save and has a stable identity.' : 'Temporary credential is not visible after save or lacks a stable identity.', {credentialName: fixture.name, credentialId: id});
+  if (!identified) return null;
+  const owned = {kind: fixture.kind, name: fixture.name, id};
+  recordOwnedFixture(owned);
+  return owned;
 }
 
 function hasExpectedSignature(format, bytes) {
@@ -212,9 +289,9 @@ function hasExpectedSignature(format, bytes) {
   return false;
 }
 
-async function characterizeDownload(page, credentialName, format) {
+async function characterizeDownload(page, fixture, format) {
   await gotoStable(page, '/credentials');
-  const row = await credentialRow(page, credentialName);
+  const row = await credentialRow(page, fixture.name);
   const contract = DOWNLOAD_CONTRACTS[format];
   const action = row.getByTitle(contract.title).first();
   if (!(await action.count())) {
@@ -233,9 +310,10 @@ async function characterizeDownload(page, credentialName, format) {
     }, {timeout: config.timeoutMs}),
     action.click(),
   ]);
-  const bytes = await response.body();
   const headers = response.headers();
+  const declaredLength = declaredContentLength(headers);
   const contentType = (headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
+  const contentEncoding = (headers['content-encoding'] || 'identity').trim().toLowerCase();
   const disposition = headers['content-disposition'] || '';
   const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
   const filename = filenameMatch ? path.basename(filenameMatch[1]) : '';
@@ -243,11 +321,27 @@ async function characterizeDownload(page, credentialName, format) {
   const statusOk = response.status() === 200;
   const contentTypeOk = contentType === contract.contentType;
   const filenameOk = filename === expectedFilename;
-  const bounded = bytes.length <= MAX_DOWNLOAD_BYTES;
-  const sizeOk = bytes.length > 0 && bounded;
+  const declaredBounded = declaredLength !== null
+    && declaredLength <= MAX_DECLARED_DOWNLOAD_BYTES;
+  if (!declaredBounded) {
+    add('fail', `credential-smoke.download.${format}.declared-length`, 'Credential download omitted a safe Content-Length or exceeded the characterization cap.', {
+      status: response.status(),
+      contentType,
+      filename,
+      declaredLength,
+    });
+    return {ok: false};
+  }
+  const bytes = await response.body();
+  const decodedBounded = bytes.length <= MAX_DECODED_DOWNLOAD_BYTES;
+  const lengthMatched = contentEncoding !== 'identity'
+    || bytes.length === declaredLength;
+  const sizeOk = format === 'key'
+    ? bytes.length === 80
+    : bytes.length > 0;
   const signatureOk = hasExpectedSignature(format, bytes);
-  const operationalOk = statusOk && contentTypeOk && filenameOk && sizeOk && signatureOk;
-  const knownEmpty = statusOk && contentTypeOk && filenameOk && bounded && bytes.length === 0;
+  const operationalOk = statusOk && contentTypeOk && filenameOk && decodedBounded && lengthMatched && sizeOk && signatureOk;
+  const knownEmpty = statusOk && contentTypeOk && filenameOk && decodedBounded && lengthMatched && bytes.length === 0;
   const ok = contract.operational ? operationalOk : knownEmpty;
   const status = ok && !contract.operational ? 'warn' : ok ? 'pass' : 'fail';
   const message = contract.operational
@@ -256,7 +350,9 @@ async function characterizeDownload(page, credentialName, format) {
   add(status, `credential-smoke.download.${format}.contract`, message, {
     status: response.status(),
     contentType,
+    contentEncoding,
     filename,
+    declaredLength,
     byteLength: bytes.length,
     signatureMatched: signatureOk,
     operational: contract.operational,
@@ -268,44 +364,64 @@ async function characterizeMissingCredential(page, requestUrl) {
   const url = new URL(requestUrl);
   url.searchParams.set('credential_id', '00000000-0000-0000-0000-000000000000');
   const response = await page.context().request.get(url.toString());
+  const contentType = (response.headers()['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
+  const contentEncoding = (response.headers()['content-encoding'] || 'identity').trim().toLowerCase();
+  const declaredLength = declaredContentLength(response.headers());
+  if (declaredLength === null || declaredLength > MAX_DECLARED_DOWNLOAD_BYTES) {
+    add('fail', 'credential-smoke.download.missing.declared-length', 'Missing credential response omitted a safe Content-Length or exceeded the characterization cap.', {
+      status: response.status(),
+      contentType,
+      declaredLength,
+    });
+    return false;
+  }
   const bytes = await response.body();
   const containsSecret = [loginPassword, credentialPassword]
     .filter(Boolean)
     .some(secret => bytes.includes(Buffer.from(secret, 'utf8')));
   const ok = response.status() === 500
-    && bytes.length > 0
-    && bytes.length <= MAX_DOWNLOAD_BYTES
+    && contentType === 'application/xml'
+    && (contentEncoding !== 'identity' || bytes.length === declaredLength)
+    && bytes.length === 431
     && !containsSecret;
   add(ok ? 'pass' : 'fail', 'credential-smoke.download.missing.contract', ok ? 'Missing credential download retained its bounded failure contract without exposing configured secrets.' : 'Missing credential download did not match the bounded failure contract.', {
     status: response.status(),
-    contentType: (response.headers()['content-type'] || '').split(';', 1)[0].trim().toLowerCase(),
+    contentType,
+    contentEncoding,
+    declaredLength,
     byteLength: bytes.length,
     containsConfiguredSecret: containsSecret,
   });
   return ok;
 }
 
-async function deleteCredential(page, credentialName, kind) {
-  await gotoStable(page, '/credentials');
-  const row = await credentialRow(page, credentialName);
+async function deleteCredential(page, fixture) {
+  const listedId = await loadCredentialId(page, fixture.name);
+  const row = await credentialRow(page, fixture.name);
   if (!(await row.count())) {
-    add('warn', `credential-smoke.${kind}.cleanup`, 'Temporary credential row was not visible during cleanup; it may not have been created.');
+    forgetOwnedFixture(fixture);
+    add('warn', `credential-smoke.${fixture.kind}.cleanup`, 'Owned temporary credential row was already absent during cleanup.');
     return true;
+  }
+  if (!listedId || listedId !== fixture.id) {
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-identity`, 'Refusing to delete a credential because the visible name does not map to the owned fixture UUID.', {credentialName: fixture.name, expectedCredentialId: fixture.id, listedCredentialId: listedId});
+    return false;
   }
   const deleteClicked = await clickFirst(page, [
     row.getByTitle('Move Credential to trashcan').first(),
     row.getByTitle(/trashcan/i).first(),
   ]);
   if (!deleteClicked) {
-    add('fail', `credential-smoke.${kind}.cleanup-click`, 'Temporary credential row was visible but the trashcan action was not found.');
-    await screenshot(page, `credential-cleanup-action-missing-${kind}-${config.urlIndex}`);
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-click`, 'Temporary credential row was visible but the trashcan action was not found.');
+    await screenshot(page, `credential-cleanup-action-missing-${fixture.kind}-${config.urlIndex}`);
     return false;
   }
   await page.waitForLoadState('networkidle', {timeout: Math.min(config.timeoutMs, 5000)}).catch(() => null);
   await row.waitFor({state: 'detached', timeout: config.timeoutMs}).catch(() => null);
-  await screenshot(page, `credentials-after-cleanup-${kind}-${config.urlIndex}`);
-  const removed = !(await credentialRowVisible(page, credentialName));
-  add(removed ? 'pass' : 'fail', `credential-smoke.${kind}.cleanup`, removed ? 'Temporary credential was moved to trashcan.' : 'Temporary credential is still visible after cleanup.', {credentialName});
+  await screenshot(page, `credentials-after-cleanup-${fixture.kind}-${config.urlIndex}`);
+  const removed = !(await credentialRowVisible(page, fixture.name));
+  if (removed) forgetOwnedFixture(fixture);
+  add(removed ? 'pass' : 'fail', `credential-smoke.${fixture.kind}.cleanup`, removed ? 'Owned temporary credential was moved to trashcan.' : 'Owned temporary credential is still visible after cleanup.', {credentialName: fixture.name, credentialId: fixture.id});
   return removed;
 }
 
@@ -318,39 +434,47 @@ async function runForBaseUrl(baseUrl, urlIndex) {
   page.setDefaultTimeout(config.timeoutMs);
   try {
     await login(page);
-    let upCreated = false;
-    let sshCreated = false;
+    if (config.cleanupOnly) {
+      let cleaned = true;
+      for (const fixture of [...ownedFixtures].reverse()) {
+        cleaned = await deleteCredential(page, fixture) && cleaned;
+      }
+      add(cleaned ? 'pass' : 'fail', 'credential-smoke.timeout-cleanup', cleaned ? 'Owned timeout fixtures were cleaned.' : 'One or more owned timeout fixtures could not be cleaned.', {baseUrl});
+      return;
+    }
+    let upFixture = null;
+    let sshFixture = null;
     let downloadsOk = false;
     let missingOk = false;
     let requestUrl;
     let upCleaned = false;
     let sshCleaned = false;
     try {
-      upCreated = await createCredential(page, {
+      upFixture = await createCredential(page, {
         kind: 'up',
         name: config.credentialName,
       });
-      sshCreated = await createCredential(page, {
+      sshFixture = await createCredential(page, {
         kind: 'usk',
         name: config.sshCredentialName,
         typeLabel: 'Username + SSH Key',
       });
-      if (upCreated && sshCreated) {
-        const exe = await characterizeDownload(page, config.credentialName, 'exe');
-        const key = await characterizeDownload(page, config.sshCredentialName, 'key');
-        const rpm = await characterizeDownload(page, config.sshCredentialName, 'rpm');
-        const deb = await characterizeDownload(page, config.sshCredentialName, 'deb');
+      if (upFixture && sshFixture) {
+        const exe = await characterizeDownload(page, upFixture, 'exe');
+        const key = await characterizeDownload(page, sshFixture, 'key');
+        const rpm = await characterizeDownload(page, sshFixture, 'rpm');
+        const deb = await characterizeDownload(page, sshFixture, 'deb');
         requestUrl = key.requestUrl;
         downloadsOk = [exe, key, rpm, deb].every(result => result.ok);
       }
     } finally {
-      sshCleaned = await deleteCredential(page, config.sshCredentialName, 'usk');
-      upCleaned = await deleteCredential(page, config.credentialName, 'up');
+      sshCleaned = sshFixture ? await deleteCredential(page, sshFixture) : true;
+      upCleaned = upFixture ? await deleteCredential(page, upFixture) : true;
     }
     if (requestUrl) {
       missingOk = await characterizeMissingCredential(page, requestUrl);
     }
-    const workflowOk = upCreated && sshCreated && downloadsOk && missingOk && upCleaned && sshCleaned;
+    const workflowOk = Boolean(upFixture) && Boolean(sshFixture) && downloadsOk && missingOk && upCleaned && sshCleaned;
     add(workflowOk ? 'pass' : 'fail', 'credential-smoke.workflow', workflowOk ? 'Credential lifecycle and download characterization completed.' : 'Credential lifecycle or download characterization failed.', {baseUrl});
   } finally {
     await context.close();
@@ -425,6 +549,111 @@ def redact_value(value: Any, secrets: list[str]) -> Any:
     if isinstance(value, dict):
         return {key: redact_value(item, secrets) for key, item in value.items()}
     return value
+
+
+def run_node_process(
+    command: list[str], *, env: dict[str, str], timeout: int
+) -> subprocess.CompletedProcess[str]:
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+        start_new_session=True,
+    )
+    try:
+        stdout, _ = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        captured = error.output or ""
+        if isinstance(captured, bytes):
+            captured = captured.decode("utf-8", errors="replace")
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            tail, _ = process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            tail, _ = process.communicate()
+        raise subprocess.TimeoutExpired(
+            command,
+            timeout,
+            output=captured + (tail or ""),
+        ) from error
+    return subprocess.CompletedProcess(
+        command,
+        process.returncode,
+        stdout=stdout,
+    )
+
+
+def timeout_cleanup(
+    *,
+    script_path: Path,
+    config_path: Path,
+    artifact_dir: Path,
+    env: dict[str, str],
+    redactions: list[str],
+) -> dict[str, Any]:
+    state_path = artifact_dir / "credential-smoke-state.json"
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {
+            "status": "pass",
+            "summary": "No owned credential fixtures were recorded before timeout.",
+        }
+    fixtures = state.get("fixtures")
+    if not isinstance(fixtures, list) or not fixtures:
+        return {
+            "status": "pass",
+            "summary": "No owned credential fixtures remained after timeout.",
+        }
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["cleanupOnly"] = True
+    config["cleanupFixtures"] = fixtures
+    cleanup_config_path = artifact_dir / "credential-smoke-cleanup-config.json"
+    cleanup_config_path.write_text(
+        json.dumps(config, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    try:
+        completed = run_node_process(
+            ["node", str(script_path), str(cleanup_config_path)],
+            env=env,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "status": "fail",
+            "summary": "Owned timeout fixtures could not be cleaned within 60 seconds.",
+            "artifact": str(cleanup_config_path),
+        }
+    try:
+        cleanup_result = json.loads(completed.stdout.strip().splitlines()[-1])
+    except (IndexError, json.JSONDecodeError):
+        cleanup_result = {
+            "status": "fail",
+            "summary": "Timeout cleanup did not return parseable JSON.",
+        }
+    cleanup_result = redact_value(cleanup_result, redactions)
+    return {
+        "status": (
+            "pass"
+            if completed.returncode == 0
+            and cleanup_result.get("status") in {"pass", "warn"}
+            else "fail"
+        ),
+        "summary": cleanup_result.get(
+            "summary", "Timeout cleanup completed without a summary."
+        ),
+        "artifact": str(cleanup_config_path),
+    }
 
 
 def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
@@ -515,31 +744,40 @@ def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
         env["YAFVS_CREDENTIAL_SMOKE_LOGIN_PASSWORD"] = login_password
         env["YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD"] = credential_password
         try:
-            completed = subprocess.run(
+            completed = run_node_process(
                 ["node", str(script_path), str(config_path)],
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
                 env=env,
                 timeout=max(
                     120,
-                    (args.timeout_ms // 1000) * max(1, len(args.base_url)) * 8,
+                    min(
+                        200,
+                        (args.timeout_ms // 1000) * max(1, len(args.base_url)) * 8,
+                    ),
                 ),
             )
         except subprocess.TimeoutExpired as error:
             output = error.stdout or ""
             if isinstance(output, bytes):
                 output = output.decode("utf-8", errors="replace")
+            cleanup = timeout_cleanup(
+                script_path=script_path,
+                config_path=config_path,
+                artifact_dir=artifact_dir,
+                env=env,
+                redactions=[login_password, credential_password],
+            )
             result = payload(
                 "fail",
                 "Runtime credential browser smoke timed out.",
                 output_tail=redact_text(
                     output, [login_password, credential_password]
                 ).splitlines()[-80:],
+                cleanup=cleanup,
             )
             result["findings"] = [{"status": "fail", "check": "credential-smoke.timeout", "message": "Credential browser smoke exceeded its bounded runtime."}]
             result["artifacts"] = [str(script_path), str(config_path)]
+            if cleanup.get("artifact"):
+                result["artifacts"].append(cleanup["artifact"])
             wrapper_artifact = write_artifact(
                 artifact_dir, "credential-smoke-wrapper.json", result
             )

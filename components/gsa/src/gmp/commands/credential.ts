@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import EntityCommand from 'gmp/commands/entity';
-import type {EntityCommandParams} from 'gmp/commands/entity';
+import EntityCommand, {type EntityCommandParams} from 'gmp/commands/entity';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
@@ -21,6 +20,7 @@ import {
   deleteNativeCredential,
   exportNativeCredentialMetadata,
   fetchNativeCredential,
+  fetchNativeCredentialCertificate,
   fetchNativeCredentialPublicKey,
   patchNativeCredential,
 } from 'gmp/native-api/credentials';
@@ -226,15 +226,7 @@ class CredentialCommand extends EntityCommand<
     if (format === 'key') {
       return new Response(await fetchNativeCredentialPublicKey(this.http, id));
     }
-
-    return this.httpRequestWithRejectionTransform<ArrayBuffer>('get', {
-      args: {
-        cmd: 'download_credential',
-        package_format: format,
-        credential_id: id,
-      },
-      responseType: 'arraybuffer',
-    });
+    return new Response(await fetchNativeCredentialCertificate(this.http, id));
   }
 
   getElementFromRoot(root: Element): CredentialElement {

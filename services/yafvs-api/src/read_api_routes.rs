@@ -9,6 +9,7 @@ use crate::{
     app_state::{AppState, healthz},
     cert_advisories::*,
     cpe_catalog::*,
+    credential_certificate::credential_certificate,
     credentials::{credential_asset_detail, credential_asset_export, credential_assets},
     cve_catalog::*,
     feeds::feeds,
@@ -137,6 +138,10 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         .route(
             "/api/v1/credentials/:credential_id/export",
             get(credential_asset_export),
+        )
+        .route(
+            "/api/v1/credentials/:credential_id/certificate",
+            get(credential_certificate),
         )
         .route("/api/v1/users", get(user_accounts))
         .route("/api/v1/users/:user_id", get(user_account_detail))

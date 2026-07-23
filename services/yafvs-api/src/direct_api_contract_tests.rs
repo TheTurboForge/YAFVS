@@ -24,6 +24,52 @@ struct RegisteredRoute<'a> {
 }
 
 #[test]
+fn credential_certificate_route_is_shared_read_and_canonical() {
+    const ROUTE: &str = "/api/v1/credentials/:credential_id/certificate";
+    const CANONICAL_PATH: &str =
+        "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/certificate";
+
+    let base_source = include_str!("read_api_routes.rs");
+    let handler_source = include_str!("credential_certificate.rs");
+    let base_routes = registered_routes(app_route_registration_block(base_source));
+
+    assert!(
+        base_routes
+            .iter()
+            .any(|route| { route.method == "get" && route.path == ROUTE })
+    );
+    for required in [
+        "credential_certificate_sql()",
+        "certificate_pem_is_valid(&certificate)",
+        "application/octet-stream",
+        "no-store",
+        "nosniff",
+    ] {
+        assert!(
+            handler_source.contains(required),
+            "credential certificate handler missing {required}"
+        );
+    }
+    assert!(direct_api_v1_method_is_allowed(
+        &axum::http::Method::GET,
+        CANONICAL_PATH,
+        false
+    ));
+    for rejected in [
+        "/api/v1/credentials/12345678-1234-1234-1234-123456789ABC/certificate",
+        "/api/v1/credentials/{12345678-1234-1234-1234-123456789abc}/certificate",
+        "/api/v1/credentials/not-a-uuid/certificate",
+        "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/certificate/extra",
+        "/api/v1/credentials//certificate",
+    ] {
+        assert!(
+            !direct_api_v1_method_is_allowed(&axum::http::Method::GET, rejected, true),
+            "noncanonical credential certificate path must be denied: {rejected}"
+        );
+    }
+}
+
+#[test]
 fn credential_public_key_route_is_operator_sensitive_and_canonical() {
     const ROUTE: &str = "/api/v1/credentials/:credential_id/public-key";
     const CANONICAL_PATH: &str =

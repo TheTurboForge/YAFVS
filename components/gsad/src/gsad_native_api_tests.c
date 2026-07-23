@@ -40,6 +40,13 @@ gsad_native_api_test_get_path_requires_operator (const gchar *path);
 extern gboolean
 gsad_native_api_test_credential_public_key_path_is_allowed (const gchar *path);
 extern gboolean
+gsad_native_api_test_credential_certificate_path_is_allowed (
+  const gchar *path);
+extern gboolean
+gsad_native_api_test_parse_certificate_response (
+  const guint8 *data, gsize length, guint *status_code, GBytes **body,
+  gchar **content_disposition);
+extern gboolean
 gsad_native_api_test_parse_key_response (const guint8 *data, gsize length,
                                          guint *status_code, GBytes **body,
                                          gchar **content_disposition);
@@ -99,6 +106,71 @@ Ensure (gsad_native_api, should_only_allow_canonical_credential_public_keys)
   for (gsize index = 0; index < G_N_ELEMENTS (rejected); index++)
     assert_that (gsad_native_api_test_credential_public_key_path_is_allowed (
                    rejected[index]), is_false);
+}
+
+Ensure (gsad_native_api, should_only_allow_canonical_credential_certificates)
+{
+  const gchar *valid =
+    "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/certificate";
+  const gchar *rejected[] = {
+    "/api/v1/credentials/not-a-uuid/certificate",
+    "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/certificate/",
+    "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/certificate/extra",
+    "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/certificate?x=1",
+    "/api/v1/credentials/12345678-1234-1234-1234-123456789ab/certificate",
+    "/api/v1/credentials/12345678-1234-1234-1234-123456789ABC/certificate",
+  };
+
+  assert_that (
+    gsad_native_api_test_credential_certificate_path_is_allowed (valid),
+    is_true);
+  assert_that (gsad_native_api_test_get_path_is_allowed (valid), is_true);
+  assert_that (gsad_native_api_test_get_path_requires_operator (valid),
+               is_true);
+  assert_that (gsad_native_api_test_delete_path_is_allowed (valid), is_false);
+  for (gsize index = 0; index < G_N_ELEMENTS (rejected); index++)
+    assert_that (gsad_native_api_test_credential_certificate_path_is_allowed (
+                   rejected[index]),
+                 is_false);
+}
+
+Ensure (gsad_native_api, should_parse_only_valid_credential_certificate_responses)
+{
+  const gchar *body_text =
+    "-----BEGIN CERTIFICATE-----\nQUFBQQ==\n-----END CERTIFICATE-----\n";
+  const gchar *valid =
+    "HTTP/1.1 200 OK\r\nContent-Length: 63\r\n"
+    "Content-Type: application/octet-stream\r\n"
+    "Content-Disposition: attachment; filename=credential.pem\r\n\r\n"
+    "-----BEGIN CERTIFICATE-----\nQUFBQQ==\n-----END CERTIFICATE-----\n";
+  const gchar *wrong_type =
+    "HTTP/1.1 200 OK\r\nContent-Length: 63\r\n"
+    "Content-Type: application/key\r\n"
+    "Content-Disposition: attachment; filename=credential.pem\r\n\r\n"
+    "-----BEGIN CERTIFICATE-----\nQUFBQQ==\n-----END CERTIFICATE-----\n";
+  guint status_code = 0;
+  GBytes *body = NULL;
+  gchar *disposition = NULL;
+  gsize body_length;
+  const gchar *body_data;
+
+  assert_that (strlen (body_text), is_equal_to (63));
+  assert_that (gsad_native_api_test_parse_certificate_response (
+                 (const guint8 *) valid, strlen (valid), &status_code, &body,
+                 &disposition),
+               is_true);
+  body_data = g_bytes_get_data (body, &body_length);
+  assert_that (body_length, is_equal_to (63));
+  assert_that (body_data, is_equal_to_string (body_text));
+  assert_that (disposition,
+               is_equal_to_string (
+                 "attachment; filename=credential.pem"));
+  g_bytes_unref (body);
+  g_free (disposition);
+  assert_that (gsad_native_api_test_parse_certificate_response (
+                 (const guint8 *) wrong_type, strlen (wrong_type),
+                 &status_code, &body, &disposition),
+               is_false);
 }
 
 Ensure (gsad_native_api, should_parse_only_valid_credential_key_responses)

@@ -8,11 +8,11 @@
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import CredentialCommand from 'gmp/commands/credential';
 import {createHttp, createActionResultResponse} from 'gmp/commands/testing';
-import {createSession} from 'gmp/testing';
 import {
   CERTIFICATE_CREDENTIAL_TYPE,
   KRB5_CREDENTIAL_TYPE,
 } from 'gmp/models/credential';
+import {createSession} from 'gmp/testing';
 
 const certificate = new File(['cert'], 'cert.pem');
 const privateKey = new File(['private_key'], 'key.pem');
@@ -704,28 +704,64 @@ describe('CredentialCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
-  test('should keep PEM downloads on the inherited path', async () => {
+  test('should download a client certificate through the native API', async () => {
     const response = new ArrayBuffer(8);
-    const fetchMock = testing.fn();
+    const fetchMock = testing.fn().mockResolvedValue({
+      arrayBuffer: testing.fn().mockResolvedValue(response),
+      ok: true,
+      status: 200,
+    });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
     };
-    fakeHttp.buildUrl = testing.fn((path: string) => path);
+    fakeHttp.buildUrl = testing.fn(
+      (path: string, params?: Record<string, string | undefined>) =>
+        `https://yafvs.example/${path}${params?.token ? `?token=${params.token}` : ''}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
     const cmd = new CredentialCommand(fakeHttp);
 
-    const result = await cmd.download({id: '1'}, 'pem');
+    const result = await cmd.download({id: 'credential/id'}, 'pem');
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'download_credential',
-        package_format: 'pem',
-        credential_id: '1',
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/credentials/credential%2Fid/certificate',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/credentials/credential%2Fid/certificate?token=test-token',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/octet-stream',
+          Authorization: 'Bearer jwt-token',
+        },
       },
-      responseType: 'arraybuffer',
-    });
-    expect(result).toBe(response);
+    );
+    expect(result.data).toBe(response);
+  });
+
+  test('should propagate native certificate failure without GMP fallback', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({ok: false, status: 500});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new CredentialCommand(fakeHttp);
+
+    await expect(cmd.download({id: 'credential-id'}, 'pem')).rejects.toThrow(
+      'Native API request failed with status 500',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should keep KEY downloads native without a capability flag', async () => {
@@ -747,15 +783,12 @@ describe('CredentialCommand tests', () => {
     const result = await cmd.download({id: '1'}, 'key');
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledWith(
-      'api/v1/credentials/1/public-key',
-      {
-        credentials: 'include',
-        headers: {
-          Accept: 'application/key',
-        },
+    expect(fetchMock).toHaveBeenCalledWith('api/v1/credentials/1/public-key', {
+      credentials: 'include',
+      headers: {
+        Accept: 'application/key',
       },
-    );
+    });
     expect(result.data).toBe(response);
   });
 

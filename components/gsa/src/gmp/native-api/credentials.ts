@@ -294,6 +294,32 @@ export const fetchNativeCredentialPublicKey = async (
   return response.arrayBuffer();
 };
 
+export const fetchNativeCredentialCertificate = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<ArrayBuffer> => {
+  const response = await fetch(
+    gmp.buildUrl(`api/v1/credentials/${encodeURIComponent(id)}/certificate`, {
+      token: gmp.session.token,
+    }),
+    {
+      credentials: 'include',
+      headers: {
+        Accept: 'application/octet-stream',
+        ...(gmp.session.jwt
+          ? {Authorization: `Bearer ${gmp.session.jwt}`}
+          : {}),
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  return response.arrayBuffer();
+};
+
 export const deleteNativeCredential = async (
   gmp: NativeApiGmp,
   id: string,

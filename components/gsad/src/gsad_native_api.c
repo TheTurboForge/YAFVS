@@ -36,8 +36,8 @@
 #define DEFAULT_NATIVE_API_PORT "9080"
 #define NATIVE_API_MAX_RESPONSE_BYTES (10 * 1024 * 1024)
 #define NATIVE_API_MAX_PDF_RESPONSE_BYTES (32 * 1024 * 1024)
-#define NATIVE_API_MAX_KEY_RESPONSE_BYTES (128 * 1024)
-#define NATIVE_API_MAX_KEY_BODY_BYTES 49146
+#define NATIVE_API_MAX_CREDENTIAL_DOWNLOAD_RESPONSE_BYTES (128 * 1024)
+#define NATIVE_API_MAX_CREDENTIAL_DOWNLOAD_BODY_BYTES 49146
 #define PDF_REPORT_FORMAT_ID "c402cc3e-b531-11e1-9163-406186ea4fc5"
 #define BROWSER_PROXY_SECRET_ENV "YAFVS_API_BROWSER_PROXY_SECRET"
 #define BROWSER_PROXY_SECRET_HEADER "x-yafvs-browser-proxy-secret"
@@ -59,6 +59,7 @@
 #define AUTHENTICATION_SETTINGS_LDAP_PATH "/api/v1/authentication-settings/ldap"
 #define AUTHENTICATION_SETTINGS_RADIUS_PATH "/api/v1/authentication-settings/radius"
 #define CREDENTIAL_PUBLIC_KEY_SUFFIX "/public-key"
+#define CREDENTIAL_CERTIFICATE_SUFFIX "/certificate"
 
 static void
 secure_clear (void *value, gsize length)
@@ -123,20 +124,20 @@ is_user_management_user_path (const gchar *path)
 }
 
 static gboolean
-native_api_credential_public_key_path_is_allowed (const gchar *path)
+native_api_credential_binary_path_is_allowed (const gchar *path,
+                                              const gchar *suffix)
 {
   const gchar *prefix = "/api/v1/credentials/";
   const gchar *id;
   gsize id_length;
 
-  if (path == NULL || strchr (path, '?') != NULL
+  if (path == NULL || suffix == NULL || strchr (path, '?') != NULL
       || !g_str_has_prefix (path, prefix)
-      || !g_str_has_suffix (path, CREDENTIAL_PUBLIC_KEY_SUFFIX))
+      || !g_str_has_suffix (path, suffix))
     return FALSE;
 
   id = path + strlen (prefix);
-  id_length = strlen (path) - strlen (prefix)
-              - strlen (CREDENTIAL_PUBLIC_KEY_SUFFIX);
+  id_length = strlen (path) - strlen (prefix) - strlen (suffix);
   if (!is_uuid_segment (id, id_length))
     return FALSE;
 
@@ -148,13 +149,28 @@ native_api_credential_public_key_path_is_allowed (const gchar *path)
 }
 
 static gboolean
+native_api_credential_public_key_path_is_allowed (const gchar *path)
+{
+  return native_api_credential_binary_path_is_allowed (
+    path, CREDENTIAL_PUBLIC_KEY_SUFFIX);
+}
+
+static gboolean
+native_api_credential_certificate_path_is_allowed (const gchar *path)
+{
+  return native_api_credential_binary_path_is_allowed (
+    path, CREDENTIAL_CERTIFICATE_SUFFIX);
+}
+
+static gboolean
 native_api_get_path_requires_operator (const gchar *path)
 {
   return g_strcmp0 (path, AUTHENTICATION_SETTINGS_PATH) == 0
          || g_strcmp0 (path, USER_SETTINGS_PATH) == 0
          || g_strcmp0 (path, USER_MANAGEMENT_USERS_PATH) == 0
          || is_user_management_user_path (path)
-         || native_api_credential_public_key_path_is_allowed (path);
+         || native_api_credential_public_key_path_is_allowed (path)
+         || native_api_credential_certificate_path_is_allowed (path);
 }
 
 static gboolean
@@ -380,9 +396,9 @@ malformed:
 }
 
 static gboolean
-parse_native_api_key_response (const guint8 *data, gsize length,
-                               native_api_pdf_response_t *response,
-                               gchar **error_message)
+parse_native_api_credential_download_response (
+  const guint8 *data, gsize length, const gchar *expected_content_type,
+  native_api_pdf_response_t *response, gchar **error_message)
 {
   gssize header_end;
   gssize status_end;
@@ -471,14 +487,15 @@ parse_native_api_key_response (const guint8 *data, gsize length,
     }
 
   if (!content_length_present
-      || content_length > NATIVE_API_MAX_KEY_BODY_BYTES
+      || content_length > NATIVE_API_MAX_CREDENTIAL_DOWNLOAD_BODY_BYTES
       || length - (gsize) header_end - 4 != content_length)
     goto malformed;
 
   body = data + header_end + 4;
   if (response->status_code == MHD_HTTP_OK
       && (content_type == NULL
-          || g_ascii_strcasecmp (content_type, "application/key") != 0
+          || expected_content_type == NULL
+          || g_ascii_strcasecmp (content_type, expected_content_type) != 0
           || content_disposition == NULL || content_length == 0))
     goto malformed;
 
@@ -491,7 +508,8 @@ malformed:
   native_api_pdf_response_clear (response);
   g_free (content_type);
   g_free (content_disposition);
-  *error_message = g_strdup ("Native API returned invalid key response framing.");
+  *error_message =
+    g_strdup ("Native API returned invalid credential download framing.");
   return FALSE;
 }
 
@@ -1568,6 +1586,9 @@ native_api_patch_path_is_allowed (const gchar *path)
 static gboolean
 native_api_path_is_allowed (const gchar *path)
 {
+  if (native_api_credential_certificate_path_is_allowed (path))
+    return TRUE;
+
   const gchar *raw_reports_path = "/api/v1/reports";
   const gchar *raw_report_prefix = "/api/v1/reports/";
   const gchar *results_path = "/api/v1/results";
@@ -2723,10 +2744,11 @@ fetch_native_api_pdf (const gchar *path,
 }
 
 static gboolean
-fetch_native_api_key (const gchar *path, const gchar *browser_proxy_secret,
-                      const gchar *operator_name, const gchar *operator_uuid,
-                      native_api_pdf_response_t *key_response,
-                      gchar **error_message)
+fetch_native_api_credential_download (
+  const gchar *path, const gchar *accept_type,
+  const gchar *expected_content_type, const gchar *browser_proxy_secret,
+  const gchar *operator_name, const gchar *operator_uuid,
+  native_api_pdf_response_t *download_response, gchar **error_message)
 {
   const gchar *host = g_getenv ("YAFVS_NATIVE_API_HOST");
   const gchar *port = g_getenv ("YAFVS_NATIVE_API_PORT");
@@ -2741,7 +2763,8 @@ fetch_native_api_key (const gchar *path, const gchar *browser_proxy_secret,
   if (port == NULL || port[0] == 0)
     port = DEFAULT_NATIVE_API_PORT;
   if (browser_proxy_secret == NULL || operator_name == NULL
-      || operator_uuid == NULL)
+      || operator_uuid == NULL || accept_type == NULL
+      || expected_content_type == NULL)
     {
       *error_message = g_strdup ("Native API browser proxy is not configured.");
       return FALSE;
@@ -2754,17 +2777,18 @@ fetch_native_api_key (const gchar *path, const gchar *browser_proxy_secret,
       return FALSE;
     }
   request = g_string_new (NULL);
-  g_string_printf (request,
-                   "GET %s HTTP/1.1\r\n"
-                   "Host: %s:%s\r\n"
-                   "Accept: application/key\r\n"
-                   "Connection: close\r\n"
-                   BROWSER_PROXY_SECRET_HEADER ": %s\r\n"
-                   BROWSER_PROXY_OPERATOR_HEADER ": %s\r\n"
-                   BROWSER_PROXY_OPERATOR_UUID_HEADER ": %s\r\n"
-                   "User-Agent: gsad-native-api-proxy\r\n\r\n",
-                   path, host, port, browser_proxy_secret, operator_name,
-                   operator_uuid);
+  g_string_printf (
+    request,
+    "GET %s HTTP/1.1\r\n"
+    "Host: %s:%s\r\n"
+    "Accept: %s\r\n"
+    "Connection: close\r\n"
+    BROWSER_PROXY_SECRET_HEADER ": %s\r\n"
+    BROWSER_PROXY_OPERATOR_HEADER ": %s\r\n"
+    BROWSER_PROXY_OPERATOR_UUID_HEADER ": %s\r\n"
+    "User-Agent: gsad-native-api-proxy\r\n\r\n",
+    path, host, port, accept_type, browser_proxy_secret, operator_name,
+    operator_uuid);
   if (!send_all (fd, request->str, request->len))
     {
       secure_gstring_free (request);
@@ -2787,7 +2811,8 @@ fetch_native_api_key (const gchar *path, const gchar *browser_proxy_secret,
           *error_message = g_strdup ("Native API response could not be read.");
           return FALSE;
         }
-      if (response->len > NATIVE_API_MAX_KEY_RESPONSE_BYTES - (gsize) count)
+      if (response->len
+          > NATIVE_API_MAX_CREDENTIAL_DOWNLOAD_RESPONSE_BYTES - (gsize) count)
         {
           g_byte_array_unref (response);
           close (fd);
@@ -2798,8 +2823,9 @@ fetch_native_api_key (const gchar *path, const gchar *browser_proxy_secret,
     }
   close (fd);
 
-  parsed = parse_native_api_key_response (response->data, response->len,
-                                          key_response, error_message);
+  parsed = parse_native_api_credential_download_response (
+    response->data, response->len, expected_content_type, download_response,
+    error_message);
   g_byte_array_unref (response);
   return parsed;
 }
@@ -2888,9 +2914,17 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
       return ret;
     }
 
-  if (native_api_credential_public_key_path_is_allowed (path))
+  if (native_api_credential_public_key_path_is_allowed (path)
+      || native_api_credential_certificate_path_is_allowed (path))
     {
-      native_api_pdf_response_t key_response = {0};
+      const gboolean certificate_download =
+        native_api_credential_certificate_path_is_allowed (path);
+      const gchar *content_type =
+        certificate_download ? "application/octet-stream" : "application/key";
+      const content_type_t response_content_type =
+        certificate_download ? GSAD_CONTENT_TYPE_OCTET_STREAM
+                             : GSAD_CONTENT_TYPE_APP_KEY;
+      native_api_pdf_response_t download_response = {0};
       const gchar *secret = browser_proxy_secret ();
 
       if (secret == NULL)
@@ -2898,10 +2932,11 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
           gsad_credentials_free (credentials);
           return send_json_error (
             connection, MHD_HTTP_SERVICE_UNAVAILABLE, "control_unavailable",
-            "Native API browser key download is not configured.");
+            "Native API browser credential download is not configured.");
         }
-      if (!fetch_native_api_key (path, secret, operator_name, operator_uuid,
-                                 &key_response, &error_message))
+      if (!fetch_native_api_credential_download (
+            path, content_type, content_type, secret, operator_name,
+            operator_uuid, &download_response, &error_message))
         {
           g_warning ("%s: %s", __func__, error_message);
           gsad_credentials_free (credentials);
@@ -2911,21 +2946,26 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
                                   "Native API service is unavailable.");
         }
       gsad_credentials_free (credentials);
-      if (key_response.status_code != MHD_HTTP_OK)
+      if (download_response.status_code != MHD_HTTP_OK)
         {
-          guint native_status = key_response.status_code;
-          native_api_pdf_response_clear (&key_response);
+          guint native_status = download_response.status_code;
+          native_api_pdf_response_clear (&download_response);
           return send_json_error (connection, (int) native_status,
-                                  "credential_key_download_failed",
-                                  "Native API credential key download failed.");
+                                  certificate_download
+                                    ? "credential_certificate_download_failed"
+                                    : "credential_key_download_failed",
+                                  certificate_download
+                                    ? "Native API credential certificate download failed."
+                                    : "Native API credential key download failed.");
         }
 
-      gsize key_length;
-      const gchar *key = g_bytes_get_data (key_response.body, &key_length);
+      gsize download_length;
+      const gchar *download = g_bytes_get_data (download_response.body,
+                                                &download_length);
       ret = gsad_http_send_response_for_content (
-        connection, key, MHD_HTTP_OK, NULL, GSAD_CONTENT_TYPE_APP_KEY,
-        key_response.content_disposition, key_length);
-      native_api_pdf_response_clear (&key_response);
+        connection, download, MHD_HTTP_OK, NULL, response_content_type,
+        download_response.content_disposition, download_length);
+      native_api_pdf_response_clear (&download_response);
       return ret;
     }
 
@@ -3278,14 +3318,40 @@ gsad_native_api_test_credential_public_key_path_is_allowed (const gchar *path)
 }
 
 gboolean
+gsad_native_api_test_credential_certificate_path_is_allowed (
+  const gchar *path)
+{
+  return native_api_credential_certificate_path_is_allowed (path);
+}
+
+gboolean
 gsad_native_api_test_parse_key_response (const guint8 *data, gsize length,
                                          guint *status_code, GBytes **body,
                                          gchar **content_disposition)
 {
   native_api_pdf_response_t response = {0};
   gchar *error_message = NULL;
-  gboolean parsed = parse_native_api_key_response (
-    data, length, &response, &error_message);
+  gboolean parsed = parse_native_api_credential_download_response (
+    data, length, "application/key", &response, &error_message);
+
+  g_free (error_message);
+  if (!parsed)
+    return FALSE;
+  *status_code = response.status_code;
+  *body = g_steal_pointer (&response.body);
+  *content_disposition = g_steal_pointer (&response.content_disposition);
+  return TRUE;
+}
+
+gboolean
+gsad_native_api_test_parse_certificate_response (
+  const guint8 *data, gsize length, guint *status_code, GBytes **body,
+  gchar **content_disposition)
+{
+  native_api_pdf_response_t response = {0};
+  gchar *error_message = NULL;
+  gboolean parsed = parse_native_api_credential_download_response (
+    data, length, "application/octet-stream", &response, &error_message);
 
   g_free (error_message);
   if (!parsed)

@@ -3721,8 +3721,8 @@ class YAFVSCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 214)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 114)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 215)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 115)
         self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 100)
         self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 100)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
@@ -3877,7 +3877,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(contract["missing_rust_direct_allowlist"], [])
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
-        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 114)
+        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 115)
         self.assertEqual(contract["openapi_marked_direct_write_control_count"], 100)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
@@ -4615,7 +4615,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 217)
+        self.assertEqual(contract["operation_count"], 218)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertIn(
@@ -4739,6 +4739,7 @@ class YAFVSCtlTests(unittest.TestCase):
          'cert-bund-advisory-metadata-export-read',
          'cpe-catalog-detail-read',
          'cpe-catalog-list-read',
+         'credential-client-certificate-download-read',
          'credential-clone',
          'credential-live-move-to-trash',
          'credential-metadata-modify',
@@ -4933,7 +4934,7 @@ class YAFVSCtlTests(unittest.TestCase):
          'vulnerability-detail-read',
          'vulnerability-list-read',
          'vulnerability-metadata-export-read']
-        expected_inherited_still_owns_values = ['credential-secret-updates-non-up-usk-types-and-pem-certificate-download',
+        expected_inherited_still_owns_values = ['credential-secret-updates-non-up-usk-types-allow-insecure-and-link-mutations',
          'credential-secrets-writes-and-deletes',
          'delivery-payload-mutations',
          'feed-sync-import-control',
@@ -5027,9 +5028,9 @@ class YAFVSCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 217)
-        self.assertEqual(details["direct_operation_count"], 214)
-        self.assertEqual(details["direct_read_operation_count"], 114)
+        self.assertEqual(details["operation_count"], 218)
+        self.assertEqual(details["direct_operation_count"], 215)
+        self.assertEqual(details["direct_read_operation_count"], 115)
         self.assertIn(
             "POST /tasks/{task_id}/replace-target",
             details["non_get_direct_operations"],
@@ -5266,11 +5267,11 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 217)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 217)
-        self.assertEqual(details["summary"]["inventory_rows"], 217)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 217)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_yafvs_exposure"], 217)
+        self.assertEqual(details["summary"]["total_rows"], 218)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 218)
+        self.assertEqual(details["summary"]["inventory_rows"], 218)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 218)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_yafvs_exposure"], 218)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -6132,7 +6133,7 @@ class YAFVSCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 217)
+        self.assertEqual(len(operation_ids), 218)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(yafvsctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(yafvsctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -6223,6 +6224,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 "POST /credentials",
                 "DELETE /credentials/{credential_id}",
                 "POST /credentials/{credential_id}/clone",
+                "GET /credentials/{credential_id}/certificate",
                 "GET /credentials/{credential_id}/public-key",
                 "GET /user-management/users",
                 "POST /user-management/users",
@@ -8442,8 +8444,8 @@ class YAFVSCtlTests(unittest.TestCase):
             "declaredContentLength",
             "captureDownloadRequest",
             "'**/api/v1/credentials/*/public-key?*'",
-            "request.method() === 'GET'",
-            "url.pathname === `/api/v1/credentials/${encodeURIComponent(credentialId)}/public-key`",
+            "request.method() !== 'GET'",
+            "url.pathname === `/api/v1/credentials/${encodeURIComponent(credentialId)}/${suffix}`",
             "route.abort('blockedbyclient')",
             "boundedAuthenticatedGet",
             "'accept-encoding': 'identity'",
@@ -8764,7 +8766,9 @@ const page = {reload: async () => null};
         helper_source = CREDENTIAL_SMOKE_PATH.read_text(encoding="utf-8")
         for anchor in (
             "Download Client Certificate",
-            "package_format') === 'pem'",
+            "format === 'certificate'",
+            "'certificate'",
+            "**/api/v1/credentials/*/certificate?*",
             "kind: 'cc'",
             "typeLabel: 'Client Certificate'",
             "input[name=\"certificate\"]",
@@ -8884,13 +8888,13 @@ const credentialId = {json.dumps(credential_id)};
 function request(method, url) {{
   return {{method: () => method, url: () => url}};
 }}
-const expected = 'https://one.example/gmp?cmd=download_credential&package_format=pem&credential_id=' + credentialId;
+const expected = 'https://one.example/api/v1/credentials/' + credentialId + '/certificate?token=redacted';
 console.log(JSON.stringify({{
   expected: credentialDownloadRequestMatches(request('GET', expected), 'certificate', credentialId),
   wrongMethod: credentialDownloadRequestMatches(request('POST', expected), 'certificate', credentialId),
   wrongOrigin: credentialDownloadRequestMatches(request('GET', expected.replace('one.example', 'two.example')), 'certificate', credentialId),
-  wrongPath: credentialDownloadRequestMatches(request('GET', expected.replace('/gmp?', '/other?')), 'certificate', credentialId),
-  wrongFormat: credentialDownloadRequestMatches(request('GET', expected.replace('package_format=pem', 'package_format=key')), 'certificate', credentialId),
+  wrongPath: credentialDownloadRequestMatches(request('GET', expected.replace('/certificate?', '/other?')), 'certificate', credentialId),
+  wrongFormat: credentialDownloadRequestMatches(request('GET', expected.replace('/certificate?', '/public-key?')), 'certificate', credentialId),
   wrongId: credentialDownloadRequestMatches(request('GET', expected.replace(credentialId, 'b0000000-0000-4000-8000-000000000002')), 'certificate', credentialId),
 }}));
 """

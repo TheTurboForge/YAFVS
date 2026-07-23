@@ -9,6 +9,7 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
     if direct_api_wildcard_detail_path_is_allowed(path)
         || direct_api_alert_definition_path_is_allowed(path)
         || direct_api_credential_public_key_path_is_allowed(path)
+        || direct_api_credential_certificate_path_is_allowed(path)
     {
         return true;
     }
@@ -141,6 +142,15 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
                 )
                 && !scope_id.is_empty()
                 && !scope_report_id.is_empty()
+    )
+}
+
+fn direct_api_credential_certificate_path_is_allowed(path: &str) -> bool {
+    let parts = path.split('/').collect::<Vec<_>>();
+    matches!(
+        parts.as_slice(),
+        ["", "api", "v1", "credentials", credential_id, "certificate"]
+            if direct_api_canonical_uuid_segment_is_allowed(credential_id)
     )
 }
 

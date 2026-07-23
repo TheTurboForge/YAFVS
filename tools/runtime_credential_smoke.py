@@ -210,16 +210,14 @@ function forwardedAuthHeaders(headers) {
 function credentialDownloadRequestMatches(request, format, credentialId) {
   const url = new URL(request.url());
   if (url.origin !== new URL(config.baseUrl).origin) return false;
-  if (format === 'key') {
-    return request.method() === 'GET'
-      && url.pathname === `/api/v1/credentials/${encodeURIComponent(credentialId)}/public-key`;
-  }
-  return format === 'certificate'
-    && request.method() === 'GET'
-    && url.pathname === '/gmp'
-    && url.searchParams.get('cmd') === 'download_credential'
-    && url.searchParams.get('package_format') === 'pem'
-    && url.searchParams.get('credential_id') === credentialId;
+  if (request.method() !== 'GET') return false;
+  const suffix = format === 'key'
+    ? 'public-key'
+    : format === 'certificate'
+      ? 'certificate'
+      : null;
+  return suffix !== null
+    && url.pathname === `/api/v1/credentials/${encodeURIComponent(credentialId)}/${suffix}`;
 }
 
 async function captureDownloadRequest(page, action, format, credentialId) {
@@ -228,7 +226,7 @@ async function captureDownloadRequest(page, action, format, credentialId) {
   }
   const pattern = format === 'key'
     ? '**/api/v1/credentials/*/public-key?*'
-    : '**/gmp?*';
+    : '**/api/v1/credentials/*/certificate?*';
   let timer;
   let resolveCapture;
   let rejectCapture;
@@ -727,8 +725,8 @@ async function characterizeDownload(page, fixture, format) {
     && !containsConfiguredSecret;
   const ok = operationalOk;
   const message = ok
-    ? `Characterized ${format.toUpperCase()} credential download transport.`
-    : `${format.toUpperCase()} credential download violated the inherited transport contract.`;
+    ? `Proved ${format.toUpperCase()} credential download transport.`
+    : `${format.toUpperCase()} credential download violated the native transport contract.`;
   add(ok ? 'pass' : 'fail', `credential-smoke.download.${format}.contract`, message, {
     status: streamed.status,
     contentType,

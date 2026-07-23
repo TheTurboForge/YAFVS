@@ -55,6 +55,21 @@ pub(crate) fn credential_assets_sql(sort_sql: &str) -> String {
     )
 }
 
+pub(crate) fn credential_certificate_sql() -> &'static str {
+    r#"WITH matching AS (
+           SELECT cd.value
+             FROM credentials c
+             JOIN credentials_data cd ON cd.credential = c.id
+            WHERE c.uuid = $1
+              AND c.type = 'cc'
+              AND cd.type = 'certificate'
+       )
+       SELECT value AS certificate
+         FROM matching
+        WHERE octet_length(value) BETWEEN 1 AND $2
+          AND (SELECT count(*) FROM matching) = 1;"#
+}
+
 /// Shared with typed credential tag selection. Search remains literal data
 /// across UUID, name, comment, owner name, and credential type.
 pub(crate) fn credential_collection_predicate_sql(

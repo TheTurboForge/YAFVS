@@ -277,14 +277,25 @@ fn validate_network_host(host: &str) -> Result<(), ApiError> {
 
 fn validate_ca_pub(value: String) -> Result<String, ApiError> {
     let value = value.trim().to_string();
-    if value.is_empty() || value.len() > MAX_SCANNER_CA_PUB_BYTES {
+    if !certificate_pem_is_valid(&value) {
         return Err(ApiError::BadRequest(format!(
             "ca_pub must be a PEM certificate up to {MAX_SCANNER_CA_PUB_BYTES} bytes"
         )));
     }
+    Ok(value)
+}
+
+pub(crate) fn certificate_pem_is_valid(value: &str) -> bool {
+    if value.is_empty() || value.len() > MAX_SCANNER_CA_PUB_BYTES {
+        return false;
+    }
+    validate_certificate_pem_blocks(value).is_ok()
+}
+
+fn validate_certificate_pem_blocks(value: &str) -> Result<(), ApiError> {
     const BEGIN: &str = "-----BEGIN CERTIFICATE-----";
     const END: &str = "-----END CERTIFICATE-----";
-    let mut remaining = value.as_str();
+    let mut remaining = value;
     let mut certificates = 0usize;
     loop {
         remaining = remaining.trim_start_matches(char::is_whitespace);
@@ -305,7 +316,7 @@ fn validate_ca_pub(value: String) -> Result<String, ApiError> {
     if certificates == 0 {
         return Err(invalid_ca_pub());
     }
-    Ok(value)
+    Ok(())
 }
 
 fn validate_certificate_block(encoded: &str) -> Result<(), ApiError> {

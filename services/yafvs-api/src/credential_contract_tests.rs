@@ -6,8 +6,8 @@ use axum::http::Method;
 
 use crate::{
     credential_query_sql::{
-        credential_asset_detail_sql, credential_assets_sql, credential_scanner_references_sql,
-        credential_target_references_sql,
+        credential_asset_detail_sql, credential_assets_sql, credential_certificate_sql,
+        credential_scanner_references_sql, credential_target_references_sql,
     },
     direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed},
 };
@@ -48,7 +48,7 @@ fn openapi_path_block(path: &str) -> String {
 }
 
 #[test]
-fn credential_live_delete_is_native_only_but_secret_download_remains_inherited() {
+fn credential_live_delete_is_native_only_but_raw_pem_compatibility_remains() {
     assert!(GSA_CREDENTIAL_COMMAND.contains("deleteNativeCredential(this.http, id)"));
     assert!(!GSA_CREDENTIAL_COMMAND.contains("cmd: 'delete_credential'"));
 
@@ -156,10 +156,11 @@ fn credential_live_delete_is_native_only_but_secret_download_remains_inherited()
 }
 
 #[test]
-fn credential_metadata_reads_have_no_public_gsad_aliases_but_pem_download_remains() {
+fn credential_metadata_reads_and_browser_certificate_download_are_native() {
     for native_marker in [
         "fetchNativeCredential(this.http, id)",
         "exportNativeCredentialMetadata(this.http, id)",
+        "fetchNativeCredentialCertificate(this.http, id)",
     ] {
         assert!(
             GSA_CREDENTIAL_COMMAND.contains(native_marker),
@@ -255,6 +256,10 @@ fn credential_metadata_reads_have_no_public_gsad_aliases_but_pem_download_remain
     assert!(!GVMD_MANAGE_SQL.contains("<format>key</format>"));
     assert!(!GMP_SCHEMA.contains("format=\"key\""));
     assert!(!GMP_SCHEMA.contains("<format>key</format>"));
+    assert!(
+        !GSA_CREDENTIAL_COMMAND.contains("cmd: 'download_credential'"),
+        "GSA client-certificate download must fail closed without a GMP fallback"
+    );
 }
 
 #[test]
@@ -497,7 +502,7 @@ fn credential_openapi_declares_redacted_read_boundary() {
             "x-yafvs-exposure: direct-read",
             "x-yafvs-maturity: live-read",
             replaces,
-            "credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
+            "credential-secret-updates-non-up-usk-types-allow-insecure-and-link-mutations",
             "secret",
         ] {
             assert!(
@@ -562,7 +567,7 @@ fn credential_patch_route_is_direct_write_control_metadata_only() {
         "x-yafvs-safety-contract: write-control-v1",
         "x-yafvs-side-effect: metadata-write",
         "CredentialPatchRequest",
-        "SSH public-key retrieval is native. Secret updates, allow_insecure mutation, credential type changes, target/scanner link mutation, and stored client-certificate PEM download remain on inherited compatibility paths; clone, live trash move, restore, and permanent trash deletion are separately native.",
+        "SSH public-key and stored client-certificate retrieval are native. Secret updates, allow_insecure mutation, credential type changes, and target/scanner link mutation remain on inherited compatibility paths; clone, live trash move, restore, and permanent trash deletion are separately native.",
     ] {
         assert!(
             block.contains(required),
@@ -589,7 +594,7 @@ fn credential_delete_route_and_openapi_define_native_secret_opaque_trash_move() 
         "operationId: deleteCredentialsByCredentialId",
         "x-yafvs-exposure: direct-write",
         "x-yafvs-replaces: credential-live-move-to-trash",
-        "x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
+        "x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-allow-insecure-and-link-mutations",
         "x-yafvs-owner-semantics: preserve-existing-owner",
         "x-yafvs-safety-contract: write-control-v1",
         "x-yafvs-side-effect: secret-opaque-trash-move",
@@ -611,7 +616,7 @@ fn credential_public_key_openapi_declares_bounded_native_binary_read() {
         "operationId: getCredentialsByCredentialIdPublicKey",
         "x-yafvs-exposure: direct-read",
         "x-yafvs-replaces: credential-ssh-public-key-download-read",
-        "x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-pem-certificate-download",
+        "x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-allow-insecure-and-link-mutations",
         "application/key:",
         "format: binary",
         "Content-Disposition:",
@@ -623,6 +628,53 @@ fn credential_public_key_openapi_declares_bounded_native_binary_read() {
         assert!(
             block.contains(required),
             "credential public-key OpenAPI block missing {required}"
+        );
+    }
+}
+
+#[test]
+fn credential_certificate_query_and_openapi_are_bounded_native_binary_read() {
+    let sql = credential_certificate_sql();
+    for required in [
+        "WITH matching AS",
+        "SELECT cd.value",
+        "JOIN credentials_data cd ON cd.credential = c.id",
+        "WHERE c.uuid = $1",
+        "c.type = 'cc'",
+        "cd.type = 'certificate'",
+        "SELECT value AS certificate",
+        "octet_length(value) BETWEEN 1 AND $2",
+        "(SELECT count(*) FROM matching) = 1",
+    ] {
+        assert!(
+            sql.contains(required),
+            "credential certificate SQL missing {required}"
+        );
+    }
+    for forbidden in ["private_key", "password", "passphrase", "secret", "LIMIT 1"] {
+        assert!(
+            !sql.contains(forbidden),
+            "credential certificate SQL must reject duplicate rows and avoid secret fields: {forbidden}"
+        );
+    }
+
+    let block = openapi_path_block("/credentials/{credential_id}/certificate");
+    for required in [
+        "operationId: getCredentialsByCredentialIdCertificate",
+        "x-yafvs-exposure: direct-read",
+        "x-yafvs-replaces: credential-client-certificate-download-read",
+        "application/octet-stream:",
+        "format: binary",
+        "Content-Disposition:",
+        "Content-Length:",
+        "Cache-Control:",
+        "X-Content-Type-Options:",
+        "private-key-bearing",
+        "'502':",
+    ] {
+        assert!(
+            block.contains(required),
+            "credential certificate OpenAPI block missing {required}"
         );
     }
 }

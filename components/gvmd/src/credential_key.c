@@ -14,6 +14,9 @@
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <gvm/util/fileutils.h>
+#include <errno.h>
+#include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,11 +32,101 @@
 #define G_LOG_DOMAIN "md manage"
 
 /**
+ * @brief Prepare an isolated session for SSH_ASKPASS.
+ *
+ * This callback runs between fork and exec, so it uses only async-signal-safe
+ * operations.
+ *
+ * @param[in] user_data  Unused.
+ */
+static void
+ssh_key_child_setup (gpointer user_data)
+{
+  (void) user_data;
+  if (setsid () == -1)
+    _exit (127);
+}
+
+/**
+ * @brief Write a complete buffer to a descriptor.
+ *
+ * @param[in] fd      Descriptor.
+ * @param[in] buffer  Buffer.
+ * @param[in] length  Buffer length.
+ *
+ * @return TRUE on success, FALSE on failure.
+ */
+static gboolean
+write_all (int fd, const char *buffer, size_t length)
+{
+  while (length)
+    {
+      ssize_t written = write (fd, buffer, length);
+
+      if (written < 0 && errno == EINTR)
+        continue;
+      if (written <= 0)
+        return FALSE;
+      buffer += written;
+      length -= (size_t) written;
+    }
+  return TRUE;
+}
+
+/**
+ * @brief Supply the passphrase twice for ssh-keygen's confirmation prompts.
+ *
+ * @param[in] fd          ssh-keygen standard input.
+ * @param[in] passphrase  Passphrase.
+ *
+ * @return TRUE on success, FALSE on failure.
+ */
+static gboolean
+write_passphrase (int fd, const char *passphrase)
+{
+  sigset_t mask;
+  sigset_t old_mask;
+  sigset_t pending;
+  struct timespec no_wait = {0, 0};
+  gboolean already_pending = FALSE;
+  gboolean written;
+  int mask_error;
+  size_t length = strlen (passphrase);
+
+  sigemptyset (&mask);
+  sigaddset (&mask, SIGPIPE);
+  mask_error = pthread_sigmask (SIG_BLOCK, &mask, &old_mask);
+  if (mask_error)
+    {
+      errno = mask_error;
+      return FALSE;
+    }
+  if (sigpending (&pending) == 0)
+    already_pending = sigismember (&pending, SIGPIPE) == 1;
+
+  written = write_all (fd, passphrase, length) && write_all (fd, "\n", 1)
+            && write_all (fd, passphrase, length) && write_all (fd, "\n", 1);
+
+  if (!written && errno == EPIPE && !already_pending)
+    while (sigtimedwait (&mask, NULL, &no_wait) == -1 && errno == EINTR)
+      continue;
+
+  mask_error = pthread_sigmask (SIG_SETMASK, &old_mask, NULL);
+  if (mask_error)
+    {
+      errno = mask_error;
+      return FALSE;
+    }
+  return written;
+}
+
+/**
  * @brief Create an SSH key for local security checks.
  *
- * Forks and creates a key for local checks by calling
- * 'ssh-keygen -t rsa -f filepath -C "comment" -P "passphrase"'.
- * A directory will be created if it does not exist.
+ * Forks and creates a key for local checks with ssh-keygen. The passphrase is
+ * supplied to SSH_ASKPASS over standard input, rather than a command line,
+ * environment value, or persistent file. A directory will be created if it
+ * does not exist.
  *
  * @param[in]  comment     Comment to use.
  * @param[in]  passphrase  Passphrase for key, must be longer than 4 characters.
@@ -49,8 +142,17 @@ create_ssh_key (const char *comment, const char *passphrase,
   gchar *astderr = NULL;
   GError *err = NULL;
   gint exit_status = 0;
+  GPid child_pid = 0;
+  gint child_input = -1;
   gchar *dir;
-  char *command;
+  gchar *askpass_path = NULL;
+  gchar **environment = NULL;
+  gboolean passphrase_written = FALSE;
+  gchar *argv[] = {
+    (gchar *) "ssh-keygen", (gchar *) "-q", (gchar *) "-t",
+    (gchar *) "rsa",        (gchar *) "-f", (gchar *) privpath,
+    (gchar *) "-C",         (gchar *) comment, NULL,
+  };
 
   if (!comment || comment[0] == '\0')
     {
@@ -62,6 +164,11 @@ create_ssh_key (const char *comment, const char *passphrase,
       g_warning ("%s: password must be longer than 4 characters", __func__);
       return -1;
     }
+  if (strchr (passphrase, '\n') || strchr (passphrase, '\r'))
+    {
+      g_warning ("%s: password must not contain line breaks", __func__);
+      return -1;
+    }
 
   dir = g_path_get_dirname (privpath);
   if (g_mkdir_with_parents (dir, 0755 /* "rwxr-xr-x" */))
@@ -70,39 +177,93 @@ create_ssh_key (const char *comment, const char *passphrase,
       g_free (dir);
       return -1;
     }
-  g_free (dir);
 
-  command = g_strconcat ("ssh-keygen -t rsa -f ", privpath, " -C \"", comment,
-                         "\" -P \"", passphrase, "\"", NULL);
-  g_debug ("command: ssh-keygen -t rsa -f %s -C \"%s\" -P \"********\"",
-           privpath, comment);
-
-  if ((g_spawn_command_line_sync (command, &astdout, &astderr, &exit_status,
-                                  &err)
-       == FALSE)
-      || (WIFEXITED (exit_status) == 0) || WEXITSTATUS (exit_status))
+  askpass_path = g_build_filename (dir, ".yafvs-ssh-askpass", NULL);
+  if (!g_file_set_contents (
+        askpass_path,
+        "#!/bin/sh\n"
+        "IFS= read -r value || exit 1\n"
+        "printf '%s\\n' \"$value\"\n",
+        -1, &err)
+      || g_chmod (askpass_path, 0700))
     {
-      if (err)
-        {
-          g_warning ("%s: failed to create private key: %s", __func__,
-                     err->message);
-          g_error_free (err);
-        }
-      else
-        g_warning ("%s: failed to create private key", __func__);
-      g_debug ("%s: key-gen failed with %d (WIF %i, WEX %i).\n", __func__,
-               exit_status, WIFEXITED (exit_status), WEXITSTATUS (exit_status));
-      g_debug ("%s: stdout: %s", __func__, astdout);
-      g_debug ("%s: stderr: %s", __func__, astderr);
-      g_free (command);
-      g_free (astdout);
-      g_free (astderr);
-      return -1;
+      g_warning ("%s: failed to create SSH askpass helper: %s", __func__,
+                 err ? err->message : g_strerror (errno));
+      g_clear_error (&err);
+      goto cleanup;
     }
-  g_free (command);
+
+  environment = g_get_environ ();
+  environment =
+    g_environ_setenv (environment, "SSH_ASKPASS", askpass_path, TRUE);
+  environment =
+    g_environ_setenv (environment, "SSH_ASKPASS_REQUIRE", "force", TRUE);
+  environment = g_environ_setenv (environment, "DISPLAY", ":0", TRUE);
+  g_debug ("command: ssh-keygen -q -t rsa -f %s -C \"%s\"", privpath,
+           comment);
+
+  if (!g_spawn_async_with_pipes (
+        NULL, argv, environment,
+        G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD, ssh_key_child_setup,
+        NULL, &child_pid, &child_input, NULL, NULL, &err))
+    {
+      g_warning ("%s: failed to start ssh-keygen: %s", __func__,
+                 err ? err->message : "unknown error");
+      g_clear_error (&err);
+      goto cleanup;
+    }
+
+  passphrase_written = write_passphrase (child_input, passphrase);
+  if (!passphrase_written)
+    g_warning ("%s: failed to supply ssh-keygen passphrase", __func__);
+  close (child_input);
+  child_input = -1;
+
+  while (waitpid (child_pid, &exit_status, 0) == -1)
+    {
+      if (errno != EINTR)
+        {
+          g_warning ("%s: failed to wait for ssh-keygen: %s", __func__,
+                     g_strerror (errno));
+          goto cleanup;
+        }
+    }
+  g_spawn_close_pid (child_pid);
+  child_pid = 0;
+
+  if (!passphrase_written || !WIFEXITED (exit_status)
+      || WEXITSTATUS (exit_status))
+    {
+      g_warning ("%s: ssh-keygen failed", __func__);
+      goto cleanup;
+    }
+
+  g_strfreev (environment);
+  environment = NULL;
+  g_unlink (askpass_path);
+  g_free (askpass_path);
+  g_free (dir);
   g_free (astdout);
   g_free (astderr);
   return 0;
+
+cleanup:
+  if (child_input >= 0)
+    close (child_input);
+  if (child_pid)
+    {
+      while (waitpid (child_pid, NULL, 0) == -1 && errno == EINTR)
+        continue;
+      g_spawn_close_pid (child_pid);
+    }
+  g_strfreev (environment);
+  if (askpass_path)
+    g_unlink (askpass_path);
+  g_free (askpass_path);
+  g_free (dir);
+  g_free (astdout);
+  g_free (astderr);
+  return -1;
 }
 
 /**

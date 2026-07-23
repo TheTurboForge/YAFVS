@@ -422,6 +422,7 @@ set(
   $<TARGET_OBJECTS:all-sql-obj>
 )
 add_unit_test(utils "${ALL_OBJECTS}" "${ALL_MISC_SRC}")
+add_unit_test(credential-key "${ALL_OBJECTS}" "${ALL_MISC_SRC}")
 
 set(
   ALL_OBJECTS

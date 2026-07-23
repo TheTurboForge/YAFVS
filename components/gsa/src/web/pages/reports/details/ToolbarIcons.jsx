@@ -7,9 +7,7 @@
 import React from 'react';
 import {isDefined} from 'gmp/utils/identity';
 import {
-  AddToAssetsIcon,
   DownloadIcon,
-  RemoveFromAssetsIcon,
   ResultIcon,
   TaskIcon,
   VulnerabilityIcon,
@@ -32,8 +30,6 @@ const ToolBarIcons = ({
   showThresholdMessage,
   task,
   threshold,
-  onAddToAssetsClick,
-  onRemoveFromAssetsClick,
   onReportDownloadClick,
   showError,
   showErrorMessage,
@@ -53,16 +49,6 @@ const ToolBarIcons = ({
       </IconDivider>
       {!isLoading && (
         <React.Fragment>
-          <IconDivider>
-            <AddToAssetsIcon
-              title={_('Add to Assets with QoD >= 70% and Overrides enabled')}
-              onClick={onAddToAssetsClick}
-            />
-            <RemoveFromAssetsIcon
-              title={_('Remove from Assets')}
-              onClick={onRemoveFromAssetsClick}
-            />
-          </IconDivider>
           <IconDivider>
             <DetailsLink
               id={isDefined(task) ? task.id : ''}
@@ -132,8 +118,6 @@ ToolBarIcons.propTypes = {
   showThresholdMessage: PropTypes.bool,
   task: PropTypes.model,
   threshold: PropTypes.number,
-  onAddToAssetsClick: PropTypes.func.isRequired,
-  onRemoveFromAssetsClick: PropTypes.func.isRequired,
   onReportDownloadClick: PropTypes.func.isRequired,
 };
 

@@ -41,9 +41,6 @@ describe('Report Details ToolBarIcons tests', () => {
     const showError = testing.fn();
     const showSuccessMessage = testing.fn();
     const showErrorMessage = testing.fn();
-    const onAddToAssetsClick = testing.fn();
-
-    const onRemoveFromAssetsClick = testing.fn();
     const onReportDownloadClick = testing.fn();
 
     const {report} = getMockReport();
@@ -67,8 +64,6 @@ describe('Report Details ToolBarIcons tests', () => {
         showThresholdMessage={false}
         task={report.task}
         threshold={10}
-        onAddToAssetsClick={onAddToAssetsClick}
-        onRemoveFromAssetsClick={onRemoveFromAssetsClick}
         onReportDownloadClick={onReportDownloadClick}
       />,
     );
@@ -86,15 +81,6 @@ describe('Report Details ToolBarIcons tests', () => {
     // Reports List Icon
     expect(links[1]).toHaveAttribute('href', '/reports');
     expect(spanLinks[1]).toHaveAttribute('title', 'Reports List');
-
-    // Add to Assets Icon
-    expect(buttons[0]).toHaveAttribute(
-      'title',
-      'Add to Assets with QoD >= 70% and Overrides enabled',
-    );
-
-    // Remove from Assets Icon
-    expect(buttons[1]).toHaveAttribute('title', 'Remove from Assets');
 
     // Corresponding Task Icon
     expect(links[2]).toHaveAttribute('href', '/task/314');
@@ -126,19 +112,16 @@ describe('Report Details ToolBarIcons tests', () => {
     ).toBeNull();
 
     // Download Report Icon
-    expect(buttons[2]).toHaveAttribute('title', 'Download Report as PDF');
+    expect(buttons[0]).toHaveAttribute('title', 'Download Report as PDF');
 
     // Trigger Alert Icon
-    expect(buttons[3]).toHaveAttribute('title', 'Trigger Alert');
+    expect(buttons[1]).toHaveAttribute('title', 'Trigger Alert');
   });
 
   test('should call click handler', () => {
     const showError = testing.fn();
     const showSuccessMessage = testing.fn();
     const showErrorMessage = testing.fn();
-    const onAddToAssetsClick = testing.fn();
-
-    const onRemoveFromAssetsClick = testing.fn();
     const onReportDownloadClick = testing.fn();
 
     const {report} = getMockReport();
@@ -162,27 +145,14 @@ describe('Report Details ToolBarIcons tests', () => {
         showThresholdMessage={false}
         task={report.task}
         threshold={10}
-        onAddToAssetsClick={onAddToAssetsClick}
-        onRemoveFromAssetsClick={onRemoveFromAssetsClick}
         onReportDownloadClick={onReportDownloadClick}
       />,
     );
 
     const buttons = element.querySelectorAll('button');
 
-    expect(buttons[0]).toHaveAttribute(
-      'title',
-      'Add to Assets with QoD >= 70% and Overrides enabled',
-    );
+    expect(buttons[0]).toHaveAttribute('title', 'Download Report as PDF');
     fireEvent.click(buttons[0]);
-    expect(onAddToAssetsClick).toHaveBeenCalled();
-
-    expect(buttons[1]).toHaveAttribute('title', 'Remove from Assets');
-    fireEvent.click(buttons[1]);
-    expect(onRemoveFromAssetsClick).toHaveBeenCalled();
-
-    expect(buttons[2]).toHaveAttribute('title', 'Download Report as PDF');
-    fireEvent.click(buttons[2]);
     expect(onReportDownloadClick).toHaveBeenCalled();
   });
 });

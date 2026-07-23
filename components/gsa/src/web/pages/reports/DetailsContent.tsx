@@ -101,7 +101,6 @@ interface PageContentProps {
   sorting: SortingData;
   task?: ReportTask;
   tlsCertificatesCounts?: CollectionCounts;
-  onAddToAssetsClick: () => void;
   onError: (error: Error) => void;
   onFilterAddLogLevelClick: () => void;
   onFilterChanged: (filter: Filter) => void;
@@ -110,7 +109,6 @@ interface PageContentProps {
   onFilterRemoveClick: () => void;
   onFilterRemoveSeverityClick: () => void;
   onFilterResetClick: () => void;
-  onRemoveFromAssetsClick: () => void;
   onReportDownloadClick: () => void;
   onSortChange: (type: string, sortField: string) => void;
   onTagSuccess: () => void;
@@ -180,7 +178,6 @@ const PageContent = ({
   showSuccessMessage,
   task,
   tlsCertificatesCounts,
-  onAddToAssetsClick,
   onTlsCertificateDownloadClick,
   onError,
   onFilterAddLogLevelClick,
@@ -190,7 +187,6 @@ const PageContent = ({
   onFilterRemoveSeverityClick,
   onFilterRemoveClick,
   onFilterResetClick,
-  onRemoveFromAssetsClick,
   onReportDownloadClick,
   onSortChange,
   onTagSuccess,
@@ -446,12 +442,10 @@ const PageContent = ({
         showThresholdMessage={showThresholdMessage}
         task={task}
         threshold={threshold}
-        onAddToAssetsClick={onAddToAssetsClick}
         onFilterChanged={onFilterChanged}
         onFilterEditClick={onFilterEditClick}
         onFilterRemoveClick={onFilterRemoveClick}
         onFilterResetClick={onFilterResetClick}
-        onRemoveFromAssetsClick={onRemoveFromAssetsClick}
         onReportDownloadClick={onReportDownloadClick}
       />
 

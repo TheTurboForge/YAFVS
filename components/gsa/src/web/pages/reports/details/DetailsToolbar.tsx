@@ -28,12 +28,10 @@ export interface DetailsToolbarProps {
   showThresholdMessage?: boolean;
   task?: ReportTask;
   threshold?: number;
-  onAddToAssetsClick: () => void;
   onFilterChanged: (filter: Filter) => void;
   onFilterEditClick: () => void;
   onFilterRemoveClick: () => void;
   onFilterResetClick: () => void;
-  onRemoveFromAssetsClick: () => void;
   onReportDownloadClick: () => void;
 }
 
@@ -53,12 +51,10 @@ const DetailsToolbar = ({
   showThresholdMessage,
   task,
   threshold,
-  onAddToAssetsClick,
   onFilterChanged,
   onFilterEditClick,
   onFilterRemoveClick,
   onFilterResetClick,
-  onRemoveFromAssetsClick,
   onReportDownloadClick,
 }: DetailsToolbarProps) => {
   return (
@@ -74,8 +70,6 @@ const DetailsToolbar = ({
         showThresholdMessage={showThresholdMessage}
         task={task}
         threshold={threshold}
-        onAddToAssetsClick={onAddToAssetsClick}
-        onRemoveFromAssetsClick={onRemoveFromAssetsClick}
         onReportDownloadClick={onReportDownloadClick}
       />
       <Layout align="end">

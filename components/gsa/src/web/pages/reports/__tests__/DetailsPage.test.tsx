@@ -199,8 +199,6 @@ const createGmp = () => ({
   },
   report: {
     get: testing.fn().mockResolvedValue({data: entity}),
-    addAssets: testing.fn().mockResolvedValue({}),
-    removeAssets: testing.fn().mockResolvedValue({}),
   },
   target: {
     get: testing.fn().mockResolvedValue({data: {}}),
@@ -545,64 +543,6 @@ describe('DetailsPage', () => {
       expect(
         screen.queryByRole('row', {name: /^Task Name/}),
       ).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Asset management', () => {
-    test('should call addAssets and show success message when Add to Assets is clicked', async () => {
-      const gmp = createGmp();
-
-      const {render} = setupRenderer(gmp);
-      renderPage(render);
-
-      await screen.findByTitle(/^Add to Assets/);
-      fireEvent.click(screen.getByTitle(/^Add to Assets/));
-
-      await screen.findByText(/Report content added to Assets/);
-      expect(gmp.report.addAssets).toHaveBeenCalled();
-    });
-
-    test('should call removeAssets and show success message when Remove from Assets is clicked', async () => {
-      const gmp = createGmp();
-
-      const {render} = setupRenderer(gmp);
-      renderPage(render);
-
-      await screen.findByTitle(/^Remove from Assets/);
-      fireEvent.click(screen.getByTitle(/^Remove from Assets/));
-
-      await screen.findByText(/Report content removed from Assets/);
-      expect(gmp.report.removeAssets).toHaveBeenCalled();
-    });
-
-    test('should show error dialog when addAssets fails', async () => {
-      const gmp = createGmp();
-      gmp.report.addAssets = testing
-        .fn()
-        .mockRejectedValue(new Error('Permission denied'));
-
-      const {render} = setupRenderer(gmp);
-      renderPage(render);
-
-      await screen.findByTitle(/^Add to Assets/);
-      fireEvent.click(screen.getByTitle(/^Add to Assets/));
-
-      await screen.findByText(/Permission denied/);
-    });
-
-    test('should show error dialog when removeAssets fails', async () => {
-      const gmp = createGmp();
-      gmp.report.removeAssets = testing
-        .fn()
-        .mockRejectedValue(new Error('Server error'));
-
-      const {render} = setupRenderer(gmp);
-      renderPage(render);
-
-      await screen.findByTitle(/^Remove from Assets/);
-      fireEvent.click(screen.getByTitle(/^Remove from Assets/));
-
-      await screen.findByText(/Server error/);
     });
   });
 

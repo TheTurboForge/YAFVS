@@ -70,7 +70,6 @@ import {
 import DynamicIcon, {
   type DynamicIconProps,
 } from 'web/components/icon/DynamicIcon';
-import AddToAssets from 'web/components/icon/svg/add_to_assets.svg?react';
 import CertBundAdv from 'web/components/icon/svg/cert_bund_adv.svg?react';
 import Clone from 'web/components/icon/svg/clone.svg?react';
 import Config from 'web/components/icon/svg/config.svg?react';
@@ -91,7 +90,6 @@ import Override from 'web/components/icon/svg/override.svg?react';
 import PortList from 'web/components/icon/svg/port_list.svg?react';
 import ProvideView from 'web/components/icon/svg/provide_view.svg?react';
 import Radius from 'web/components/icon/svg/radius.svg?react';
-import RemoveFromAssets from 'web/components/icon/svg/remove_from_assets.svg?react';
 import Report from 'web/components/icon/svg/report.svg?react';
 import ReportFormat from 'web/components/icon/svg/report_format.svg?react';
 import Restore from 'web/components/icon/svg/restore.svg?react';
@@ -239,12 +237,6 @@ const getIcons = (): Record<string, IconComponent> => {
     PlugZap: createIcon(PlugZap, 'plug-zap-icon', 'Plug Zap Icon'),
 
     // SVG icons
-    AddToAssets: createIcon(
-      AddToAssets,
-      'add-to-assets-icon',
-      'Add To Assets Icon',
-      false,
-    ),
     CertBundAdv: createIcon(
       CertBundAdv,
       'cert-bund-adv-icon',
@@ -284,12 +276,6 @@ const getIcons = (): Record<string, IconComponent> => {
       false,
     ),
     Radius: createIcon(Radius, 'radius-icon', 'Radius Icon', false),
-    RemoveFromAssets: createIcon(
-      RemoveFromAssets,
-      'remove-from-assets-icon',
-      'Remove From Assets Icon',
-      false,
-    ),
     Report: createIcon(Report, 'report-icon', 'Report Icon', false),
     ReportFormat: createIcon(
       ReportFormat,
@@ -392,7 +378,6 @@ const getIcons = (): Record<string, IconComponent> => {
 };
 
 export const AlertCircleIcon = getIcons().AlertCircle;
-export const AddToAssetsIcon = getIcons().AddToAssets;
 export const AlterableIcon = getIcons().Alterable;
 export const ArrowDownIcon = getIcons().ArrowDown;
 export const ArrowUpIcon = getIcons().ArrowUp;
@@ -453,7 +438,6 @@ export const ProvideViewIcon = getIcons().ProvideView;
 export const SolutionTypeSvgIcon = getIcons().Puzzle;
 export const RadiusIcon = getIcons().Radius;
 export const RefreshIcon = getIcons().RefreshCcw;
-export const RemoveFromAssetsIcon = getIcons().RemoveFromAssets;
 export const ReportIcon = getIcons().Report;
 export const ReportFormatIcon = getIcons().ReportFormat;
 export const RestoreIcon = getIcons().Restore;

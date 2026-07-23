@@ -97,7 +97,6 @@ const createMockProps = (overrides: Record<string, unknown> = {}) => {
     showError: testing.fn(),
     showErrorMessage: testing.fn(),
     showSuccessMessage: testing.fn(),
-    onAddToAssetsClick: testing.fn(),
     onTlsCertificateDownloadClick: testing.fn(),
     onError: testing.fn(),
     onFilterAddLogLevelClick: testing.fn(),
@@ -108,7 +107,6 @@ const createMockProps = (overrides: Record<string, unknown> = {}) => {
     onFilterRemoveSeverityClick: testing.fn(),
     onFilterRemoveClick: testing.fn(),
     onFilterResetClick: testing.fn(),
-    onRemoveFromAssetsClick: testing.fn(),
     onReportDownloadClick: testing.fn(),
     onSortChange: testing.fn(),
     onTagSuccess: testing.fn(),
@@ -320,14 +318,16 @@ describe('DetailsContent', () => {
       ).toHaveAttribute('href', '/tlscertificates?filter=report_id%3D1234');
     });
 
-    test('should render asset action buttons', () => {
+    test('should not render retired report asset action buttons', () => {
       const props = createMockProps();
 
       const {render} = setupRenderer();
       render(<DetailsContent {...props} />);
 
-      screen.getByTitle(/^Add to Assets/);
-      screen.getByTitle(/^Remove from Assets/);
+      expect(screen.queryByTitle(/^Add to Assets/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByTitle(/^Remove from Assets/),
+      ).not.toBeInTheDocument();
       screen.getByTitle(/^Download Report as PDF/);
       screen.getByTitle(/^Trigger Alert/);
     });

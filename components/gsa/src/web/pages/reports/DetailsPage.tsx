@@ -203,56 +203,6 @@ const ReportDetailsPage = () => {
     handleFilterChange(DEFAULT_FILTER);
   }, [handleFilterChange]);
 
-  const handleAddToAssets = useCallback(async () => {
-    if (!entity?.id) return;
-    try {
-      await gmp.report.addAssets({
-        id: entity.id,
-        filter: reportFilter?.toFilterString(),
-      });
-      showSuccessMessage(
-        _(
-          'Report content added to Assets with QoD>=70% and Overrides enabled.',
-        ),
-      );
-      await queryClient.invalidateQueries({queryKey: ['get_report']});
-    } catch (error) {
-      log.error(error);
-      showError(error as Error);
-    }
-  }, [
-    entity,
-    gmp,
-    reportFilter,
-    showSuccessMessage,
-    showError,
-    queryClient,
-    _,
-  ]);
-
-  const handleRemoveFromAssets = useCallback(async () => {
-    if (!entity?.id) return;
-    try {
-      await gmp.report.removeAssets({
-        id: entity.id,
-        filter: reportFilter?.toFilterString(),
-      });
-      showSuccessMessage(_('Report content removed from Assets.'));
-      await queryClient.invalidateQueries({queryKey: ['get_report']});
-    } catch (error) {
-      log.error(error);
-      showError(error as Error);
-    }
-  }, [
-    entity,
-    gmp,
-    reportFilter,
-    showSuccessMessage,
-    showError,
-    queryClient,
-    _,
-  ]);
-
   const handleFilterEditClick = useCallback(() => {
     setShowFilterDialog(true);
   }, []);
@@ -406,7 +356,6 @@ const ReportDetailsPage = () => {
             sorting={sorting}
             task={isDefined(report) ? report.task : undefined}
             tlsCertificatesCounts={tlsCertificatesCounts}
-            onAddToAssetsClick={handleAddToAssets}
             onError={handleError}
             onFilterAddLogLevelClick={handleFilterAddLogLevel}
             onFilterChanged={handleFilterChange}
@@ -415,7 +364,6 @@ const ReportDetailsPage = () => {
             onFilterRemoveClick={handleFilterRemoveClick}
             onFilterRemoveSeverityClick={handleFilterRemoveSeverity}
             onFilterResetClick={handleFilterResetClick}
-            onRemoveFromAssetsClick={handleRemoveFromAssets}
             onReportDownloadClick={handleReportDownload}
             onSortChange={handleSortChange}
             onTagSuccess={handleChanged}

@@ -11,16 +11,6 @@ import type Filter from 'gmp/models/filter';
 import {deliverNativeAlertReport} from 'gmp/native-api/alerts';
 import {fetchNativeReport} from 'gmp/native-api/reports';
 
-interface ReportCommandAddAssetsParams {
-  id: string;
-  filter?: string;
-}
-
-interface ReportCommandARemoveAssetsParams {
-  id: string;
-  filter?: string;
-}
-
 interface ReportCommandAlertParams {
   alert_id: string;
   report_id: string;
@@ -39,22 +29,6 @@ interface ReportCommandGetParams {
 class ReportCommand extends HttpCommand {
   constructor(http: Http) {
     super(http);
-  }
-
-  addAssets({id, filter = ''}: ReportCommandAddAssetsParams) {
-    return this.httpPostWithTransform({
-      cmd: 'create_asset',
-      report_id: id,
-      filter,
-    });
-  }
-
-  removeAssets({id, filter = ''}: ReportCommandARemoveAssetsParams) {
-    return this.httpPostWithTransform({
-      cmd: 'delete_asset',
-      report_id: id,
-      filter,
-    });
   }
 
   // eslint-disable-next-line @typescript-eslint/naming-convention

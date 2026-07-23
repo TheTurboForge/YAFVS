@@ -8392,7 +8392,7 @@ class YAFVSCtlTests(unittest.TestCase):
             runtime_credential_smoke.BROWSER_SCRIPT,
         )
         self.assertIn(
-            "replace(/([?&](?:token|access_token)=)",
+            "replace(/([?&](?:token|access_token|session|session_token|auth_token|jwt)=)",
             runtime_credential_smoke.BROWSER_SCRIPT,
         )
         self.assertNotIn(
@@ -8415,12 +8415,16 @@ class YAFVSCtlTests(unittest.TestCase):
             "input[name=\"privateKey\"]",
             "setInputFiles(config.sshPrivateKeyPath)",
             "page.waitForResponse",
-            "response.headers()",
             "headers['content-type']",
             "headers['content-disposition']",
             "MAX_DECLARED_DOWNLOAD_BYTES",
-            "MAX_DECODED_DOWNLOAD_BYTES",
             "declaredContentLength",
+            "captureDownloadRequest",
+            "route.abort('blockedbyclient')",
+            "boundedAuthenticatedGet",
+            "'accept-encoding': 'identity'",
+            "response.on('data'",
+            "request.destroy(new Error",
             "bytes.length === 80",
             "bytes.length === 431",
             "hasExpectedSignature",
@@ -8430,6 +8434,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "credential-smoke-state.json",
             "config.cleanupOnly",
             "listedId !== fixture.id",
+            "safeStoredUrl",
         ):
             self.assertIn(contract_anchor, runtime_credential_smoke.BROWSER_SCRIPT)
         helper_source = CREDENTIAL_SMOKE_PATH.read_text(encoding="utf-8")
@@ -8437,10 +8442,15 @@ class YAFVSCtlTests(unittest.TestCase):
             "def run_node_process(",
             "os.killpg",
             "def timeout_cleanup(",
+            "def sanitized_base_url(",
         ):
             self.assertIn(process_anchor, helper_source)
         self.assertNotIn(
             "fs.writeFileSync(output, bytes",
+            runtime_credential_smoke.BROWSER_SCRIPT,
+        )
+        self.assertNotIn(
+            "response.body()",
             runtime_credential_smoke.BROWSER_SCRIPT,
         )
 
@@ -8452,7 +8462,7 @@ class YAFVSCtlTests(unittest.TestCase):
             args = runtime_credential_smoke.build_parser().parse_args(
                 [
                     "--base-url",
-                    "https://127.0.0.1:19392",
+                    "https://127.0.0.1:19392/?session_token=url-secret",
                     "--username",
                     "admin",
                     "--password-file",
@@ -8519,7 +8529,8 @@ class YAFVSCtlTests(unittest.TestCase):
             )
             self.assertEqual(config["sshCredentialName"], "test-ssh")
             self.assertTrue(config["sshPrivateKeyPath"].endswith("/id_ed25519"))
-            for secret in ("environment-password", "admin-secret"):
+            self.assertEqual(config["baseUrls"], ["https://127.0.0.1:19392/"])
+            for secret in ("environment-password", "admin-secret", "url-secret"):
                 self.assertNotIn(secret, serialized)
                 self.assertNotIn(secret, artifact)
 

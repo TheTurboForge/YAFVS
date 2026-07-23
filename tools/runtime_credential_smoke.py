@@ -15,12 +15,15 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from runtime_browser_smoke import DEFAULT_TIMEOUT_MS, playwright_node_path_candidates
 
 
 BROWSER_SCRIPT = r"""
 const fs = require('fs');
+const http = require('http');
+const https = require('https');
 const path = require('path');
 const { chromium } = require('playwright');
 
@@ -30,7 +33,6 @@ const credentialPassword = process.env.YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWOR
 const findings = [];
 const artifacts = [];
 const MAX_DECLARED_DOWNLOAD_BYTES = 64 * 1024 * 1024;
-const MAX_DECODED_DOWNLOAD_BYTES = 64 * 1024 * 1024;
 const statePath = artifactPath('credential-smoke-state.json');
 let ownedFixtures = Array.isArray(config.cleanupFixtures)
   ? config.cleanupFixtures.filter(fixture => fixture && fixture.name && fixture.kind)
@@ -68,7 +70,16 @@ function add(status, check, message, details = {}) {
 
 function safeError(error) {
   return String(error && error.stack ? error.stack : error)
-    .replace(/([?&](?:token|access_token)=)[^&\s)]+/gi, '$1[redacted]');
+    .replace(/([?&](?:token|access_token|session|session_token|auth_token|jwt)=)[^&\s)]+/gi, '$1[redacted]');
+}
+
+function safeStoredUrl(value) {
+  try {
+    const url = new URL(value);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return '[invalid-url]';
+  }
 }
 
 function artifactPath(name) {
@@ -115,9 +126,109 @@ async function fillFirst(page, selectors, value) {
 
 function declaredContentLength(headers) {
   const raw = headers['content-length'];
-  if (!raw || !/^\d+$/.test(raw)) return null;
+  if (typeof raw !== 'string' || !/^\d+$/.test(raw)) return null;
   const value = Number(raw);
   return Number.isSafeInteger(value) ? value : null;
+}
+
+function forwardedAuthHeaders(headers) {
+  const forwarded = {
+    accept: '*/*',
+    'accept-encoding': 'identity',
+  };
+  for (const name of ['authorization', 'cookie', 'x-yafvs-token', 'user-agent']) {
+    if (typeof headers[name] === 'string' && headers[name]) {
+      forwarded[name] = headers[name];
+    }
+  }
+  return forwarded;
+}
+
+async function captureDownloadRequest(page, action, format) {
+  const pattern = '**/gmp?*';
+  let timer;
+  let resolveCapture;
+  let rejectCapture;
+  const captured = new Promise((resolve, reject) => {
+    resolveCapture = resolve;
+    rejectCapture = reject;
+    timer = setTimeout(
+      () => reject(new Error(`Timed out while capturing ${format} credential request.`)),
+      config.timeoutMs,
+    );
+  });
+  const handler = async route => {
+    const request = route.request();
+    try {
+      const url = new URL(request.url());
+      if (url.searchParams.get('cmd') === 'download_credential'
+          && url.searchParams.get('package_format') === format) {
+        const headers = await request.allHeaders();
+        clearTimeout(timer);
+        resolveCapture({url: request.url(), headers});
+        await route.abort('blockedbyclient');
+        return;
+      }
+    } catch {
+      // Non-matching requests continue unchanged.
+    }
+    await route.continue();
+  };
+  await page.route(pattern, handler);
+  try {
+    await action.click();
+    return await captured;
+  } catch (error) {
+    clearTimeout(timer);
+    rejectCapture(error);
+    throw error;
+  } finally {
+    await page.unroute(pattern, handler);
+  }
+}
+
+async function boundedAuthenticatedGet(urlValue, sourceHeaders) {
+  const url = new URL(urlValue);
+  const transport = url.protocol === 'https:' ? https : http;
+  return await new Promise((resolve, reject) => {
+    const request = transport.request(url, {
+      method: 'GET',
+      headers: forwardedAuthHeaders(sourceHeaders),
+      rejectUnauthorized: false,
+    }, response => {
+      const declaredLength = declaredContentLength(response.headers);
+      if (declaredLength === null
+          || declaredLength > MAX_DECLARED_DOWNLOAD_BYTES) {
+        response.destroy();
+        reject(new Error('Credential response omitted a safe Content-Length or exceeded the characterization cap.'));
+        return;
+      }
+      const chunks = [];
+      let received = 0;
+      response.on('data', chunk => {
+        received += chunk.length;
+        if (received > MAX_DECLARED_DOWNLOAD_BYTES) {
+          request.destroy(new Error('Credential response exceeded the characterization cap while streaming.'));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      response.on('end', () => {
+        resolve({
+          status: response.statusCode || 0,
+          headers: response.headers,
+          declaredLength,
+          bytes: Buffer.concat(chunks, received),
+        });
+      });
+      response.on('error', reject);
+    });
+    request.setTimeout(config.timeoutMs, () => {
+      request.destroy(new Error('Credential response exceeded its bounded streaming timeout.'));
+    });
+    request.on('error', reject);
+    request.end();
+  });
 }
 
 async function clickFirst(page, candidates) {
@@ -190,7 +301,7 @@ async function login(page) {
   await page.waitForLoadState('networkidle', {timeout: config.timeoutMs}).catch(() => null);
   const text = await bodyText(page).catch(() => '');
   const loggedIn = /scans|tasks|reports|credentials/i.test(text) && !/login failed/i.test(text);
-  add(loggedIn ? 'pass' : 'fail', 'credential-smoke.login', loggedIn ? 'Development operator login completed.' : 'Development operator login did not reach the application shell.', {url: page.url()});
+  add(loggedIn ? 'pass' : 'fail', 'credential-smoke.login', loggedIn ? 'Development operator login completed.' : 'Development operator login did not reach the application shell.', {url: safeStoredUrl(page.url())});
   await screenshot(page, 'login-after-submit');
 }
 
@@ -298,57 +409,32 @@ async function characterizeDownload(page, fixture, format) {
     add('fail', `credential-smoke.download.${format}.action`, `Could not find ${contract.title}.`);
     return {ok: false};
   }
-  const [response] = await Promise.all([
-    page.waitForResponse(candidate => {
-      try {
-        const url = new URL(candidate.url());
-        return url.searchParams.get('cmd') === 'download_credential'
-          && url.searchParams.get('package_format') === format;
-      } catch {
-        return false;
-      }
-    }, {timeout: config.timeoutMs}),
-    action.click(),
-  ]);
-  const headers = response.headers();
-  const declaredLength = declaredContentLength(headers);
+  const captured = await captureDownloadRequest(page, action, format);
+  const streamed = await boundedAuthenticatedGet(captured.url, captured.headers);
+  const {bytes, declaredLength, headers} = streamed;
   const contentType = (headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
   const contentEncoding = (headers['content-encoding'] || 'identity').trim().toLowerCase();
   const disposition = headers['content-disposition'] || '';
   const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
   const filename = filenameMatch ? path.basename(filenameMatch[1]) : '';
   const expectedFilename = `credential-${config.credentialLogin}.${contract.extension}`;
-  const statusOk = response.status() === 200;
+  const statusOk = streamed.status === 200;
   const contentTypeOk = contentType === contract.contentType;
   const filenameOk = filename === expectedFilename;
-  const declaredBounded = declaredLength !== null
-    && declaredLength <= MAX_DECLARED_DOWNLOAD_BYTES;
-  if (!declaredBounded) {
-    add('fail', `credential-smoke.download.${format}.declared-length`, 'Credential download omitted a safe Content-Length or exceeded the characterization cap.', {
-      status: response.status(),
-      contentType,
-      filename,
-      declaredLength,
-    });
-    return {ok: false};
-  }
-  const bytes = await response.body();
-  const decodedBounded = bytes.length <= MAX_DECODED_DOWNLOAD_BYTES;
-  const lengthMatched = contentEncoding !== 'identity'
-    || bytes.length === declaredLength;
+  const lengthMatched = bytes.length === declaredLength;
   const sizeOk = format === 'key'
     ? bytes.length === 80
     : bytes.length > 0;
   const signatureOk = hasExpectedSignature(format, bytes);
-  const operationalOk = statusOk && contentTypeOk && filenameOk && decodedBounded && lengthMatched && sizeOk && signatureOk;
-  const knownEmpty = statusOk && contentTypeOk && filenameOk && decodedBounded && lengthMatched && bytes.length === 0;
+  const operationalOk = statusOk && contentTypeOk && contentEncoding === 'identity' && filenameOk && lengthMatched && sizeOk && signatureOk;
+  const knownEmpty = statusOk && contentTypeOk && contentEncoding === 'identity' && filenameOk && lengthMatched && bytes.length === 0;
   const ok = contract.operational ? operationalOk : knownEmpty;
   const status = ok && !contract.operational ? 'warn' : ok ? 'pass' : 'fail';
   const message = contract.operational
     ? (ok ? `Characterized ${format.toUpperCase()} credential download transport.` : `${format.toUpperCase()} credential download violated the inherited transport contract.`)
     : (ok ? `${format.toUpperCase()} remains advertised but returns an empty body; this broken inherited surface should be removed.` : `${format.toUpperCase()} no longer matches the characterized empty inherited response.`);
   add(status, `credential-smoke.download.${format}.contract`, message, {
-    status: response.status(),
+    status: streamed.status,
     contentType,
     contentEncoding,
     filename,
@@ -357,35 +443,31 @@ async function characterizeDownload(page, fixture, format) {
     signatureMatched: signatureOk,
     operational: contract.operational,
   });
-  return {ok, requestUrl: response.url()};
+  return {
+    ok,
+    requestUrl: captured.url,
+    requestHeaders: captured.headers,
+  };
 }
 
-async function characterizeMissingCredential(page, requestUrl) {
+async function characterizeMissingCredential(requestUrl, requestHeaders) {
   const url = new URL(requestUrl);
   url.searchParams.set('credential_id', '00000000-0000-0000-0000-000000000000');
-  const response = await page.context().request.get(url.toString());
-  const contentType = (response.headers()['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
-  const contentEncoding = (response.headers()['content-encoding'] || 'identity').trim().toLowerCase();
-  const declaredLength = declaredContentLength(response.headers());
-  if (declaredLength === null || declaredLength > MAX_DECLARED_DOWNLOAD_BYTES) {
-    add('fail', 'credential-smoke.download.missing.declared-length', 'Missing credential response omitted a safe Content-Length or exceeded the characterization cap.', {
-      status: response.status(),
-      contentType,
-      declaredLength,
-    });
-    return false;
-  }
-  const bytes = await response.body();
+  const streamed = await boundedAuthenticatedGet(url.toString(), requestHeaders);
+  const {bytes, declaredLength, headers} = streamed;
+  const contentType = (headers['content-type'] || '').split(';', 1)[0].trim().toLowerCase();
+  const contentEncoding = (headers['content-encoding'] || 'identity').trim().toLowerCase();
   const containsSecret = [loginPassword, credentialPassword]
     .filter(Boolean)
     .some(secret => bytes.includes(Buffer.from(secret, 'utf8')));
-  const ok = response.status() === 500
+  const ok = streamed.status === 500
     && contentType === 'application/xml'
-    && (contentEncoding !== 'identity' || bytes.length === declaredLength)
+    && contentEncoding === 'identity'
+    && bytes.length === declaredLength
     && bytes.length === 431
     && !containsSecret;
   add(ok ? 'pass' : 'fail', 'credential-smoke.download.missing.contract', ok ? 'Missing credential download retained its bounded failure contract without exposing configured secrets.' : 'Missing credential download did not match the bounded failure contract.', {
-    status: response.status(),
+    status: streamed.status,
     contentType,
     contentEncoding,
     declaredLength,
@@ -439,7 +521,7 @@ async function runForBaseUrl(baseUrl, urlIndex) {
       for (const fixture of [...ownedFixtures].reverse()) {
         cleaned = await deleteCredential(page, fixture) && cleaned;
       }
-      add(cleaned ? 'pass' : 'fail', 'credential-smoke.timeout-cleanup', cleaned ? 'Owned timeout fixtures were cleaned.' : 'One or more owned timeout fixtures could not be cleaned.', {baseUrl});
+      add(cleaned ? 'pass' : 'fail', 'credential-smoke.timeout-cleanup', cleaned ? 'Owned timeout fixtures were cleaned.' : 'One or more owned timeout fixtures could not be cleaned.', {baseUrl: safeStoredUrl(baseUrl)});
       return;
     }
     let upFixture = null;
@@ -447,6 +529,7 @@ async function runForBaseUrl(baseUrl, urlIndex) {
     let downloadsOk = false;
     let missingOk = false;
     let requestUrl;
+    let requestHeaders;
     let upCleaned = false;
     let sshCleaned = false;
     try {
@@ -465,17 +548,18 @@ async function runForBaseUrl(baseUrl, urlIndex) {
         const rpm = await characterizeDownload(page, sshFixture, 'rpm');
         const deb = await characterizeDownload(page, sshFixture, 'deb');
         requestUrl = key.requestUrl;
+        requestHeaders = key.requestHeaders;
         downloadsOk = [exe, key, rpm, deb].every(result => result.ok);
       }
     } finally {
       sshCleaned = sshFixture ? await deleteCredential(page, sshFixture) : true;
       upCleaned = upFixture ? await deleteCredential(page, upFixture) : true;
     }
-    if (requestUrl) {
-      missingOk = await characterizeMissingCredential(page, requestUrl);
+    if (requestUrl && requestHeaders) {
+      missingOk = await characterizeMissingCredential(requestUrl, requestHeaders);
     }
     const workflowOk = Boolean(upFixture) && Boolean(sshFixture) && downloadsOk && missingOk && upCleaned && sshCleaned;
-    add(workflowOk ? 'pass' : 'fail', 'credential-smoke.workflow', workflowOk ? 'Credential lifecycle and download characterization completed.' : 'Credential lifecycle or download characterization failed.', {baseUrl});
+    add(workflowOk ? 'pass' : 'fail', 'credential-smoke.workflow', workflowOk ? 'Credential lifecycle and download characterization completed.' : 'Credential lifecycle or download characterization failed.', {baseUrl: safeStoredUrl(baseUrl)});
   } finally {
     await context.close();
     await browser.close();
@@ -487,7 +571,7 @@ async function runForBaseUrl(baseUrl, urlIndex) {
     try {
       await runForBaseUrl(baseUrl, index);
     } catch (error) {
-      add('fail', 'credential-smoke.exception', safeError(error), {baseUrl});
+      add('fail', 'credential-smoke.exception', safeError(error), {baseUrl: safeStoredUrl(baseUrl)});
     }
   }
   const rank = {pass: 0, warn: 1, fail: 2};
@@ -498,7 +582,7 @@ async function runForBaseUrl(baseUrl, urlIndex) {
     generated_at: new Date().toISOString(),
     findings,
     artifacts,
-    metadata: {base_urls: config.baseUrls, credential_name: config.credentialName, ssh_credential_name: config.sshCredentialName},
+    metadata: {base_urls: config.baseUrls.map(safeStoredUrl), credential_name: config.credentialName, ssh_credential_name: config.sshCredentialName},
   };
   const output = artifactPath('credential-smoke.json');
   fs.writeFileSync(output, JSON.stringify(payload, null, 2) + '\n');
@@ -511,7 +595,7 @@ async function runForBaseUrl(baseUrl, urlIndex) {
     generated_at: new Date().toISOString(),
     findings: [{status: 'fail', check: 'credential-smoke.crash', message: safeError(error)}],
     artifacts,
-    metadata: {base_urls: config.baseUrls, credential_name: config.credentialName, ssh_credential_name: config.sshCredentialName},
+    metadata: {base_urls: config.baseUrls.map(safeStoredUrl), credential_name: config.credentialName, ssh_credential_name: config.sshCredentialName},
   };
   console.log(JSON.stringify(payload));
   process.exit(1);
@@ -549,6 +633,15 @@ def redact_value(value: Any, secrets: list[str]) -> Any:
     if isinstance(value, dict):
         return {key: redact_value(item, secrets) for key, item in value.items()}
     return value
+
+
+def sanitized_base_url(value: str) -> str:
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("base URL must be an absolute HTTP(S) URL")
+    if parsed.username or parsed.password:
+        raise ValueError("base URL must not contain user information")
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", "", ""))
 
 
 def run_node_process(
@@ -724,7 +817,7 @@ def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
             json.dumps(
                 {
                     "artifactDir": str(artifact_dir),
-                    "baseUrls": args.base_url,
+                    "baseUrls": [sanitized_base_url(url) for url in args.base_url],
                     "credentialLogin": args.credential_login,
                     "credentialName": args.credential_name,
                     "sshCredentialName": f"{args.credential_name}-ssh",

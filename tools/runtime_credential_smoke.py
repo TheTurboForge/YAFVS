@@ -655,7 +655,7 @@ async function purgeCredentialFromTrash(page, fixture) {
     return true;
   }
   if (decision.action !== 'purge') {
-    add('fail', `credential-smoke.${fixture.kind}.cleanup-purge-identity`, 'Refusing to purge a credential because the exact native Trashcan query does not map one matching UUID and name to the owned fixture.', {credentialName: fixture.name, expectedCredentialId: fixture.id, returnedItems: before.items.map(item => ({id: item.id, name: item.name, entityType: item.entity_type}))});
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-purge-identity`, 'Refusing to purge a credential because the exact native Trashcan query does not map one matching UUID and name to the owned fixture.', {credentialName: fixture.name, expectedCredentialId: fixture.id, returnedItems: before.items.map(item => item && typeof item === 'object' ? {id: item.id, name: item.name, entityType: item.entity_type} : null)});
     return false;
   }
 
@@ -856,6 +856,8 @@ def sanitized_base_url(value: str) -> str:
         raise ValueError("base URL must be an absolute HTTP(S) URL")
     if parsed.username or parsed.password:
         raise ValueError("base URL must not contain user information")
+    if parsed.path not in {"", "/"}:
+        raise ValueError("base URL path must be /")
     try:
         port = parsed.port
     except ValueError as error:
@@ -865,7 +867,18 @@ def sanitized_base_url(value: str) -> str:
     hostname = parsed.hostname.lower()
     host = f"[{hostname}]" if ":" in hostname else hostname
     netloc = f"{host}:{port}" if port is not None else host
-    return urlunsplit((scheme, netloc, parsed.path or "/", "", ""))
+    return urlunsplit((scheme, netloc, "/", "", ""))
+
+
+def json_object_without_duplicate_keys(
+    pairs: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    parsed: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in parsed:
+            raise ValueError(f"JSON object contains duplicate key {key!r}")
+        parsed[key] = value
+    return parsed
 
 
 FIXTURE_NAME_PATTERN = re.compile(
@@ -881,20 +894,36 @@ def load_owned_fixtures(
 ) -> list[dict[str, str]]:
     state_path = artifact_dir / "credential-smoke-state.json"
     try:
-        payload = json.loads(state_path.read_text(encoding="utf-8"))
+        payload = json.loads(
+            state_path.read_text(encoding="utf-8"),
+            object_pairs_hook=json_object_without_duplicate_keys,
+        )
     except FileNotFoundError:
         return []
     except (json.JSONDecodeError, OSError) as error:
         raise ValueError(
             "credential smoke state is unreadable or malformed"
         ) from error
-    fixtures = payload.get("fixtures") if isinstance(payload, dict) else None
+    if not isinstance(payload, dict) or set(payload) != {"fixtures"}:
+        raise ValueError("credential smoke state has a noncanonical root object")
+    fixtures = payload.get("fixtures")
     if not isinstance(fixtures, list):
         raise ValueError("credential smoke state has no fixture list")
     retained: list[dict[str, str]] = []
+    retained_identities: set[tuple[str, str]] = set()
     for fixture in fixtures:
         if not isinstance(fixture, dict):
             raise ValueError("credential smoke state contains a malformed fixture")
+        if set(fixture) != {
+            "baseUrl",
+            "id",
+            "kind",
+            "name",
+            "ownershipMarker",
+        }:
+            raise ValueError(
+                "credential smoke state contains a noncanonical fixture object"
+            )
         kind = fixture.get("kind")
         name = fixture.get("name")
         credential_id = fixture.get("id")
@@ -933,6 +962,10 @@ def load_owned_fixtures(
             raise ValueError("credential smoke fixture base URL is not canonical")
         if canonical_base_url not in configured_base_urls:
             raise ValueError("credential smoke fixture belongs to an unconfigured base URL")
+        identity = (canonical_base_url, canonical_id)
+        if identity in retained_identities:
+            raise ValueError("credential smoke state contains a duplicate fixture identity")
+        retained_identities.add(identity)
         retained_fixture["baseUrl"] = canonical_base_url
         retained.append(retained_fixture)
     return retained
@@ -988,7 +1021,10 @@ def timeout_cleanup(
     redactions: list[str],
 ) -> dict[str, Any]:
     try:
-        config = json.loads(config_path.read_text(encoding="utf-8"))
+        config = json.loads(
+            config_path.read_text(encoding="utf-8"),
+            object_pairs_hook=json_object_without_duplicate_keys,
+        )
         configured_urls = config.get("baseUrls")
         if not isinstance(configured_urls, list) or not all(
             isinstance(url, str) for url in configured_urls

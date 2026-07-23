@@ -8697,9 +8697,13 @@ const page = {reload: async () => null};
   const rejected = await deleteCredential(page, fixture);
   liveItem = null;
   const purged = await purgeCredentialFromTrash(page, fixture);
+  trashFetchCalls = 0;
+  trashItems = [null];
+  const malformedRejected = await purgeCredentialFromTrash(page, fixture);
   console.log(JSON.stringify({
     rejected,
     purged,
+    malformedRejected,
     liveDeleteCalls,
     trashDeleteCalls,
   }));
@@ -8722,6 +8726,7 @@ const page = {reload: async () => null};
             {
                 "rejected": False,
                 "purged": True,
+                "malformedRejected": False,
                 "liveDeleteCalls": 0,
                 "trashDeleteCalls": 1,
             },
@@ -8737,8 +8742,12 @@ const page = {reload: async () => null};
         }
         invalid_payloads = [
             "{malformed",
+            '{"fixtures":[],"fixtures":[]}',
+            json.dumps({"fixtures": [], "unexpected": True}),
             json.dumps({"fixtures": [{**valid, "baseUrl": "https://ONE.example/"}]}),
             json.dumps({"fixtures": [{**valid, "id": valid["id"].upper()}]}),
+            json.dumps({"fixtures": [{**valid, "unexpected": True}]}),
+            json.dumps({"fixtures": [valid, valid]}),
             json.dumps(
                 {
                     "fixtures": [
@@ -8759,6 +8768,21 @@ const page = {reload: async () => null};
                         runtime_credential_smoke.load_owned_fixtures(
                             artifact_dir, {"https://one.example/"}
                         )
+
+    def test_runtime_credential_smoke_rejects_path_scoped_base_urls(self):
+        self.assertEqual(
+            runtime_credential_smoke.sanitized_base_url(
+                "https://ONE.example:443/?token=redacted"
+            ),
+            "https://one.example/",
+        )
+        for value in (
+            "https://one.example/instance-a",
+            "https://one.example/instance-a/",
+        ):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "path must be /"):
+                    runtime_credential_smoke.sanitized_base_url(value)
 
     def test_runtime_credential_timeout_cleanup_uses_strict_owned_state(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -9064,8 +9088,10 @@ const page = {reload: async () => null};
                                 "fixtures": [
                                     {
                                         "kind": "up",
-                                        "name": "test",
+                                        "name": "yafvs-credential-smoke-001122aa",
                                         "id": "00000000-0000-4000-8000-000000000001",
+                                        "baseUrl": "https://127.0.0.1:19392/",
+                                        "ownershipMarker": "yafvs-smoke:" + "a" * 43,
                                     }
                                 ]
                             }

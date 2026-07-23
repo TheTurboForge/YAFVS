@@ -42,6 +42,7 @@ impl UserAccountCollectionQuery {
             page_size: self.page_size,
             sort: self.sort.clone(),
             filter: self.filter.clone(),
+            id: None,
             filter_type: self.filter_type.clone(),
             active: self.active.clone(),
             name: None,

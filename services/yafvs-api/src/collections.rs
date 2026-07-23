@@ -141,6 +141,7 @@ pub(crate) const REPORT_FORMAT_SORT_FIELDS: &[(&str, &str)] = &[
 ];
 pub(crate) const TRASHCAN_ITEM_DEFAULT_SORT: &str = "resource_type";
 pub(crate) const TRASHCAN_ITEM_SORT_FIELDS: &[(&str, &str)] = &[
+    ("id", "id"),
     ("resource_type", "resource_type"),
     ("title", "title"),
     ("name", "name"),

@@ -6265,6 +6265,7 @@ paths:
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/TrashcanItemId'
       responses:
         '200':
           description: Redacted Trashcan item collection
@@ -8651,6 +8652,14 @@ components:
       schema:
         type: string
         maxLength: 4096
+    TrashcanItemId:
+      name: id
+      in: query
+      required: false
+      description: Return only the Trashcan item with this exact UUID.
+      schema:
+        type: string
+        format: uuid
     ReportTaskId:
       name: task_id
       in: query

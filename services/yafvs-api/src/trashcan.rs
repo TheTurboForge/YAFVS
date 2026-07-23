@@ -12,7 +12,7 @@ use crate::{
     errors::ApiError,
     query::{
         ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe_params,
-        normalize_collection_query, sort_clause,
+        normalize_collection_query, normalize_optional_uuid_query, sort_clause,
     },
 };
 
@@ -168,8 +168,9 @@ fn trashcan_items_sql(sort_sql: &str) -> String {
            ), filtered AS (
              SELECT *
                FROM trash_items
-              WHERE $1 = ''
-                 OR lower(resource_type || ' ' || title || ' ' || name || ' ' || coalesce(comment, '')) LIKE '%' || lower($1) || '%'
+              WHERE ($1 = ''
+                 OR lower(resource_type || ' ' || title || ' ' || name || ' ' || coalesce(comment, '')) LIKE '%' || lower($1) || '%')
+                AND ($4 = '' OR id = $4)
            )
            SELECT count(*) OVER() AS total,
                   id, resource_type, entity_type, title, name, comment, creation_time, modification_time
@@ -183,12 +184,16 @@ pub(crate) async fn trashcan_items(
     State(state): State<AppState>,
     ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<TrashcanItem>>, ApiError> {
+    let item_id = normalize_optional_uuid_query(query.id.as_deref(), "id")?;
     let params = normalize_collection_query(query, TRASHCAN_ITEM_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, TRASHCAN_ITEM_SORT_FIELDS)?;
     let sql = trashcan_items_sql(&sort_sql);
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let rows = client
-        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .query(
+            &sql,
+            &[&params.filter, &params.page_size, &params.offset, &item_id],
+        )
         .await
         .map_err(|error| {
             tracing::warn!(%error, "trashcan item list query failed");
@@ -201,7 +206,7 @@ pub(crate) async fn trashcan_items(
         &rows,
         &sql,
         &params,
-        &[&params.filter, &probe_page_size, &probe_offset],
+        &[&params.filter, &probe_page_size, &probe_offset, &item_id],
         "trashcan item list",
     )
     .await?;
@@ -243,5 +248,44 @@ mod tests {
         assert!(sql.contains("FROM targets_trash"));
         assert!(sql.contains("FROM tasks"));
         assert!(sql.contains("WHERE hidden = 2"));
+        assert!(sql.contains("AND ($4 = '' OR id = $4)"));
+    }
+
+    #[test]
+    fn openapi_places_exact_id_filter_only_on_trashcan_items() {
+        let openapi = include_str!("../../../api/openapi/yafvs-v1.yaml");
+        let cves = openapi
+            .split_once("  /cves:")
+            .expect("CVE path must exist")
+            .1
+            .split_once("\n  /")
+            .expect("CVE operation block must terminate")
+            .0;
+        let trashcan = openapi
+            .split_once("  /trashcan/items:")
+            .expect("Trashcan item path must exist")
+            .1
+            .split_once("\n  /")
+            .expect("Trashcan item operation block must terminate")
+            .0;
+        assert!(!cves.contains("TrashcanItemId"));
+        assert!(trashcan.contains("TrashcanItemId"));
+    }
+
+    #[test]
+    fn exact_id_query_deserializes_with_collection_controls() {
+        let uri =
+            "/api/v1/trashcan/items?id=00000000-0000-4000-8000-000000000001&page_size=2&sort=id"
+                .parse()
+                .expect("query URI must parse");
+        let axum::extract::Query(query) =
+            axum::extract::Query::<CollectionQuery>::try_from_uri(&uri)
+                .expect("exact Trashcan collection query must deserialize");
+        assert_eq!(
+            query.id.as_deref(),
+            Some("00000000-0000-4000-8000-000000000001")
+        );
+        assert_eq!(query.page_size, Some(2));
+        assert_eq!(query.sort.as_deref(), Some("id"));
     }
 }

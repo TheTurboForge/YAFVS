@@ -8435,10 +8435,39 @@ class YAFVSCtlTests(unittest.TestCase):
             "recordOwnedFixture(owned)",
             "credential-smoke-state.json",
             "config.cleanupOnly",
-            "listedId !== fixture.id",
+            "live.item.id !== fixture.id",
+            "deleteNativeTrashCredential",
+            "deleteNativeLiveCredential",
+            "fetchNativeTrashCredential",
+            "fetchNativeLiveCredential",
+            "encodeURIComponent(id)",
+            "'X-YAFVS-Token': token",
+            "cache: 'no-store'",
+            "url.searchParams.set('token', token)",
+            "url.searchParams.set('id', id)",
+            "url.searchParams.set('page_size', '2')",
+            "url.searchParams.set('sort', 'id')",
+            "_smoke_nonce",
+            "owned.length !== 1",
+            "liveResult.item !== null",
+            "after.items.length === 0",
+            "cleanup-purge-identity",
+            "exact owned credential UUID was permanently deleted",
+            "retainOwnedFixture",
+            "releaseOwnedFixture",
+            "fixture.baseUrl === currentBaseUrl",
+            "exact owned credential UUID was moved to Trashcan",
             "safeStoredUrl",
         ):
             self.assertIn(contract_anchor, runtime_credential_smoke.BROWSER_SCRIPT)
+        self.assertNotIn(
+            "row.getByTitle('Delete')",
+            runtime_credential_smoke.BROWSER_SCRIPT,
+        )
+        self.assertNotIn(
+            "row.getByTitle(/trashcan/i)",
+            runtime_credential_smoke.BROWSER_SCRIPT,
+        )
         helper_source = CREDENTIAL_SMOKE_PATH.read_text(encoding="utf-8")
         for process_anchor in (
             "def run_node_process(",
@@ -8454,6 +8483,111 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn(
             "response.body()",
             runtime_credential_smoke.BROWSER_SCRIPT,
+        )
+
+    def test_runtime_credential_cleanup_policy_fails_closed_by_exact_identity(self):
+        fixture = {
+            "kind": "up",
+            "name": "owned",
+            "id": "00000000-0000-4000-8000-000000000001",
+        }
+        cases = [
+            {"trash": []},
+            {"trash": [], "live": None},
+            {"trash": [], "live": {"ok": True, "item": fixture}},
+            {"trash": [], "live": {"ok": True, "item": None}},
+            {
+                "trash": [
+                    {
+                        "entity_type": "credential",
+                        "name": "other",
+                        "id": fixture["id"],
+                    }
+                ]
+            },
+            {
+                "trash": [
+                    {
+                        "entity_type": "credential",
+                        "name": fixture["name"],
+                        "id": fixture["id"],
+                    }
+                ]
+            },
+        ]
+        script = (
+            runtime_credential_smoke.CREDENTIAL_CLEANUP_POLICY
+            + "\nconst fixture = "
+            + json.dumps(fixture)
+            + ";\nconst cases = "
+            + json.dumps(cases)
+            + ";\nconsole.log(JSON.stringify(cases.map(item => "
+            + "credentialCleanupDecision(fixture, item.trash, item.live).action)));\n"
+        )
+        completed = subprocess.run(
+            ["node", "-e", script],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(
+            json.loads(completed.stdout),
+            [
+                "verify-live",
+                "live-unverified",
+                "live-present",
+                "absent",
+                "identity-mismatch",
+                "purge",
+            ],
+        )
+
+    def test_runtime_credential_ownership_is_scoped_by_base_url_and_uuid(self):
+        fixtures = [
+            {
+                "kind": "up",
+                "name": "same-name",
+                "id": "00000000-0000-4000-8000-000000000001",
+                "baseUrl": "https://one.example/",
+            },
+            {
+                "kind": "up",
+                "name": "same-name",
+                "id": "00000000-0000-4000-8000-000000000002",
+                "baseUrl": "https://two.example/",
+            },
+            {
+                "kind": "up",
+                "name": "same-name",
+                "id": "00000000-0000-4000-8000-000000000003",
+                "baseUrl": "https://one.example/",
+            },
+        ]
+        script = (
+            runtime_credential_smoke.CREDENTIAL_CLEANUP_POLICY
+            + "\nconst additions = "
+            + json.dumps(fixtures)
+            + ";\nlet owned = [];"
+            + "\nfor (const fixture of additions) owned = retainOwnedFixture(owned, fixture);"
+            + "\nconst retained = owned.length;"
+            + "\nowned = releaseOwnedFixture(owned, additions[0]);"
+            + "\nconsole.log(JSON.stringify({retained, remaining: owned.map(item => item.id)}));\n"
+        )
+        completed = subprocess.run(
+            ["node", "-e", script],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10,
+        )
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["retained"], 3)
+        self.assertEqual(
+            result["remaining"],
+            [fixtures[1]["id"], fixtures[2]["id"]],
         )
 
     def test_runtime_credential_smoke_uses_environment_password_and_redacts_artifact(self):

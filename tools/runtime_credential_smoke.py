@@ -20,6 +20,51 @@ from urllib.parse import urlsplit, urlunsplit
 from runtime_browser_smoke import DEFAULT_TIMEOUT_MS, playwright_node_path_candidates
 
 
+CREDENTIAL_CLEANUP_POLICY = r"""
+function retainOwnedFixture(fixtures, fixture) {
+  return fixtures
+    .filter(existing =>
+      existing.id !== fixture.id || existing.baseUrl !== fixture.baseUrl)
+    .concat([fixture]);
+}
+
+function releaseOwnedFixture(fixtures, fixture) {
+  return fixtures.filter(existing =>
+    existing.id !== fixture.id || existing.baseUrl !== fixture.baseUrl);
+}
+
+function credentialCleanupDecision(fixture, trashItems, liveResult) {
+  if (!fixture || typeof fixture.id !== 'string' || typeof fixture.name !== 'string'
+      || !Array.isArray(trashItems)) {
+    return {action: 'identity-mismatch', owned: []};
+  }
+  const owned = trashItems.filter(item =>
+    item && item.entity_type === 'credential' && item.id === fixture.id);
+  if (owned.length === 0) {
+    if (trashItems.length !== 0) {
+      return {action: 'identity-mismatch', owned};
+    }
+    if (liveResult === undefined) {
+      return {action: 'verify-live', owned};
+    }
+    if (!liveResult || !liveResult.ok) {
+      return {action: 'live-unverified', owned};
+    }
+    if (liveResult.item !== null) {
+      return {action: 'live-present', owned};
+    }
+    return {action: 'absent', owned};
+  }
+  if (trashItems.length !== 1
+      || owned.length !== 1
+      || owned[0].name !== fixture.name) {
+    return {action: 'identity-mismatch', owned};
+  }
+  return {action: 'purge', owned};
+}
+"""
+
+
 BROWSER_SCRIPT = r"""
 const fs = require('fs');
 const http = require('http');
@@ -33,6 +78,7 @@ const credentialPassword = process.env.YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWOR
 const findings = [];
 const artifacts = [];
 const MAX_DECLARED_DOWNLOAD_BYTES = 64 * 1024 * 1024;
+""" + CREDENTIAL_CLEANUP_POLICY + r"""
 const statePath = artifactPath('credential-smoke-state.json');
 let ownedFixtures = Array.isArray(config.cleanupFixtures)
   ? config.cleanupFixtures.filter(fixture => fixture && fixture.name && fixture.kind)
@@ -78,14 +124,12 @@ function persistOwnedFixtures() {
 }
 
 function recordOwnedFixture(fixture) {
-  ownedFixtures = ownedFixtures.filter(existing => existing.name !== fixture.name);
-  ownedFixtures.push(fixture);
+  ownedFixtures = retainOwnedFixture(ownedFixtures, fixture);
   persistOwnedFixtures();
 }
 
 function forgetOwnedFixture(fixture) {
-  ownedFixtures = ownedFixtures.filter(existing =>
-    fixture.id ? existing.id !== fixture.id : existing.name !== fixture.name);
+  ownedFixtures = releaseOwnedFixture(ownedFixtures, fixture);
   persistOwnedFixtures();
 }
 
@@ -245,14 +289,6 @@ async function credentialRowVisible(page, credentialName) {
   return await row.count() > 0 && await row.isVisible().catch(() => false);
 }
 
-async function loadCredentialId(page, credentialName) {
-  const listResponse = page.waitForResponse(isCredentialListResponse, {
-    timeout: config.timeoutMs,
-  }).catch(() => null);
-  await gotoStable(page, '/credentials');
-  return await credentialIdFromResponse(await listResponse, credentialName);
-}
-
 function isCredentialListResponse(response) {
   try {
     const url = new URL(response.url());
@@ -274,6 +310,103 @@ async function credentialIdFromResponse(response, credentialName) {
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(matches[0].id)
     ? matches[0].id
     : null;
+}
+
+async function deleteNativeTrashCredential(page, credentialId) {
+  return await page.evaluate(async id => {
+    const token = globalThis.localStorage.getItem('token');
+    const jwt = globalThis.localStorage.getItem('jwt');
+    const response = await fetch(
+      new URL(`/api/v1/credentials/${encodeURIComponent(id)}/trash`, globalThis.location.origin),
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          ...(token ? {'X-YAFVS-Token': token} : {}),
+          ...(jwt ? {Authorization: `Bearer ${jwt}`} : {}),
+        },
+      },
+    );
+    return {ok: response.ok, status: response.status};
+  }, credentialId);
+}
+
+async function deleteNativeLiveCredential(page, credentialId) {
+  return await page.evaluate(async id => {
+    const token = globalThis.localStorage.getItem('token');
+    const jwt = globalThis.localStorage.getItem('jwt');
+    const response = await fetch(
+      new URL(`/api/v1/credentials/${encodeURIComponent(id)}`, globalThis.location.origin),
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          ...(token ? {'X-YAFVS-Token': token} : {}),
+          ...(jwt ? {Authorization: `Bearer ${jwt}`} : {}),
+        },
+      },
+    );
+    return {ok: response.ok, status: response.status};
+  }, credentialId);
+}
+
+async function fetchNativeTrashCredential(page, credentialId) {
+  return await page.evaluate(async id => {
+    const token = globalThis.localStorage.getItem('token');
+    const jwt = globalThis.localStorage.getItem('jwt');
+    const headers = {
+      Accept: 'application/json',
+      ...(token ? {'X-YAFVS-Token': token} : {}),
+      ...(jwt ? {Authorization: `Bearer ${jwt}`} : {}),
+    };
+    const url = new URL('/api/v1/trashcan/items', globalThis.location.origin);
+    url.searchParams.set('id', id);
+    url.searchParams.set('page_size', '2');
+    url.searchParams.set('sort', 'id');
+    if (token) url.searchParams.set('token', token);
+    url.searchParams.set('_smoke_nonce', String(Date.now()));
+    const response = await fetch(url, {
+      cache: 'no-store',
+      credentials: 'include',
+      headers,
+    });
+    if (!response.ok) {
+      return {ok: false, status: response.status, items: []};
+    }
+    const payload = await response.json().catch(() => null);
+    return payload && Array.isArray(payload.items)
+      ? {ok: true, status: response.status, items: payload.items}
+      : {ok: false, status: response.status, items: []};
+  }, credentialId);
+}
+
+async function fetchNativeLiveCredential(page, credentialId) {
+  return await page.evaluate(async id => {
+    const token = globalThis.localStorage.getItem('token');
+    const jwt = globalThis.localStorage.getItem('jwt');
+    const url = new URL(
+      `/api/v1/credentials/${encodeURIComponent(id)}`,
+      globalThis.location.origin,
+    );
+    if (token) url.searchParams.set('token', token);
+    url.searchParams.set('_smoke_nonce', String(Date.now()));
+    const response = await fetch(url, {
+      cache: 'no-store',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        ...(token ? {'X-YAFVS-Token': token} : {}),
+        ...(jwt ? {Authorization: `Bearer ${jwt}`} : {}),
+      },
+    });
+    if (response.status === 404) {
+      return {ok: true, status: response.status, item: null};
+    }
+    const item = response.ok ? await response.json().catch(() => null) : null;
+    return {ok: response.ok && Boolean(item), status: response.status, item};
+  }, credentialId);
 }
 
 async function login(page) {
@@ -370,7 +503,12 @@ async function createCredential(page, fixture) {
   const identified = created && Boolean(id);
   add(identified ? 'pass' : 'fail', `credential-smoke.${fixture.kind}.created-visible`, identified ? 'Temporary credential is visible after save and has a stable identity.' : 'Temporary credential is not visible after save or lacks a stable identity.', {credentialName: fixture.name, credentialId: id});
   if (!identified) return null;
-  const owned = {kind: fixture.kind, name: fixture.name, id};
+  const owned = {
+    kind: fixture.kind,
+    name: fixture.name,
+    id,
+    baseUrl: safeStoredUrl(config.baseUrl),
+  };
   recordOwnedFixture(owned);
   return owned;
 }
@@ -474,34 +612,75 @@ async function characterizeMissingCredential(requestUrl, requestHeaders) {
   return ok;
 }
 
-async function deleteCredential(page, fixture) {
-  const listedId = await loadCredentialId(page, fixture.name);
-  const row = await credentialRow(page, fixture.name);
-  if (!(await row.count())) {
+async function purgeCredentialFromTrash(page, fixture) {
+  await gotoStable(page, '/trashcan#credential');
+  const before = await fetchNativeTrashCredential(page, fixture.id);
+  if (!before.ok) {
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-purge-inventory`, 'Native trash inventory could not be verified before permanent credential cleanup.', {credentialName: fixture.name, credentialId: fixture.id, status: before.status});
+    return false;
+  }
+  let decision = credentialCleanupDecision(fixture, before.items);
+  if (decision.action === 'verify-live') {
+    const live = await fetchNativeLiveCredential(page, fixture.id);
+    decision = credentialCleanupDecision(fixture, before.items, live);
+  }
+  if (decision.action === 'live-unverified') {
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-live-inventory`, 'The exact owned credential UUID was absent from Trashcan but its live state could not be verified.', {credentialName: fixture.name, credentialId: fixture.id});
+    return false;
+  }
+  if (decision.action === 'live-present') {
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-live-present`, 'Refusing to discard ownership because the exact credential UUID is still present in the live inventory.', {credentialName: fixture.name, credentialId: fixture.id});
+    return false;
+  }
+  if (decision.action === 'absent') {
     forgetOwnedFixture(fixture);
-    add('warn', `credential-smoke.${fixture.kind}.cleanup`, 'Owned temporary credential row was already absent during cleanup.');
+    add('warn', `credential-smoke.${fixture.kind}.cleanup-purge`, 'Owned temporary credential was already absent from both the live and trash inventories.');
     return true;
   }
-  if (!listedId || listedId !== fixture.id) {
-    add('fail', `credential-smoke.${fixture.kind}.cleanup-identity`, 'Refusing to delete a credential because the visible name does not map to the owned fixture UUID.', {credentialName: fixture.name, expectedCredentialId: fixture.id, listedCredentialId: listedId});
+  if (decision.action !== 'purge') {
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-purge-identity`, 'Refusing to purge a credential because the exact native Trashcan query does not map one matching UUID and name to the owned fixture.', {credentialName: fixture.name, expectedCredentialId: fixture.id, returnedItems: before.items.map(item => ({id: item.id, name: item.name, entityType: item.entity_type}))});
     return false;
   }
-  const deleteClicked = await clickFirst(page, [
-    row.getByTitle('Move Credential to trashcan').first(),
-    row.getByTitle(/trashcan/i).first(),
-  ]);
-  if (!deleteClicked) {
-    add('fail', `credential-smoke.${fixture.kind}.cleanup-click`, 'Temporary credential row was visible but the trashcan action was not found.');
-    await screenshot(page, `credential-cleanup-action-missing-${fixture.kind}-${config.urlIndex}`);
+
+  const deletion = await deleteNativeTrashCredential(page, fixture.id);
+  if (!deletion.ok) {
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-purge-request`, 'Native permanent deletion of the exact owned credential UUID failed.', {credentialName: fixture.name, credentialId: fixture.id, status: deletion.status});
     return false;
   }
-  await page.waitForLoadState('networkidle', {timeout: Math.min(config.timeoutMs, 5000)}).catch(() => null);
-  await row.waitFor({state: 'detached', timeout: config.timeoutMs}).catch(() => null);
-  await screenshot(page, `credentials-after-cleanup-${fixture.kind}-${config.urlIndex}`);
-  const removed = !(await credentialRowVisible(page, fixture.name));
+
+  const after = await fetchNativeTrashCredential(page, fixture.id);
+  await page.reload({waitUntil: 'domcontentloaded', timeout: config.timeoutMs}).catch(() => null);
+  await screenshot(page, `credentials-after-purge-${fixture.kind}-${config.urlIndex}`);
+  const removed = after.ok && after.items.length === 0;
   if (removed) forgetOwnedFixture(fixture);
-  add(removed ? 'pass' : 'fail', `credential-smoke.${fixture.kind}.cleanup`, removed ? 'Owned temporary credential was moved to trashcan.' : 'Owned temporary credential is still visible after cleanup.', {credentialName: fixture.name, credentialId: fixture.id});
+  add(removed ? 'pass' : 'fail', `credential-smoke.${fixture.kind}.cleanup-purge`, removed ? 'The exact owned credential UUID was permanently deleted through the native trash API.' : 'The exact owned credential UUID could not be proven absent from the native trash inventory after permanent cleanup.', {credentialName: fixture.name, credentialId: fixture.id, deleteStatus: deletion.status, inventoryStatus: after.status});
   return removed;
+}
+
+async function deleteCredential(page, fixture) {
+  const live = await fetchNativeLiveCredential(page, fixture.id);
+  if (!live.ok) {
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-live-inventory`, 'The exact owned credential UUID could not be verified before cleanup.', {credentialName: fixture.name, credentialId: fixture.id, status: live.status});
+    return false;
+  }
+  if (live.item === null) {
+    return await purgeCredentialFromTrash(page, fixture);
+  }
+  if (live.item.id !== fixture.id || live.item.name !== fixture.name) {
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-identity`, 'Refusing to delete a credential because the exact live UUID does not map to the owned fixture name.', {credentialName: fixture.name, expectedCredentialId: fixture.id, liveCredentialId: live.item.id, liveCredentialName: live.item.name});
+    return false;
+  }
+  const deletion = await deleteNativeLiveCredential(page, fixture.id);
+  if (!deletion.ok) {
+    add('fail', `credential-smoke.${fixture.kind}.cleanup-request`, 'Native Trashcan move for the exact owned credential UUID failed.', {credentialName: fixture.name, credentialId: fixture.id, status: deletion.status});
+    return false;
+  }
+  await gotoStable(page, '/credentials');
+  await screenshot(page, `credentials-after-cleanup-${fixture.kind}-${config.urlIndex}`);
+  const after = await fetchNativeLiveCredential(page, fixture.id);
+  const removed = after.ok && after.item === null;
+  add(removed ? 'pass' : 'fail', `credential-smoke.${fixture.kind}.cleanup`, removed ? 'The exact owned credential UUID was moved to Trashcan through the native API.' : 'The exact owned credential UUID could not be proven absent from the live inventory after cleanup.', {credentialName: fixture.name, credentialId: fixture.id, deleteStatus: deletion.status, inventoryStatus: after.status});
+  return removed && await purgeCredentialFromTrash(page, fixture);
 }
 
 async function runForBaseUrl(baseUrl, urlIndex) {
@@ -515,7 +694,12 @@ async function runForBaseUrl(baseUrl, urlIndex) {
     await login(page);
     if (config.cleanupOnly) {
       let cleaned = true;
-      for (const fixture of [...ownedFixtures].reverse()) {
+      const currentBaseUrl = safeStoredUrl(baseUrl);
+      const applicableFixtures = ownedFixtures.filter(fixture =>
+        fixture.baseUrl
+          ? fixture.baseUrl === currentBaseUrl
+          : urlIndex === 0);
+      for (const fixture of [...applicableFixtures].reverse()) {
         cleaned = await deleteCredential(page, fixture) && cleaned;
       }
       add(cleaned ? 'pass' : 'fail', 'credential-smoke.timeout-cleanup', cleaned ? 'Owned timeout fixtures were cleaned.' : 'One or more owned timeout fixtures could not be cleaned.', {baseUrl: safeStoredUrl(baseUrl)});

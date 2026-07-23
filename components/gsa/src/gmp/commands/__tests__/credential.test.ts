@@ -6,9 +6,7 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import CredentialCommand, {
-  type CredentialDownloadFormat,
-} from 'gmp/commands/credential';
+import CredentialCommand from 'gmp/commands/credential';
 import {createHttp, createActionResultResponse} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 import {
@@ -646,27 +644,110 @@ describe('CredentialCommand tests', () => {
     expect(resp.data.id).toEqual('foo');
   });
 
-  test.each<CredentialDownloadFormat>(['pem', 'key'])(
-    'should download credential as %s',
-    async format => {
-      const response = new ArrayBuffer(8);
-      const fakeHttp = createHttp(response);
+  test('should download a public key through the native API', async () => {
+    const response = new ArrayBuffer(8);
+    const fetchMock = testing.fn().mockResolvedValue({
+      arrayBuffer: testing.fn().mockResolvedValue(response),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string, params?: Record<string, string | undefined>) =>
+        `https://yafvs.example/${path}${params?.token ? `?token=${params.token}` : ''}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new CredentialCommand(fakeHttp);
 
-      const cmd = new CredentialCommand(fakeHttp);
-      const resp = await cmd.download({id: '1'}, format);
+    const result = await cmd.download({id: 'credential/id'}, 'key');
 
-      expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-        args: {
-          cmd: 'download_credential',
-          package_format: format,
-          credential_id: '1',
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/credentials/credential%2Fid/public-key',
+      {token: 'test-token'},
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/credentials/credential%2Fid/public-key?token=test-token',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/key',
+          Authorization: 'Bearer jwt-token',
         },
-        responseType: 'arraybuffer',
-      });
+      },
+    );
+    expect(result.data).toBe(response);
+  });
 
-      expect(resp).toBe(response);
-    },
-  );
+  test('should propagate native public key failure without GMP fallback', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({ok: false, status: 500});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new CredentialCommand(fakeHttp);
+
+    await expect(cmd.download({id: 'credential-id'}, 'key')).rejects.toThrow(
+      'Native API request failed with status 500',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should keep PEM downloads on the inherited path', async () => {
+    const response = new ArrayBuffer(8);
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+    };
+    fakeHttp.buildUrl = testing.fn((path: string) => path);
+    const cmd = new CredentialCommand(fakeHttp);
+
+    const result = await cmd.download({id: '1'}, 'pem');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+      args: {
+        cmd: 'download_credential',
+        package_format: 'pem',
+        credential_id: '1',
+      },
+      responseType: 'arraybuffer',
+    });
+    expect(result).toBe(response);
+  });
+
+  test('should keep KEY downloads inherited without native capability', async () => {
+    const response = new ArrayBuffer(8);
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response);
+    const cmd = new CredentialCommand(fakeHttp);
+
+    const result = await cmd.download({id: '1'}, 'key');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+      args: {
+        cmd: 'download_credential',
+        package_format: 'key',
+        credential_id: '1',
+      },
+      responseType: 'arraybuffer',
+    });
+    expect(result).toBe(response);
+  });
 
   test('should get element from root', () => {
     const fakeHttp = createHttp();

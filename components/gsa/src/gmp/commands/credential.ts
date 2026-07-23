@@ -21,6 +21,7 @@ import {
   deleteNativeCredential,
   exportNativeCredentialMetadata,
   fetchNativeCredential,
+  fetchNativeCredentialPublicKey,
   patchNativeCredential,
 } from 'gmp/native-api/credentials';
 import {parseYesNo} from 'gmp/parser';
@@ -222,6 +223,10 @@ class CredentialCommand extends EntityCommand<
   }
 
   async download({id}, format: CredentialDownloadFormat = 'pem') {
+    if (format === 'key' && canUseNativeApi(this.http)) {
+      return new Response(await fetchNativeCredentialPublicKey(this.http, id));
+    }
+
     return this.httpRequestWithRejectionTransform<ArrayBuffer>('get', {
       args: {
         cmd: 'download_credential',

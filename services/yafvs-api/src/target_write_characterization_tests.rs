@@ -59,13 +59,17 @@ fn target_reads_exports_and_acl_are_native_only_without_retiring_target_control(
     assert!(target_get.contains("fetchNativeTarget(this.http, id)"));
     assert!(!target_get.contains("super.get"));
     assert!(GSA_TARGET_COMMAND.contains("protected getElementFromRoot(): never"));
-    assert!(GSA_TARGET_COMMAND
-        .contains("throw new Error('Target XML response parsing has been retired')"));
+    assert!(
+        GSA_TARGET_COMMAND
+            .contains("throw new Error('Target XML response parsing has been retired')")
+    );
     assert!(!GSA_TARGET_COMMAND.contains("get_targets_response"));
     assert!(!GSA_TARGET_COMMAND.contains("cmd: 'get_target'"));
     assert!(GSA_TARGETS_COMMAND.contains("protected getEntitiesResponse(): never"));
-    assert!(GSA_TARGETS_COMMAND
-        .contains("throw new Error('Target XML collection parsing has been retired')"));
+    assert!(
+        GSA_TARGETS_COMMAND
+            .contains("throw new Error('Target XML collection parsing has been retired')")
+    );
     assert!(!GSA_TARGETS_COMMAND.contains("get_targets_response"));
     assert!(!GSA_REPORT_DETAILS.contains("gmp.target.get"));
 
@@ -564,7 +568,10 @@ fn target_delete_is_native_only_while_raw_gmp_and_create_save_bridges_remain() {
         .find("typeof id !== 'string' || id.trim().length === 0")
         .expect("single target delete must guard the runtime ID");
     assert!(
-        id_guard < delete_gsa.find("deleteNativeTarget(this.http, id)").unwrap(),
+        id_guard
+            < delete_gsa
+                .find("deleteNativeTarget(this.http, id)")
+                .unwrap(),
         "single target delete must guard the ID before native deletion"
     );
     assert!(!delete_gsa.contains("super.delete"));

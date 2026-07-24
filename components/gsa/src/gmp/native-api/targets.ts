@@ -404,37 +404,89 @@ export const cloneNativeTarget = async (
   return new Response({id: stringValue(payload.id)});
 };
 
+const nativeTargetCredentialBody = (
+  credentials:
+    | NativeTargetCreateArgs['credentials']
+    | NativeTargetPatchArgs['credentials'],
+) =>
+  Object.fromEntries(
+    Object.entries({
+      ssh: credentials?.ssh,
+      ssh_elevate: credentials?.sshElevate,
+      smb: credentials?.smb,
+      esxi: credentials?.esxi,
+      snmp: credentials?.snmp,
+      krb5: credentials?.krb5,
+    }).filter(([, value]) => value !== undefined),
+  );
+
+export const nativeTargetCreateBody = (args: NativeTargetCreateArgs) => {
+  const credentials = nativeTargetCredentialBody(args.credentials);
+  return {
+    name: args.name,
+    ...(args.comment !== undefined ? {comment: args.comment} : {}),
+    port_list_id: args.portListId,
+    hosts: args.hosts,
+    ...(args.excludeHosts !== undefined
+      ? {exclude_hosts: args.excludeHosts}
+      : {}),
+    alive_tests: args.aliveTests,
+    allow_simultaneous_ips: args.allowSimultaneousIPs,
+    reverse_lookup_only: args.reverseLookupOnly,
+    reverse_lookup_unify: args.reverseLookupUnify,
+    ...(Object.keys(credentials).length > 0 ? {credentials} : {}),
+  };
+};
+
+export const nativeTargetPatchBody = ({
+  aliveTests,
+  allowSimultaneousIPs,
+  comment,
+  credentials,
+  excludeHosts,
+  hosts,
+  name,
+  portListId,
+  reverseLookupOnly,
+  reverseLookupUnify,
+}: NativeTargetPatchArgs) => {
+  const credentialBody = nativeTargetCredentialBody(credentials);
+  return {
+    ...(name !== undefined ? {name} : {}),
+    ...(comment !== undefined ? {comment} : {}),
+    ...(aliveTests !== undefined ? {alive_tests: aliveTests} : {}),
+    ...(allowSimultaneousIPs !== undefined
+      ? {allow_simultaneous_ips: allowSimultaneousIPs}
+      : {}),
+    ...(reverseLookupOnly !== undefined
+      ? {reverse_lookup_only: reverseLookupOnly}
+      : {}),
+    ...(reverseLookupUnify !== undefined
+      ? {reverse_lookup_unify: reverseLookupUnify}
+      : {}),
+    ...(portListId !== undefined ? {port_list_id: portListId} : {}),
+    ...(hosts !== undefined ? {hosts} : {}),
+    ...(excludeHosts !== undefined ? {exclude_hosts: excludeHosts} : {}),
+    ...(Object.keys(credentialBody).length > 0
+      ? {credentials: credentialBody}
+      : {}),
+  };
+};
+
+const MAX_NATIVE_TARGET_WRITE_BODY_BYTES = 256 * 1024;
+
+export const nativeTargetWriteBodyFits = (body: unknown) =>
+  new TextEncoder().encode(JSON.stringify(body)).byteLength <=
+  MAX_NATIVE_TARGET_WRITE_BODY_BYTES;
+
 export const createNativeTarget = async (
   gmp: NativeApiGmp,
   args: NativeTargetCreateArgs,
 ): Promise<Response<ActionResult>> => {
-  const credentialEntries = Object.entries({
-    ssh: args.credentials?.ssh,
-    ssh_elevate: args.credentials?.sshElevate,
-    smb: args.credentials?.smb,
-    esxi: args.credentials?.esxi,
-    snmp: args.credentials?.snmp,
-    krb5: args.credentials?.krb5,
-  }).filter(([, value]) => value !== undefined);
   const payload = await writeNativeJson<NativeTargetItem>(
     gmp,
     'api/v1/targets',
-    {
-      name: args.name,
-      ...(args.comment !== undefined ? {comment: args.comment} : {}),
-      port_list_id: args.portListId,
-      hosts: args.hosts,
-      ...(args.excludeHosts !== undefined
-        ? {exclude_hosts: args.excludeHosts}
-        : {}),
-      alive_tests: args.aliveTests,
-      allow_simultaneous_ips: args.allowSimultaneousIPs,
-      reverse_lookup_only: args.reverseLookupOnly,
-      reverse_lookup_unify: args.reverseLookupUnify,
-      ...(credentialEntries.length > 0
-        ? {credentials: Object.fromEntries(credentialEntries)}
-        : {}),
-    },
+    nativeTargetCreateBody(args),
   );
   return new Response(
     new ActionResult({
@@ -463,38 +515,22 @@ export const patchNativeTarget = async (
     reverseLookupUnify,
   }: NativeTargetPatchArgs,
 ): Promise<Response<ActionResult>> => {
-  const credentialEntries = Object.entries({
-    ssh: credentials?.ssh,
-    ssh_elevate: credentials?.sshElevate,
-    smb: credentials?.smb,
-    esxi: credentials?.esxi,
-    snmp: credentials?.snmp,
-    krb5: credentials?.krb5,
-  }).filter(([, value]) => value !== undefined);
-  const body = {
-    ...(name !== undefined ? {name} : {}),
-    ...(comment !== undefined ? {comment} : {}),
-    ...(aliveTests !== undefined ? {alive_tests: aliveTests} : {}),
-    ...(allowSimultaneousIPs !== undefined
-      ? {allow_simultaneous_ips: allowSimultaneousIPs}
-      : {}),
-    ...(reverseLookupOnly !== undefined
-      ? {reverse_lookup_only: reverseLookupOnly}
-      : {}),
-    ...(reverseLookupUnify !== undefined
-      ? {reverse_lookup_unify: reverseLookupUnify}
-      : {}),
-    ...(portListId !== undefined ? {port_list_id: portListId} : {}),
-    ...(hosts !== undefined ? {hosts} : {}),
-    ...(excludeHosts !== undefined ? {exclude_hosts: excludeHosts} : {}),
-    ...(credentialEntries.length > 0
-      ? {credentials: Object.fromEntries(credentialEntries)}
-      : {}),
-  };
   const payload = await writeNativeJson<NativeTargetItem>(
     gmp,
     `api/v1/targets/${encodeURIComponent(id)}`,
-    body,
+    nativeTargetPatchBody({
+      id,
+      aliveTests,
+      allowSimultaneousIPs,
+      comment,
+      credentials,
+      excludeHosts,
+      hosts,
+      name,
+      portListId,
+      reverseLookupOnly,
+      reverseLookupUnify,
+    }),
     'PATCH',
   );
   return new Response(

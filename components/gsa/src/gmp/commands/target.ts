@@ -28,6 +28,9 @@ import {
   deleteNativeTarget,
   exportNativeTargetMetadata,
   fetchNativeTarget,
+  nativeTargetCreateBody,
+  nativeTargetPatchBody,
+  nativeTargetWriteBodyFits,
   patchNativeTarget,
   type NativeTargetCredentialPatchArgs,
   type NativeTargetCredentialsPatchArgs,
@@ -143,6 +146,56 @@ const parseNativeTargetHostList = (
   return entries.every(isNativeTargetHostEntry)
     ? [...new Set(entries)]
     : undefined;
+};
+
+// Avoids reading arbitrarily large local files. The exact encoded JSON body is
+// checked separately before native dispatch.
+const MAX_NATIVE_TARGET_HOST_FILE_READ_BYTES = 256 * 1024;
+
+const prepareNativeTargetHostSources = async <
+  T extends TargetCommandCreateParams,
+>(
+  params: T,
+): Promise<T | undefined> => {
+  const {excludeFile, file, hostsFilter, targetExcludeSource, targetSource} =
+    params;
+  if (hostsFilter !== undefined || targetSource === 'asset_hosts') {
+    return undefined;
+  }
+  if (
+    (targetSource === 'file') !== (file !== undefined) ||
+    (targetExcludeSource === 'file') !== (excludeFile !== undefined)
+  ) {
+    return undefined;
+  }
+  if (
+    (file?.size ?? 0) + (excludeFile?.size ?? 0) >
+    MAX_NATIVE_TARGET_HOST_FILE_READ_BYTES
+  ) {
+    return undefined;
+  }
+
+  try {
+    const [fileHosts, fileExcludeHosts] = await Promise.all([
+      targetSource === 'file' ? file?.text() : undefined,
+      targetExcludeSource === 'file' ? excludeFile?.text() : undefined,
+    ]);
+    return {
+      ...params,
+      ...(targetSource === 'file'
+        ? {file: undefined, hosts: fileHosts, targetSource: 'manual' as const}
+        : {}),
+      ...(targetExcludeSource === 'file'
+        ? {
+            excludeFile: undefined,
+            excludeHosts: fileExcludeHosts,
+            targetExcludeSource: 'manual' as const,
+          }
+        : {}),
+    };
+  } catch {
+    return undefined;
+  }
 };
 
 const canUseNativeTargetAliveTests = (
@@ -580,34 +633,44 @@ class TargetCommand extends EntityCommand<Target> {
     excludeFile,
     hostsFilter,
   }: TargetCommandCreateParams) {
-    const nativeCreateArgs = nativeTargetCreateArgsFromParams({
-      aliveTests,
-      allowSimultaneousIPs,
-      comment,
-      esxiCredentialId,
-      excludeFile,
-      excludeHosts,
-      file,
-      hosts,
-      hostsFilter,
-      krb5CredentialId,
-      name,
-      port,
-      portListId,
-      reverseLookupOnly,
-      reverseLookupUnify,
-      smbCredentialId,
-      snmpCredentialId,
-      sshCredentialId,
-      sshElevateCredentialId,
-      sshHostKeyPins,
-      targetExcludeSource,
-      targetSource,
-    });
-    if (canUseNativeApi(this.http) && nativeCreateArgs !== undefined) {
+    const nativeApiAvailable = canUseNativeApi(this.http);
+    const nativeParams = nativeApiAvailable
+      ? await prepareNativeTargetHostSources({
+          aliveTests,
+          allowSimultaneousIPs,
+          comment,
+          esxiCredentialId,
+          excludeFile,
+          excludeHosts,
+          file,
+          hosts,
+          hostsFilter,
+          krb5CredentialId,
+          name,
+          port,
+          portListId,
+          reverseLookupOnly,
+          reverseLookupUnify,
+          smbCredentialId,
+          snmpCredentialId,
+          sshCredentialId,
+          sshElevateCredentialId,
+          sshHostKeyPins,
+          targetExcludeSource,
+          targetSource,
+        })
+      : undefined;
+    const nativeCreateArgs =
+      nativeParams === undefined
+        ? undefined
+        : nativeTargetCreateArgsFromParams(nativeParams);
+    if (
+      nativeCreateArgs !== undefined &&
+      nativeTargetWriteBodyFits(nativeTargetCreateBody(nativeCreateArgs))
+    ) {
       return createNativeTarget(this.http, nativeCreateArgs);
     }
-    if (canUseNativeApi(this.http) && !isUnsetCredential(sshCredentialId)) {
+    if (nativeApiAvailable && !isUnsetCredential(sshCredentialId)) {
       throw new Error(
         'SSH credential targets require valid per-IP OpenSSH SHA-256 host-key pins and the native manual target workflow.',
       );
@@ -655,12 +718,22 @@ class TargetCommand extends EntityCommand<Target> {
   }
 
   async save(args: TargetCommandSaveArgs) {
-    const nativePatchArgs = nativeTargetPatchArgsFromParams(args);
-    if (canUseNativeApi(this.http) && nativePatchArgs !== undefined) {
+    const nativeApiAvailable = canUseNativeApi(this.http);
+    const nativeParams = nativeApiAvailable
+      ? await prepareNativeTargetHostSources(args)
+      : undefined;
+    const nativePatchArgs =
+      nativeParams === undefined
+        ? undefined
+        : nativeTargetPatchArgsFromParams(nativeParams);
+    if (
+      nativePatchArgs !== undefined &&
+      nativeTargetWriteBodyFits(nativeTargetPatchBody(nativePatchArgs))
+    ) {
       return patchNativeTarget(this.http, nativePatchArgs);
     }
     if (
-      canUseNativeApi(this.http) &&
+      nativeApiAvailable &&
       args.sshCredentialId !== undefined &&
       args.sshCredentialId !== UNSET_VALUE
     ) {

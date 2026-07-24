@@ -9,6 +9,7 @@ import TargetCommand from 'gmp/commands/target';
 import {createActionResultResponse, createHttp} from 'gmp/commands/testing';
 import type Http from 'gmp/http/http';
 import {ResponseRejection} from 'gmp/http/rejection';
+import Filter from 'gmp/models/filter';
 import {SCAN_CONFIG_DEFAULT} from 'gmp/models/target';
 import {NO_VALUE, YES_VALUE} from 'gmp/parser';
 import {createSession} from 'gmp/testing';
@@ -323,6 +324,323 @@ describe('TargetCommand tests', () => {
         },
       },
     );
+  });
+
+  test('should create bounded include and exclude host files through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-target-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const file = {
+      size: 32,
+      text: testing.fn().mockResolvedValue('192.0.2.1\n192.0.2.0/30\n'),
+    } as unknown as File;
+    const excludeFile = {
+      size: 12,
+      text: testing.fn().mockResolvedValue('192.0.2.2\n'),
+    } as unknown as File;
+    const cmd = new TargetCommand(fakeHttp);
+
+    await cmd.create({
+      allowSimultaneousIPs: true,
+      name: 'File Target',
+      comment: 'comment',
+      targetSource: 'file',
+      targetExcludeSource: 'file',
+      file,
+      excludeFile,
+      reverseLookupOnly: false,
+      reverseLookupUnify: true,
+      portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+      aliveTests: [SCAN_CONFIG_DEFAULT],
+      port: 22,
+      sshCredentialId: UNSET_VALUE,
+      sshElevateCredentialId: UNSET_VALUE,
+      smbCredentialId: UNSET_VALUE,
+      esxiCredentialId: UNSET_VALUE,
+      snmpCredentialId: UNSET_VALUE,
+      krb5CredentialId: UNSET_VALUE,
+    });
+
+    expect(file.text).toHaveBeenCalledOnce();
+    expect(excludeFile.text).toHaveBeenCalledOnce();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/targets',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'File Target',
+          comment: 'comment',
+          port_list_id: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+          hosts: ['192.0.2.1', '192.0.2.0/30'],
+          exclude_hosts: ['192.0.2.2'],
+          alive_tests: [SCAN_CONFIG_DEFAULT],
+          allow_simultaneous_ips: true,
+          reverse_lookup_only: false,
+          reverse_lookup_unify: true,
+        }),
+      }),
+    );
+  });
+
+  test('should save bounded host files through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'target-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const file = {
+      size: 24,
+      text: testing.fn().mockResolvedValue('192.0.2.1\n192.0.2.0/30\n'),
+    } as unknown as File;
+    const cmd = new TargetCommand(fakeHttp);
+
+    await cmd.save({
+      id: 'target-id',
+      name: 'File Target',
+      targetSource: 'file',
+      targetExcludeSource: 'manual',
+      file,
+      excludeHosts: '',
+      reverseLookupOnly: false,
+      reverseLookupUnify: false,
+      portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+      aliveTests: [SCAN_CONFIG_DEFAULT],
+      allowSimultaneousIPs: true,
+      port: 22,
+      sshCredentialId: UNSET_VALUE,
+      sshElevateCredentialId: UNSET_VALUE,
+      smbCredentialId: UNSET_VALUE,
+      esxiCredentialId: UNSET_VALUE,
+      snmpCredentialId: UNSET_VALUE,
+      krb5CredentialId: UNSET_VALUE,
+    });
+
+    expect(file.text).toHaveBeenCalledOnce();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/targets/target-id',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: 'File Target',
+          alive_tests: [SCAN_CONFIG_DEFAULT],
+          allow_simultaneous_ips: true,
+          reverse_lookup_only: false,
+          reverse_lookup_unify: false,
+          port_list_id: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+          hosts: ['192.0.2.1', '192.0.2.0/30'],
+          exclude_hosts: [],
+          credentials: {
+            ssh: null,
+            ssh_elevate: null,
+            smb: null,
+            esxi: null,
+            snmp: null,
+            krb5: null,
+          },
+        }),
+      }),
+    );
+  });
+
+  test('should fall back when a bounded host file cannot be read', async () => {
+    const response = createActionResultResponse();
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const file = {
+      size: 16,
+      text: testing.fn().mockRejectedValue(new Error('read failed')),
+    } as unknown as File;
+    const cmd = new TargetCommand(fakeHttp);
+
+    await cmd.create({
+      allowSimultaneousIPs: true,
+      name: 'Unreadable File Target',
+      targetSource: 'file',
+      targetExcludeSource: 'manual',
+      file,
+      excludeHosts: '',
+      reverseLookupOnly: false,
+      reverseLookupUnify: false,
+      portListId: 'pl-id',
+      aliveTests: [SCAN_CONFIG_DEFAULT],
+      port: 22,
+    });
+
+    expect(file.text).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: expect.objectContaining({cmd: 'create_target', file}),
+    });
+  });
+
+  test('should keep oversized host files on the inherited bounded upload path', async () => {
+    const response = createActionResultResponse();
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const file = {
+      size: 256 * 1024 + 1,
+      text: testing.fn(),
+    } as unknown as File;
+    const cmd = new TargetCommand(fakeHttp);
+
+    await cmd.create({
+      allowSimultaneousIPs: true,
+      name: 'Large File Target',
+      targetSource: 'file',
+      targetExcludeSource: 'manual',
+      file,
+      excludeHosts: '',
+      reverseLookupOnly: false,
+      reverseLookupUnify: false,
+      portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+      aliveTests: [SCAN_CONFIG_DEFAULT],
+      port: 22,
+      sshCredentialId: UNSET_VALUE,
+      sshElevateCredentialId: UNSET_VALUE,
+      smbCredentialId: UNSET_VALUE,
+      esxiCredentialId: UNSET_VALUE,
+      snmpCredentialId: UNSET_VALUE,
+      krb5CredentialId: UNSET_VALUE,
+    });
+
+    expect(file.text).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: expect.objectContaining({
+        cmd: 'create_target',
+        file,
+        target_source: 'file',
+      }),
+    });
+  });
+
+  test('should fall back when JSON encoding expands a bounded file past the native body limit', async () => {
+    const response = createActionResultResponse();
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const text = Array.from(
+      {length: 70},
+      (_, index) => `${'"'.repeat(3500)}${index}`,
+    ).join('\n');
+    const file = {
+      size: new TextEncoder().encode(text).byteLength,
+      text: testing.fn().mockResolvedValue(text),
+    } as unknown as File;
+    const cmd = new TargetCommand(fakeHttp);
+
+    await cmd.create({
+      allowSimultaneousIPs: true,
+      name: 'Encoded Large File Target',
+      targetSource: 'file',
+      targetExcludeSource: 'manual',
+      file,
+      excludeHosts: '',
+      reverseLookupOnly: false,
+      reverseLookupUnify: false,
+      portListId: 'pl-id',
+      aliveTests: [SCAN_CONFIG_DEFAULT],
+      port: 22,
+    });
+
+    expect(file.size).toBeLessThan(256 * 1024);
+    expect(file.text).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: expect.objectContaining({cmd: 'create_target', file}),
+    });
+  });
+
+  test.each([
+    {
+      name: 'asset-host source',
+      params: {
+        targetSource: 'asset_hosts' as const,
+        targetExcludeSource: 'manual' as const,
+        hostsFilter: Filter.fromString('name=server'),
+      },
+    },
+    {
+      name: 'inconsistent file shape',
+      params: {
+        targetSource: 'file' as const,
+        targetExcludeSource: 'manual' as const,
+      },
+    },
+  ])('should keep $name on the inherited target path', async ({params}) => {
+    const response = createActionResultResponse();
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response);
+    const cmd = new TargetCommand(fakeHttp);
+
+    await cmd.create({
+      allowSimultaneousIPs: true,
+      name: 'Inherited Target',
+      ...params,
+      hosts: '',
+      excludeHosts: '',
+      reverseLookupOnly: false,
+      reverseLookupUnify: false,
+      portListId: 'pl-id',
+      aliveTests: [SCAN_CONFIG_DEFAULT],
+      port: 22,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: expect.objectContaining({
+        cmd: 'create_target',
+        target_source: params.targetSource,
+      }),
+    });
   });
 
   test('should not fall back to GMP when native target delete fails', async () => {

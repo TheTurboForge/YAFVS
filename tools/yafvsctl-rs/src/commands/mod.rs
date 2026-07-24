@@ -9,6 +9,7 @@ mod build_hardening;
 mod c_hardening;
 mod common;
 mod compose;
+mod config_schedule_schema;
 mod db_introspect;
 mod deps;
 mod direct_api;

@@ -5,6 +5,10 @@
 
 use super::common::{metadata, output_tail, runtime_dir};
 use super::compose::{compose_command, runtime_lifecycle_environment};
+use super::config_schedule_schema::{
+    CONFIG_SCHEDULE_SCHEMA_FINGERPRINT, CONFIG_SCHEDULE_SCHEMA_SQL,
+    config_schedule_schema_fingerprint_sql,
+};
 use super::foundational_schema::{
     FOUNDATIONAL_SCHEMA_FINGERPRINT, FOUNDATIONAL_SCHEMA_SQL, foundational_schema_fingerprint_sql,
 };
@@ -372,6 +376,80 @@ pub(crate) fn command_runtime_init_with(
             repo_root,
             runner,
             "Runtime initialization stopped while verifying foundational schema.",
+            findings,
+        );
+    }
+    let create_config_schedule_schema = psql(
+        repo_root,
+        runner,
+        &environment,
+        &database,
+        CONFIG_SCHEDULE_SCHEMA_SQL,
+    );
+    findings.push(process_finding(
+        &create_config_schedule_schema,
+        "postgres.config-schedule-schema.create",
+        "Create/verify configuration and schedule schema",
+        80,
+        None,
+    ));
+    if !process_succeeded(&create_config_schedule_schema) {
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped while creating configuration and schedule schema.",
+            findings,
+        );
+    }
+    let config_schedule_fingerprint = psql(
+        repo_root,
+        runner,
+        &environment,
+        &database,
+        &config_schedule_schema_fingerprint_sql(),
+    );
+    if !process_succeeded(&config_schedule_fingerprint) {
+        findings.push(process_finding(
+            &config_schedule_fingerprint,
+            "postgres.config-schedule-schema",
+            "Configuration and schedule schema fingerprint query",
+            40,
+            None,
+        ));
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped while verifying configuration and schedule schema.",
+            findings,
+        );
+    }
+    let observed_fingerprint = psql_value(
+        config_schedule_fingerprint
+            .as_ref()
+            .map_or("", |output| &output.stdout),
+    );
+    let schema_matches = observed_fingerprint == CONFIG_SCHEDULE_SCHEMA_FINGERPRINT;
+    findings.push(
+        Finding::new(
+            if schema_matches { "pass" } else { "fail" },
+            "postgres.config-schedule-schema",
+            if schema_matches {
+                "Configuration and schedule schema matches the fixed catalog contract.".to_string()
+            } else {
+                "Configuration and schedule schema does not match the fixed catalog contract."
+                    .to_string()
+            },
+        )
+        .with_details(json!({
+            "expected": CONFIG_SCHEDULE_SCHEMA_FINGERPRINT,
+            "observed": observed_fingerprint,
+        })),
+    );
+    if has_failure(&findings) {
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped while verifying configuration and schedule schema.",
             findings,
         );
     }
@@ -1133,6 +1211,9 @@ mod tests {
         foundational_create_success: bool,
         foundational_fingerprint_success: bool,
         foundational_fingerprint: String,
+        config_schedule_create_success: bool,
+        config_schedule_fingerprint_success: bool,
+        config_schedule_fingerprint: String,
     }
 
     impl Runner {
@@ -1150,6 +1231,9 @@ mod tests {
                 foundational_create_success: true,
                 foundational_fingerprint_success: true,
                 foundational_fingerprint: format!("{FOUNDATIONAL_SCHEMA_FINGERPRINT}\n"),
+                config_schedule_create_success: true,
+                config_schedule_fingerprint_success: true,
+                config_schedule_fingerprint: format!("{CONFIG_SCHEDULE_SCHEMA_FINGERPRINT}\n"),
             }
         }
 
@@ -1197,6 +1281,26 @@ mod tests {
                         1
                     },
                     &self.foundational_fingerprint,
+                );
+            }
+            if joined.contains("CREATE TABLE IF NOT EXISTS nvt_selectors") {
+                return output(
+                    if self.config_schedule_create_success {
+                        0
+                    } else {
+                        1
+                    },
+                    "",
+                );
+            }
+            if joined.contains("config_schedule_schema_items") {
+                return output(
+                    if self.config_schedule_fingerprint_success {
+                        0
+                    } else {
+                        1
+                    },
+                    &self.config_schedule_fingerprint,
                 );
             }
             output(0, "")
@@ -1296,6 +1400,14 @@ mod tests {
             .iter()
             .position(|call| call.contains("foundational_schema_items"))
             .unwrap();
+        let config_schedule_create = joined
+            .iter()
+            .position(|call| call.contains("CREATE TABLE IF NOT EXISTS nvt_selectors"))
+            .unwrap();
+        let config_schedule_fingerprint = joined
+            .iter()
+            .position(|call| call.contains("config_schedule_schema_items"))
+            .unwrap();
         let up = joined
             .iter()
             .position(|call| call.ends_with("up -d --build postgres"))
@@ -1337,6 +1449,10 @@ mod tests {
         assert!(
             pg_gvm_create < foundational_create && foundational_create < foundational_fingerprint
         );
+        assert!(
+            foundational_fingerprint < config_schedule_create
+                && config_schedule_create < config_schedule_fingerprint
+        );
         let foundational_sql = calls[foundational_create]
             .args
             .iter()
@@ -1345,6 +1461,14 @@ mod tests {
         assert!(foundational_sql.trim_start().starts_with("BEGIN;"));
         assert!(foundational_sql.trim_end().ends_with("COMMIT;"));
         assert!(!foundational_sql.contains("database_version"));
+        let config_schedule_sql = calls[config_schedule_create]
+            .args
+            .iter()
+            .find(|argument| argument.contains("CREATE TABLE IF NOT EXISTS nvt_selectors"))
+            .unwrap();
+        assert!(config_schedule_sql.trim_start().starts_with("BEGIN;"));
+        assert!(config_schedule_sql.trim_end().ends_with("COMMIT;"));
+        assert!(!config_schedule_sql.contains("database_version"));
         for extension in POSTGRES_EXTENSIONS {
             assert!(
                 joined
@@ -1540,6 +1664,70 @@ mod tests {
         );
         assert!(result.findings.iter().any(|finding| {
             finding.check == "postgres.foundational-schema" && finding.status == "fail"
+        }));
+    }
+
+    #[test]
+    fn config_schedule_schema_creation_failure_stops_before_attestation() {
+        let fixture = Fixture::new("config-schedule-create-failure");
+        let runner = Runner {
+            config_schedule_create_success: false,
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail", "{:?}", result.findings);
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped while creating configuration and schedule schema."
+        );
+        let calls = runner.calls.lock().unwrap();
+        assert!(calls.iter().any(|call| {
+            call.args
+                .join(" ")
+                .contains("CREATE TABLE IF NOT EXISTS nvt_selectors")
+        }));
+        assert!(
+            !calls
+                .iter()
+                .any(|call| { call.args.join(" ").contains("config_schedule_schema_items") })
+        );
+    }
+
+    #[test]
+    fn config_schedule_schema_mismatch_fails_closed() {
+        let fixture = Fixture::new("config-schedule-mismatch");
+        let runner = Runner {
+            config_schedule_fingerprint: "not-the-contract\n".into(),
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail", "{:?}", result.findings);
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped while verifying configuration and schedule schema."
+        );
+        assert!(result.findings.iter().any(|finding| {
+            finding.check == "postgres.config-schedule-schema"
+                && finding.status == "fail"
+                && finding.message.contains("does not match")
+        }));
+    }
+
+    #[test]
+    fn config_schedule_schema_attestation_query_failure_fails_closed() {
+        let fixture = Fixture::new("config-schedule-query-failure");
+        let runner = Runner {
+            config_schedule_fingerprint_success: false,
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail", "{:?}", result.findings);
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped while verifying configuration and schedule schema."
+        );
+        assert!(result.findings.iter().any(|finding| {
+            finding.check == "postgres.config-schedule-schema" && finding.status == "fail"
         }));
     }
 

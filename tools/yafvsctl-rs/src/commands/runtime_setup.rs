@@ -22,13 +22,15 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-pub(crate) const RUNTIME_DIRS: [&str; 45] = [
+pub(crate) const RUNTIME_DIRS: [&str; 47] = [
     "postgres",
     "mosquitto",
+    "mosquitto/data",
     "mosquitto/secrets",
     "feeds",
     "run",
     "logs",
+    "logs/mosquitto",
     "artifacts",
     "certs/CA",
     "certs/private/CA",
@@ -1062,6 +1064,59 @@ mod tests {
         let fixture = Fixture::new("layout");
         let findings = ensure_runtime_setup(&fixture.repo, &Runner::new(vec![]));
         assert!(findings.iter().all(|finding| finding.status == "pass"));
+        assert_eq!(
+            RUNTIME_DIRS,
+            [
+                "postgres",
+                "mosquitto",
+                "mosquitto/data",
+                "mosquitto/secrets",
+                "feeds",
+                "run",
+                "logs",
+                "logs/mosquitto",
+                "artifacts",
+                "certs/CA",
+                "certs/private/CA",
+                "secrets",
+                "state",
+                "state/gvmd-bind-files",
+                "state/ospd",
+                "state/ospd/result-spool",
+                "state/feed-gnupg",
+                "redis-openvas",
+                "run/gvmd-gmp",
+                "run/gvmd-control",
+                "run/gvmd",
+                "run/gsad",
+                "run/ospd",
+                "run/notus",
+                "run/redis-openvas",
+                "logs/gvmd",
+                "logs/ospd",
+                "logs/notus",
+                "logs/gsad",
+                "logs/yafvs-api",
+                "logs/redis-openvas",
+                "logs/feed-sync",
+                "logs/quality-gate",
+                "artifacts/log-review",
+                "artifacts/data-state",
+                "artifacts/quality-gate",
+                "artifacts/performance",
+                "artifacts/reports",
+                "artifacts/credential-smoke",
+                "artifacts/native-api",
+                "feed-cache/community/22.04/var-lib",
+                "feeds/openvas/plugins",
+                "feeds/notus/advisories",
+                "feeds/notus/products",
+                "feeds/gvm/scap-data",
+                "feeds/gvm/cert-data",
+                "feeds/gvm/data-objects/gvmd/22.04",
+            ]
+        );
+        assert_eq!(RUNTIME_DIRS.len(), 47);
         for relative in RUNTIME_DIRS {
             assert!(fixture.runtime().join(relative).is_dir());
         }

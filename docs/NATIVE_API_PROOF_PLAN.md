@@ -157,7 +157,9 @@ Task start and stop are reviewed native scanner-control slices. Browser task
 start uses the same-origin native `POST /api/v1/tasks/{task_id}/start` route;
 the superseded gsad `start_task` GMP action is retired while lowercase
 `start_task` remains GSA availability vocabulary. Start creates the report and
-gvmd `scan_queue` request transactionally. Stop sends one strict,
+gvmd `scan_queue` request transactionally. Start-task alert execution sends one
+strict private authenticated command to gvmd; it is separate from public GMP
+`START_TASK`, which remains for scheduler and external compatibility. Stop sends one strict,
 bounded shared-secret/operator/task command over a private gvmd Unix socket,
 keeps status and queue state unchanged when scanner absence cannot be verified,
 rejects stale report handlers, and serializes task finalization with stop. This

@@ -11,6 +11,7 @@
 #ifndef _GVMD_YAFVS_CONTROL_H
 #define _GVMD_YAFVS_CONTROL_H
 
+#include <glib.h>
 #include <signal.h>
 
 /*
@@ -29,6 +30,8 @@
  *
  * alert-start-task-create <secret> <operator_uuid> <active:0|1> <name_b64>
  *                         <comment_b64> <status_b64> <task_uuid>\n
+ *
+ * start <secret> <operator_uuid> <task_uuid>\n
  *
  * alert-test <secret> <operator_uuid> <alert_uuid>\n
  *
@@ -56,5 +59,13 @@
 
 void
 yafvs_control_accept_and_fork (int, int, int, sigset_t *);
+
+/* Configure the alert self-client only after the private listener is bound. */
+gboolean
+yafvs_control_configure_alert_client (const char *);
+
+/* Start an alert task through the private listener; never retries a sent frame. */
+int
+yafvs_control_start_alert_task (const char *, const char *);
 
 #endif /* not _GVMD_YAFVS_CONTROL_H */

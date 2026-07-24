@@ -22,6 +22,7 @@
 #include "manage_sql_report_formats.h"
 #include "manage_sql_resources.h"
 #include "manage_users.h"
+#include "yafvs_control.h"
 
 #include <bsd/unistd.h>
 #include <fcntl.h>
@@ -3615,8 +3616,7 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
       case ALERT_METHOD_START_TASK:
         {
           gvm_connection_t connection;
-          char *task_id, *report_id, *owner_id, *owner_name;
-          gmp_authenticate_info_opts_t auth_opts;
+          char *task_id, *owner_id;
 
           /* Run the callback to fork a child connected to the Manager. */
 
@@ -3635,14 +3635,11 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
 
 
           owner_id = alert_owner_uuid (alert);
-          owner_name = alert_owner_name (alert);
-
           if (owner_id == NULL)
             {
               g_warning ("%s: could not find alert owner",
                          __func__);
               free (owner_id);
-              free (owner_name);
               return -1;
             }
 
@@ -3663,40 +3660,22 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
                 /* Parent.  Continue with whatever lead to this escalation. */
                 g_free (task_id);
                 free (owner_id);
-                free (owner_name);
                 return 0;
                 break;
             }
 
-          /* Start the task. */
-
-          auth_opts = gmp_authenticate_info_opts_defaults;
-          auth_opts.username = owner_name;
-          auth_opts.password = "dummy";
-          if (gmp_authenticate_info_ext_c (&connection, auth_opts))
+          /* Do not reuse the forked manager connection in the alert child. */
+          gvm_connection_free (&connection);
+          if (yafvs_control_start_alert_task (owner_id, task_id))
             {
               g_free (task_id);
               free (owner_id);
-              free (owner_name);
-              gvm_connection_free (&connection);
-              gvm_close_sentry ();
-              exit (EXIT_FAILURE);
-            }
-          if (gmp_start_task_report_c (&connection, task_id, &report_id))
-            {
-              g_free (task_id);
-              free (owner_id);
-              free (owner_name);
-              gvm_connection_free (&connection);
               gvm_close_sentry ();
               exit (EXIT_FAILURE);
             }
 
           g_free (task_id);
-          g_free (report_id);
           free (owner_id);
-          free (owner_name);
-          gvm_connection_free (&connection);
           gvm_close_sentry ();
           exit (EXIT_SUCCESS);
         }

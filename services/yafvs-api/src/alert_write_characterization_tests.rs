@@ -55,6 +55,30 @@ fn inherited_function(source: &str, name: &str) -> String {
     tail[..end].to_string()
 }
 
+#[test]
+fn alert_start_execution_uses_private_control_and_does_not_remove_gmp_owners() {
+    let trigger = inherited_function(MANAGE_ALERTS_C, "trigger");
+    assert!(!trigger.contains("gmp_start_task_report_c"));
+    assert!(trigger.contains("yafvs_control_start_alert_task (owner_id, task_id)"));
+    assert!(trigger.contains("manage_fork_connection (&connection, owner_id)"));
+    assert!(trigger.contains("gvm_connection_free (&connection)"));
+
+    for required in [
+        "YAFVS_CONTROL_START_TASK_COMMAND",
+        "yafvs_control_parse_start_task_request",
+        "yafvs_control_start_operator_session (operator_uuid)",
+        "start_task (task_uuid, &report_id)",
+        "yafvs_control_secure_clear (request, sizeof (request))",
+        "YAFVS_CONTROL_START_TASK_INDETERMINATE",
+    ] {
+        assert!(
+            YAFVS_CONTROL_C.contains(required),
+            "private alert start missing {required}"
+        );
+    }
+    assert!(GVMD_GMP_C.contains("case CLIENT_START_TASK:"));
+}
+
 fn contains_c_identifier(source: &str, identifier: &str) -> bool {
     source
         .split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))

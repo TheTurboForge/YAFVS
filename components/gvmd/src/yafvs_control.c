@@ -28,13 +28,16 @@
 #include <gvm/base/pwpolicy.h>
 #include <gvm/util/sshutils.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <glib.h>
+#include <poll.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #undef G_LOG_DOMAIN
@@ -47,6 +50,10 @@
 #define YAFVS_CONTROL_MAX_REQUEST_BYTES 65536
 #define YAFVS_CONTROL_MAX_RESPONSE_BYTES 64
 #define YAFVS_CONTROL_TIMEOUT_SECONDS 5
+#define YAFVS_CONTROL_START_TASK_COMMAND "start "
+#define YAFVS_CONTROL_START_TASK_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_START_TASK_COMMAND) - 1)
+#define YAFVS_CONTROL_START_TASK_MAX_REQUEST_BYTES 256
 #define YAFVS_CONTROL_TRASH_EMPTY_COMMAND "trash-empty "
 #define YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH \
   (sizeof (YAFVS_CONTROL_TRASH_EMPTY_COMMAND) - 1)
@@ -326,6 +333,27 @@ typedef struct
   char credential_uuid[37];
 } yafvs_control_credential_public_key_request_t;
 
+typedef enum
+{
+  YAFVS_CONTROL_START_TASK_OK = 0,
+  YAFVS_CONTROL_START_TASK_ACTIVE = 1,
+  YAFVS_CONTROL_START_TASK_NOT_FOUND = 3,
+  YAFVS_CONTROL_START_TASK_RESUME_UNSUPPORTED = 4,
+  YAFVS_CONTROL_START_TASK_FORBIDDEN = 99,
+  YAFVS_CONTROL_START_TASK_MISSING_TARGET = -2,
+  YAFVS_CONTROL_START_TASK_REPORT_CREATE = -3,
+  YAFVS_CONTROL_START_TASK_TARGET_MISSING_HOSTS = -4,
+  YAFVS_CONTROL_START_TASK_BUSY = -6,
+  YAFVS_CONTROL_START_TASK_FORK_FAILED = -9,
+  YAFVS_CONTROL_START_TASK_INTERNAL = -1,
+  YAFVS_CONTROL_START_TASK_MALFORMED = -100,
+  YAFVS_CONTROL_START_TASK_CONFIGURATION = -101,
+  YAFVS_CONTROL_START_TASK_UNAVAILABLE = -102,
+  YAFVS_CONTROL_START_TASK_INDETERMINATE = -103
+} yafvs_control_start_task_result_t;
+
+static gchar *yafvs_control_alert_client_socket_path;
+
 static gboolean
 yafvs_control_decode_base64_field (const char *, size_t, size_t, gboolean,
                                       gchar **);
@@ -374,6 +402,10 @@ yafvs_control_secret_matches (const char *, size_t, const char *, size_t);
 static gboolean
 yafvs_control_uuid_is_valid (const char *);
 
+static gboolean
+yafvs_control_parse_start_task_request (const char *, size_t, const char *,
+                                        size_t, char[37], char[37]);
+
 static void
 yafvs_control_array_add_data (array_t *, const char *, const char *);
 
@@ -412,6 +444,42 @@ yafvs_control_secret_is_valid (const char *secret, size_t secret_len)
       return FALSE;
 
   return TRUE;
+}
+
+static const char *
+yafvs_control_start_task_response (
+  int result, const char *report_uuid,
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
+{
+  if (result == YAFVS_CONTROL_START_TASK_OK)
+    {
+      if (report_uuid == NULL
+          || (strcmp (report_uuid, "0") != 0
+              && !yafvs_control_uuid_is_valid (report_uuid)))
+        return "-1 internal\n";
+      g_snprintf (response, YAFVS_CONTROL_MAX_RESPONSE_BYTES, "0 started %s\n",
+                  report_uuid);
+      return response;
+    }
+
+  switch (result)
+    {
+      case YAFVS_CONTROL_START_TASK_ACTIVE: return "1 active\n";
+      case YAFVS_CONTROL_START_TASK_NOT_FOUND: return "3 not_found\n";
+      case YAFVS_CONTROL_START_TASK_RESUME_UNSUPPORTED:
+        return "4 resume_unsupported\n";
+      case YAFVS_CONTROL_START_TASK_FORBIDDEN: return "99 forbidden\n";
+      case YAFVS_CONTROL_START_TASK_MISSING_TARGET:
+        return "-2 missing_target\n";
+      case YAFVS_CONTROL_START_TASK_REPORT_CREATE:
+        return "-3 report_create\n";
+      case YAFVS_CONTROL_START_TASK_TARGET_MISSING_HOSTS:
+        return "-4 target_missing_hosts\n";
+      case YAFVS_CONTROL_START_TASK_BUSY: return "-6 busy\n";
+      case YAFVS_CONTROL_START_TASK_FORK_FAILED: return "-9 fork_failed\n";
+      case YAFVS_CONTROL_START_TASK_MALFORMED: return "-2 malformed\n";
+      default: return "-1 internal\n";
+    }
 }
 
 static void
@@ -1148,6 +1216,33 @@ done:
   return result;
 }
 
+static int
+yafvs_control_start_task (const char *operator_uuid, const char *task_uuid,
+                          char report_uuid[37])
+{
+  char *report_id = NULL;
+  int result;
+
+  if (!yafvs_control_start_operator_session (operator_uuid))
+    return YAFVS_CONTROL_START_TASK_FORBIDDEN;
+
+  result = start_task (task_uuid, &report_id);
+  if (result == YAFVS_CONTROL_START_TASK_OK)
+    {
+      if (report_id == NULL)
+        memcpy (report_uuid, "0", 2);
+      else if (yafvs_control_uuid_is_valid (report_id))
+        {
+          memcpy (report_uuid, report_id, 37);
+        }
+      else
+        result = YAFVS_CONTROL_START_TASK_INTERNAL;
+    }
+  yafvs_control_secure_free (report_id);
+  yafvs_control_finish_operator_session ();
+  return result;
+}
+
 static const char *
 yafvs_control_credential_public_key_response (int result, gchar **response)
 {
@@ -1526,6 +1621,31 @@ yafvs_control_parse_request (const char *request, size_t request_len,
 
   return yafvs_control_uuid_is_valid (operator_uuid)
          && yafvs_control_uuid_is_valid (task_uuid);
+}
+
+static gboolean
+yafvs_control_parse_start_task_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37], char task_uuid[37])
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  size_t field_len;
+
+  if (request == NULL
+      || request_len > YAFVS_CONTROL_START_TASK_MAX_REQUEST_BYTES
+      || !yafvs_control_parse_authenticated_prefix (
+           request, request_len, YAFVS_CONTROL_START_TASK_COMMAND,
+           YAFVS_CONTROL_START_TASK_COMMAND_LENGTH, expected_secret,
+           expected_secret_len, operator_uuid, &cursor, &end)
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
+      || cursor != end || field_len != 36)
+    return FALSE;
+
+  memcpy (task_uuid, field, field_len);
+  task_uuid[field_len] = 0;
+  return yafvs_control_uuid_is_valid (task_uuid);
 }
 
 static gboolean
@@ -3301,6 +3421,220 @@ yafvs_control_set_timeouts (int socket)
                strerror (errno));
 }
 
+gboolean
+yafvs_control_configure_alert_client (const char *socket_path)
+{
+  size_t socket_path_len;
+  gchar *socket_path_copy;
+
+  if (socket_path == NULL)
+    return FALSE;
+  socket_path_len = strnlen (socket_path, sizeof (((struct sockaddr_un *) 0)->sun_path));
+  if (socket_path_len == 0
+      || socket_path_len >= sizeof (((struct sockaddr_un *) 0)->sun_path))
+    return FALSE;
+
+  socket_path_copy = g_strdup (socket_path);
+  if (socket_path_copy == NULL)
+    return FALSE;
+  yafvs_control_secure_free (yafvs_control_alert_client_socket_path);
+  yafvs_control_alert_client_socket_path = socket_path_copy;
+  return TRUE;
+}
+
+static gboolean
+yafvs_control_alert_client_wait (int socket, short events)
+{
+  struct pollfd descriptor = { socket, events, 0 };
+  int ret;
+
+  do
+    ret = poll (&descriptor, 1, YAFVS_CONTROL_TIMEOUT_SECONDS * 1000);
+  while (ret == -1 && errno == EINTR);
+  return ret == 1 && (descriptor.revents & events) != 0;
+}
+
+static gboolean
+yafvs_control_alert_client_connect (int socket, const char *socket_path)
+{
+  struct sockaddr_un address = {0};
+  int flags;
+  int socket_error = 0;
+  socklen_t socket_error_len = sizeof (socket_error);
+
+  flags = fcntl (socket, F_GETFL, 0);
+  if (flags == -1 || fcntl (socket, F_SETFL, flags | O_NONBLOCK) == -1)
+    return FALSE;
+
+  address.sun_family = AF_UNIX;
+  g_strlcpy (address.sun_path, socket_path, sizeof (address.sun_path));
+  if (connect (socket, (struct sockaddr *) &address, sizeof (address)) == 0)
+    return TRUE;
+  if (errno != EINPROGRESS || !yafvs_control_alert_client_wait (socket, POLLOUT)
+      || getsockopt (socket, SOL_SOCKET, SO_ERROR, &socket_error,
+                     &socket_error_len)
+           == -1)
+    return FALSE;
+  return socket_error == 0;
+}
+
+static gboolean
+yafvs_control_alert_client_write (int socket, const char *request,
+                                  size_t request_len, gboolean *fully_sent)
+{
+  size_t written = 0;
+
+  *fully_sent = FALSE;
+  while (written < request_len)
+    {
+      ssize_t ret = write (socket, request + written, request_len - written);
+
+      if (ret > 0)
+        {
+          written += ret;
+          continue;
+        }
+      if (ret < 0 && errno == EINTR)
+        continue;
+      if ((ret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+          && yafvs_control_alert_client_wait (socket, POLLOUT))
+        continue;
+      return FALSE;
+    }
+  *fully_sent = TRUE;
+  return TRUE;
+}
+
+static gboolean
+yafvs_control_alert_client_read (int socket,
+                                 char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES + 2],
+                                 size_t *response_len)
+{
+  gboolean newline_seen = FALSE;
+  size_t length = 0;
+
+  *response_len = 0;
+  while (TRUE)
+    {
+      ssize_t ret;
+      char *newline;
+
+      if (!yafvs_control_alert_client_wait (socket, POLLIN | POLLHUP))
+        return FALSE;
+      ret = read (socket, response + length,
+                  YAFVS_CONTROL_MAX_RESPONSE_BYTES + 1 - length);
+      if (ret == 0)
+        {
+          *response_len = length;
+          return newline_seen;
+        }
+      if (ret < 0 && errno == EINTR)
+        continue;
+      if (ret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+        continue;
+      if (ret < 0 || newline_seen
+          || (size_t) ret > YAFVS_CONTROL_MAX_RESPONSE_BYTES - length)
+        return FALSE;
+
+      length += (size_t) ret;
+      newline = memchr (response, '\n', length);
+      if (newline != NULL && newline != response + length - 1)
+        return FALSE;
+      newline_seen = newline != NULL;
+    }
+}
+
+static int
+yafvs_control_parse_start_task_response (char *response, size_t response_len)
+{
+  const char *report_uuid;
+
+  if (response_len == 0 || response_len > YAFVS_CONTROL_MAX_RESPONSE_BYTES
+      || response[response_len - 1] != '\n')
+    return YAFVS_CONTROL_START_TASK_MALFORMED;
+  response[response_len - 1] = 0;
+  if (g_str_has_prefix (response, "0 started "))
+    {
+      report_uuid = response + strlen ("0 started ");
+      return strcmp (report_uuid, "0") == 0
+                 || yafvs_control_uuid_is_valid (report_uuid)
+               ? YAFVS_CONTROL_START_TASK_OK
+               : YAFVS_CONTROL_START_TASK_MALFORMED;
+    }
+  if (strcmp (response, "1 active") == 0)
+    return YAFVS_CONTROL_START_TASK_ACTIVE;
+  if (strcmp (response, "3 not_found") == 0)
+    return YAFVS_CONTROL_START_TASK_NOT_FOUND;
+  if (strcmp (response, "4 resume_unsupported") == 0)
+    return YAFVS_CONTROL_START_TASK_RESUME_UNSUPPORTED;
+  if (strcmp (response, "99 forbidden") == 0)
+    return YAFVS_CONTROL_START_TASK_FORBIDDEN;
+  if (strcmp (response, "-2 missing_target") == 0)
+    return YAFVS_CONTROL_START_TASK_MISSING_TARGET;
+  if (strcmp (response, "-3 report_create") == 0)
+    return YAFVS_CONTROL_START_TASK_REPORT_CREATE;
+  if (strcmp (response, "-4 target_missing_hosts") == 0)
+    return YAFVS_CONTROL_START_TASK_TARGET_MISSING_HOSTS;
+  if (strcmp (response, "-6 busy") == 0)
+    return YAFVS_CONTROL_START_TASK_BUSY;
+  if (strcmp (response, "-9 fork_failed") == 0)
+    return YAFVS_CONTROL_START_TASK_FORK_FAILED;
+  if (strcmp (response, "-1 internal") == 0)
+    return YAFVS_CONTROL_START_TASK_INTERNAL;
+  return YAFVS_CONTROL_START_TASK_MALFORMED;
+}
+
+int
+yafvs_control_start_alert_task (const char *operator_uuid,
+                                const char *task_uuid)
+{
+  char request[YAFVS_CONTROL_START_TASK_MAX_REQUEST_BYTES] = {0};
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES + 2] = {0};
+  const char *secret;
+  size_t secret_len;
+  size_t request_len;
+  size_t response_len = 0;
+  gboolean fully_sent = FALSE;
+  int socket_fd = -1;
+  int result = YAFVS_CONTROL_START_TASK_CONFIGURATION;
+
+  if (yafvs_control_alert_client_socket_path == NULL
+      || !yafvs_control_uuid_is_valid (operator_uuid)
+      || !yafvs_control_uuid_is_valid (task_uuid)
+      || !yafvs_control_configured_secret (&secret, &secret_len))
+    goto done;
+  request_len = (size_t) g_snprintf (
+    request, sizeof (request), "%s%s %s %s\n",
+    YAFVS_CONTROL_START_TASK_COMMAND, secret, operator_uuid, task_uuid);
+  if (request_len >= sizeof (request))
+    goto done;
+
+  socket_fd = socket (AF_UNIX, SOCK_STREAM, 0);
+  if (socket_fd == -1
+      || !yafvs_control_alert_client_connect (
+           socket_fd, yafvs_control_alert_client_socket_path))
+    {
+      result = YAFVS_CONTROL_START_TASK_UNAVAILABLE;
+      goto done;
+    }
+  if (!yafvs_control_alert_client_write (socket_fd, request, request_len,
+                                         &fully_sent)
+      || !yafvs_control_alert_client_read (socket_fd, response, &response_len))
+    {
+      result = fully_sent ? YAFVS_CONTROL_START_TASK_INDETERMINATE
+                          : YAFVS_CONTROL_START_TASK_UNAVAILABLE;
+      goto done;
+    }
+  result = yafvs_control_parse_start_task_response (response, response_len);
+
+done:
+  if (socket_fd != -1)
+    close (socket_fd);
+  yafvs_control_secure_clear (response, sizeof (response));
+  yafvs_control_secure_clear (request, sizeof (request));
+  return result;
+}
+
 static gboolean
 yafvs_control_start_operator_session (const char *operator_uuid)
 {
@@ -4601,6 +4935,21 @@ yafvs_control_serve_client (int client_socket)
                     == 0)
         result_response =
           yafvs_control_task_clone_response (-2, NULL, response);
+      else if (yafvs_control_parse_start_task_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, task_uuid))
+        {
+          result = yafvs_control_start_task (operator_uuid, task_uuid,
+                                             created_uuid);
+          result_response = yafvs_control_start_task_response (
+            result, result == YAFVS_CONTROL_START_TASK_OK ? created_uuid : NULL,
+            response);
+        }
+      else if (request_len >= YAFVS_CONTROL_START_TASK_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_START_TASK_COMMAND,
+                          YAFVS_CONTROL_START_TASK_COMMAND_LENGTH) == 0)
+        result_response = yafvs_control_start_task_response (
+          YAFVS_CONTROL_START_TASK_MALFORMED, NULL, response);
       else if (yafvs_control_parse_request (request, request_len,
                                           expected_secret,
                                           expected_secret_len,
@@ -4833,6 +5182,11 @@ yafvs_control_serve_client (int client_socket)
                       YAFVS_CONTROL_TASK_CLONE_COMMAND_LENGTH)
                 == 0)
     result_response = yafvs_control_task_clone_response (-2, NULL, response);
+  else if (request_len >= YAFVS_CONTROL_START_TASK_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_START_TASK_COMMAND,
+                      YAFVS_CONTROL_START_TASK_COMMAND_LENGTH) == 0)
+    result_response = yafvs_control_start_task_response (
+      YAFVS_CONTROL_START_TASK_MALFORMED, NULL, response);
   else if (request_len >= YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
            && memcmp (request, YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
                       YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)
@@ -4911,6 +5265,7 @@ yafvs_control_serve_client (int client_socket)
   yafvs_control_secure_clear (&credential_public_key_request,
                               sizeof (credential_public_key_request));
   yafvs_control_secure_free (allocated_response);
+  yafvs_control_secure_clear (response, sizeof (response));
   if (request_len <= YAFVS_CONTROL_MAX_REQUEST_BYTES)
     {
       yafvs_control_secure_clear (request, request_len);

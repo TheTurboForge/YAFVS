@@ -13,6 +13,8 @@ const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GVM_LIBS_GMP_C: &str = include_str!("../../../components/gvm-libs/gmp/gmp.c");
+const MANAGE_ALERTS_C: &str = include_str!("../../../components/gvmd/src/manage_alerts.c");
+const YAFVS_CONTROL_C: &str = include_str!("../../../components/gvmd/src/yafvs_control.c");
 const GSA_NATIVE_TASKS: &str = include_str!("../../../components/gsa/src/gmp/native-api/tasks.ts");
 const GSA_CAPABILITIES: &str =
     include_str!("../../../components/gsa/src/gmp/capabilities/capabilities.ts");
@@ -26,6 +28,47 @@ fn inherited_function(source: &str, name: &str) -> String {
     let tail = &source[start..];
     let end = tail.find("\n/**").unwrap_or(tail.len());
     tail[..end].to_string()
+}
+
+#[test]
+fn alert_start_uses_the_private_control_without_retiring_public_or_scheduler_gmp() {
+    let alert_trigger = inherited_function(MANAGE_ALERTS_C, "trigger");
+    assert!(!alert_trigger.contains("gmp_start_task_report_c"));
+    for required in [
+        "manage_fork_connection (&connection, owner_id)",
+        "gvm_connection_free (&connection)",
+        "yafvs_control_start_alert_task (owner_id, task_id)",
+        "gvm_close_sentry ()",
+    ] {
+        assert!(
+            alert_trigger.contains(required),
+            "alert start missing {required}"
+        );
+    }
+
+    let private_start = inherited_function(YAFVS_CONTROL_C, "yafvs_control_start_task");
+    for required in [
+        "yafvs_control_start_operator_session (operator_uuid)",
+        "start_task (task_uuid, &report_id)",
+        "yafvs_control_finish_operator_session ()",
+    ] {
+        assert!(
+            private_start.contains(required),
+            "private start missing {required}"
+        );
+    }
+    assert!(YAFVS_CONTROL_C.contains("YAFVS_CONTROL_START_TASK_COMMAND \"start \""));
+
+    let public_start = gmp_client_state_block("CLIENT_START_TASK");
+    assert!(public_start.contains("start_task (start_task_data->task_id, &report_id)"));
+    assert!(
+        inherited_function(GVM_LIBS_GMP_C, "gmp_start_task_report_c")
+            .contains("<start_task task_id=\\\"%s\\\"/>")
+    );
+    assert!(
+        inherited_function(MANAGE_C, "scheduled_task_start")
+            .contains("gmp_start_task_ext_c (&connection, opts)")
+    );
 }
 
 #[test]

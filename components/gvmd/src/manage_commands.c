@@ -34,7 +34,6 @@ command_t gmp_commands[]
  = {{"AUTHENTICATE", "Authenticate with the manager." },
     {"CREATE_CONFIG", "Import a scan config."},
     {"CREATE_CREDENTIAL", "Create a credential."},
-    {"CREATE_TASK", "Create a task."},
     {"DELETE_CONFIG", "Delete a config."},
     {"DELETE_REPORT", "Delete a report."},
     {"GET_AGGREGATES", "Get aggregates of resources."},
@@ -56,6 +55,7 @@ command_t gmp_commands[]
  * GMP parser, help, and schema surfaces are removed. */
 static const char *native_acl_operations[] = {
   "CREATE_ALERT",
+  "CREATE_TASK",
   "DELETE_ALERT",
   "GET_ALERTS",
   "GET_ASSETS",

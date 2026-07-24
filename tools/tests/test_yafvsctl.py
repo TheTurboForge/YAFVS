@@ -1152,36 +1152,27 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("<name>get_targets</name>", schema)
         self.assertIn("<command>GET_TARGETS</command>", schema)
 
-    def test_gvmd_task_parser_consumes_retained_create_elements_only(self):
-        gmp_source = (Path(__file__).resolve().parents[2] / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")
-        start_handler = gmp_source[
-            gmp_source.index("gmp_xml_handle_start_element"):
-            gmp_source.index("/**\n * @brief Send XML for an NVT.")
-        ]
-        required_transitions = [
-            "case CLIENT_CREATE_TASK:",
-            "set_client_state (CLIENT_CREATE_TASK_NAME);",
-            "set_client_state (CLIENT_CREATE_TASK_COMMENT);",
-            "set_client_state (CLIENT_CREATE_TASK_SCANNER);",
-            "set_client_state (CLIENT_CREATE_TASK_CONFIG);",
-            "set_client_state (CLIENT_CREATE_TASK_TARGET);",
-            "set_client_state (CLIENT_CREATE_TASK_PREFERENCES);",
-            "case CLIENT_CREATE_TASK_PREFERENCES:",
-            "set_client_state (CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE);",
-            "case CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE:",
-            "set_client_state (CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE_NAME);",
-            "set_client_state (CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE_VALUE);",
-        ]
-        for transition in required_transitions:
-            with self.subTest(transition=transition):
-                self.assertIn(transition, start_handler)
-        for retired in [
-            "CLIENT_MODIFY_TASK",
-            'strcasecmp ("MODIFY_TASK", element_name)',
-            "modify_task_data_t",
-        ]:
+    def test_gvmd_raw_create_task_parser_is_retired_but_native_creation_and_acl_remain(self):
+        repo_root = Path(__file__).resolve().parents[2]
+        gmp_source = (repo_root / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")
+        gmp_clients = (repo_root / "components" / "gvm-libs" / "gmp" / "gmp.c").read_text(encoding="utf-8")
+        gmp_header = (repo_root / "components" / "gvm-libs" / "gmp" / "gmp.h").read_text(encoding="utf-8")
+        commands = (repo_root / "components" / "gvmd" / "src" / "manage_commands.c").read_text(encoding="utf-8")
+        schema = (repo_root / "components" / "gvmd" / "src" / "schema_formats" / "XML" / "GMP.xml.in").read_text(encoding="utf-8")
+        native_tasks = (repo_root / "components" / "gsa" / "src" / "gmp" / "native-api" / "tasks.ts").read_text(encoding="utf-8")
+        control = (repo_root / "components" / "gvmd" / "src" / "yafvs_control.c").read_text(encoding="utf-8")
+        for retired in ["create_task_data_t", "CLIENT_CREATE_TASK", 'strcasecmp ("CREATE_TASK", element_name)', "gmp_create_task", "CLIENT_MODIFY_TASK", 'strcasecmp ("MODIFY_TASK", element_name)', "modify_task_data_t"]:
             with self.subTest(retired=retired):
-                self.assertNotIn(retired, gmp_source)
+                self.assertNotIn(retired, gmp_source + gmp_clients + gmp_header)
+        self.assertNotIn('{"CREATE_TASK",', commands)
+        self.assertNotIn("<name>create_task</name>", schema)
+        self.assertIn('strcasecmp ("GET_TASKS", element_name)', gmp_source)
+        self.assertIn("export const createNativeTask", native_tasks)
+        self.assertIn("writeNativeJson<NativeTaskItem>(gmp, 'api/v1/tasks'", native_tasks)
+        self.assertIn("yafvs_control_clone_task", control)
+        self.assertIn("copy_task (NULL, NULL, source_task_uuid, -1, &new_task)", control)
+        native_acl = commands.split("native_acl_operations[] = {", 1)[1]
+        self.assertIn('"CREATE_TASK",', native_acl)
 
     def test_gvmd_credential_parser_consumes_create_credential_elements(self):
         gmp_source = (Path(__file__).resolve().parents[2] / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")

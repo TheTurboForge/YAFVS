@@ -465,7 +465,32 @@ fn scheduled_report_marker_is_explicit_and_reaches_every_report_creation_branch(
 }
 
 #[test]
-fn raw_modify_task_transport_and_duplicate_writer_are_retired() {
+fn raw_task_create_and_modify_transports_are_retired() {
+    for retired in [
+        "create_task_data_t",
+        "create_task_data_reset",
+        "CLIENT_CREATE_TASK",
+        "strcasecmp (\"CREATE_TASK\", element_name)",
+    ] {
+        assert!(
+            !GMP_C.contains(retired),
+            "raw task creation remains: {retired}"
+        );
+    }
+    for retired in [
+        "gmp_create_task",
+        "gmp_create_task_ext",
+        "gmp_create_task_opts_t",
+    ] {
+        assert!(
+            !GVM_LIBS_GMP_C.contains(retired) && !GVM_LIBS_GMP_H.contains(retired),
+            "raw GMP task client remains: {retired}"
+        );
+    }
+    assert!(!GMP_SCHEMA.contains("<name>create_task</name>"));
+    assert!(GMP_SCHEMA.contains("<command>CREATE_TASK</command>"));
+    assert!(!MANAGE_COMMANDS_C.contains("{\"CREATE_TASK\","));
+    assert!(GMP_C.contains("strcasecmp (\"GET_TASKS\", element_name)"));
     for retired in [
         "CLIENT_MODIFY_TASK",
         "strcasecmp (\"MODIFY_TASK\", element_name)",
@@ -482,19 +507,15 @@ fn raw_modify_task_transport_and_duplicate_writer_are_retired() {
             "duplicate public task writer remains: {retired}"
         );
     }
-    assert!(GMP_C.contains("strcasecmp (\"CREATE_TASK\", element_name)"));
-    assert!(GMP_C.contains("strcasecmp (\"GET_TASKS\", element_name)"));
-    assert!(MANAGE_SQL_C.contains("find_task_with_permission (task_id, &task, \"modify_task\")"));
+    assert!(GSA_NATIVE_TASKS.contains("export const createNativeTask"));
+    assert!(GSA_NATIVE_TASKS.contains("writeNativeJson<NativeTaskItem>(gmp, 'api/v1/tasks'"));
+    assert!(YAFVS_CONTROL_C.contains("yafvs_control_clone_task"));
+    assert!(YAFVS_CONTROL_C.contains("copy_task (NULL, NULL, source_task_uuid, -1, &new_task)"));
     let native_acl = MANAGE_COMMANDS_C
         .split("native_acl_operations[] = {")
         .nth(1)
         .unwrap();
-    assert!(native_acl.contains("\"MODIFY_TASK\""));
-    let public_help = MANAGE_COMMANDS_C
-        .split("native_acl_operations[] = {")
-        .next()
-        .unwrap();
-    assert!(!public_help.contains("{\"MODIFY_TASK\""));
+    assert!(native_acl.contains("\"CREATE_TASK\""));
 }
 
 #[test]

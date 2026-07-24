@@ -156,39 +156,6 @@ static const gmp_get_task_opts_t gmp_get_task_opts_defaults = {NULL, NULL, 0,
                                                                0};
 
 /**
- * @brief Struct holding options for gmp create_task command.
- */
-typedef struct
-{
-  array_t *alert_ids;         ///< Array of alert IDs.
-  const char *config_id;      ///< ID of config.
-  const char *scanner_id;     ///< ID of task scanner.
-  const char *schedule_id;    ///< ID of task schedule.
-  const char *slave_id;       ///< ID of task schedule.
-  const char *target_id;      ///< ID of target.
-  const char *name;           ///< Name of task.
-  const char *comment;        ///< Comment on task.
-  const char *hosts_ordering; ///< Not used, kept for reasons of compatibility.
-  const char *observers;      ///< Comma-separated string of observer users.
-  array_t *observer_groups;   ///< IDs of observer groups.
-  int schedule_periods;       ///< Number of periods the schedule must run for.
-  /* Preferences */
-  const char *in_assets;    ///< In assets preference.
-  const char *max_hosts;    ///< Max hosts preference.
-  const char *max_checks;   ///< Max checks preference.
-  const char *source_iface; ///< Source iface preference.
-  /* Boolean flags: */
-  int alterable; ///< Whether the task is alterable.
-} gmp_create_task_opts_t;
-
-/**
- * @brief Sensible default values for gmp_get_report_opts_t.
- */
-static const gmp_create_task_opts_t gmp_create_task_opts_defaults = {
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-  NULL, NULL, 0,    NULL, NULL, NULL, NULL, 0};
-
-/**
  * @brief Struct holding options for gmp create_lsc_credential command.
  */
 typedef struct
@@ -244,13 +211,6 @@ gmp_authenticate_info_ext (gnutls_session_t *, gmp_authenticate_info_opts_t);
 
 int
 gmp_authenticate_info_ext_c (gvm_connection_t *, gmp_authenticate_info_opts_t);
-
-int
-gmp_create_task (gnutls_session_t *, const char *, const char *, const char *,
-                 const char *, gchar **);
-
-int
-gmp_create_task_ext (gnutls_session_t *, gmp_create_task_opts_t, gchar **);
 
 int
 gmp_get_tasks (gnutls_session_t *, const char *, int, int, entity_t *);

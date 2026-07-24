@@ -2862,55 +2862,6 @@ credential_full_type (const char* abbreviation)
 /* Scheduling. */
 
 /**
- * @brief Flag for manage_auth_allow_all.
- *
- * 1 if set via scheduler, 2 if set via event, else 0.
- */
-int authenticate_allow_all = 0;
-
-/**
- * @brief UUID of user whose scheduled task is to be started (in connection
- *        with authenticate_allow_all).
- */
-static gchar* schedule_user_uuid = NULL;
-
-/**
- * @brief Ensure that any subsequent authentications succeed.
- *
- * @param[in]  scheduled  Whether this is happening from the scheduler.
- */
-void
-manage_auth_allow_all (int scheduled)
-{
-  authenticate_allow_all = scheduled ? 1 : 2;
-}
-
-/**
- * @brief Access UUID of user that scheduled the current task.
- *
- * @return UUID of user that scheduled the current task.
- */
-const gchar*
-get_scheduled_user_uuid ()
-{
-  return schedule_user_uuid;
-}
-
-/**
- * @brief Set UUID of user that scheduled the current task.
- * The previous value is freed and a copy of the UUID is created.
- *
- * @param user_uuid UUID of user that scheduled the current task.
- */
-void
-set_scheduled_user_uuid (const gchar* user_uuid)
-{
-  gchar *user_uuid_copy = user_uuid ? g_strdup (user_uuid) : NULL;
-  g_free (schedule_user_uuid);
-  schedule_user_uuid = user_uuid_copy;
-}
-
-/**
  * @brief Task info, for scheduler.
  */
 typedef struct

@@ -191,13 +191,6 @@ manage_attach_databases ();
 
 /* Headers for symbols defined in manage.c which are private to libmanage. */
 
-/**
- * @brief Flag to force authentication to succeed.
- *
- * 1 if set via scheduler, 2 if set via event, else 0.
- */
-extern int authenticate_allow_all;
-
 int delete_reports (task_t);
 
 int
@@ -268,9 +261,9 @@ set_credential_snmp_secret (credential_t, const char *, const char *,
 /* Variables. */
 
 /**
- * @brief Function to fork a connection that will accept GMP requests.
+ * @brief Function to fork an alert child for a task-control request.
  */
-manage_connection_forker_t manage_fork_connection;
+manage_alert_forker_t manage_fork_alert_child;
 
 /**
  * @brief Memory cache of NVT information from the database.
@@ -3979,9 +3972,8 @@ cleanup_tables ()
  * @param[in]  max_email_include_size     Max size of email inclusions.
  * @param[in]  max_email_message_size     Max size of email user message text.
  * @param[in]  stop_tasks          Stop any active tasks.
- * @param[in]  fork_connection     Function to fork a connection that will
- *                                 accept GMP requests.  Used to start tasks
- *                                 with GMP when an alert occurs.
+ * @param[in]  fork_alert_child    Function to fork an alert child that starts
+ *                                 a task through private control.
  * @param[in]  skip_db_check       Skip DB check.
  * @param[in]  check_encryption_key  Check encryption key if doing DB check.
  * @param[in]  avoid_db_check_inserts  Whether to avoid inserts in DB check.
@@ -3997,7 +3989,7 @@ init_manage_internal (GSList *log_config,
                       int max_email_include_size,
                       int max_email_message_size,
                       int stop_tasks,
-                      manage_connection_forker_t fork_connection,
+                      manage_alert_forker_t fork_alert_child,
                       int skip_db_check,
                       int check_encryption_key,
                       int avoid_db_check_inserts)
@@ -4014,14 +4006,9 @@ init_manage_internal (GSList *log_config,
    *                 init_gmpd_process
    *                     init_manage_process
    *                 ...
-   *                 event
-   *                   fork_connection_for_event
-   *                       fork one
-   *                           init_gmpd_process
-   *                               init_manage_process
-   *                           serve_client
-   *                       fork two
-   *                           gmp_auth, gmp_start_task_report.
+   *                 alert event
+   *                   fork_alert_child
+   *                       private task-control start request
    *                 ...
    *             manage_schedule
    *                 private task-control start/stop requests
@@ -4117,8 +4104,8 @@ init_manage_internal (GSList *log_config,
   gvmd_db_conn_info.user = database->user ? g_strdup (database->user) : NULL;
   gvmd_db_conn_info.semaphore_timeout = database->semaphore_timeout;
 
-  if (fork_connection)
-    manage_fork_connection = fork_connection;
+  if (fork_alert_child)
+    manage_fork_alert_child = fork_alert_child;
   return 0;
 }
 
@@ -4148,9 +4135,8 @@ init_manage_funcs () {
  * @param[in]  max_email_attachment_size  Max size of email attachments.
  * @param[in]  max_email_include_size     Max size of email inclusions.
  * @param[in]  max_email_message_size     Max size of email user message text.
- * @param[in]  fork_connection     Function to fork a connection that will
- *                                 accept GMP requests.  Used to start tasks
- *                                 with GMP when an alert occurs.
+ * @param[in]  fork_alert_child    Function to fork an alert child that starts
+ *                                 a task through private control.
  * @param[in]  skip_db_check       Skip DB check.
  *
  * @return 0 success, -1 error, -2 database is too old, -3 database needs
@@ -4161,7 +4147,7 @@ int
 init_manage (GSList *log_config, const db_conn_info_t *database,
              int max_ips_per_target, int max_email_attachment_size,
              int max_email_include_size, int max_email_message_size,
-             manage_connection_forker_t fork_connection,
+             manage_alert_forker_t fork_alert_child,
              int skip_db_check)
 {
   return init_manage_internal (log_config,
@@ -4171,7 +4157,7 @@ init_manage (GSList *log_config, const db_conn_info_t *database,
                                max_email_include_size,
                                max_email_message_size,
                                1,  /* Stop active tasks. */
-                               fork_connection,
+                               fork_alert_child,
                                skip_db_check,
                                1, /* Check encryption key if checking db. */
                                0  /* Do not avoid inserts if checking db. */);
@@ -4812,24 +4798,6 @@ authenticate (credentials_t* credentials)
     {
       int fail;
       auth_method_t auth_method;
-
-      if (authenticate_allow_all)
-        {
-          /* This flag is set when Manager makes a connection to itself, for
-           * scheduled tasks and alerts.  Take the stored uuid
-           * to be able to tell apart locally authenticated vs remotely
-           * authenticated users (in order to fetch the correct rules). */
-          credentials->uuid = g_strdup (get_scheduled_user_uuid ());
-          if (*credentials->uuid)
-            {
-              if (credentials_setup (credentials))
-                return 99;
-
-              manage_session_init (credentials->uuid);
-              return 0;
-            }
-          return -1;
-        }
 
       fail = authenticate_any_method (credentials->username,
                                       credentials->password,

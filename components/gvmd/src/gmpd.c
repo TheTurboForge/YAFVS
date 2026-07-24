@@ -1,4 +1,5 @@
 /* Copyright (C) 2009-2022 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -78,8 +79,8 @@ static int close_connection = 0;
  * @param[in]  max_email_attachment_size  Max size of email attachments.
  * @param[in]  max_email_include_size     Max size of email inclusions.
  * @param[in]  max_email_message_size     Max size of email user message text.
- * @param[in]  fork_connection  Function to fork a connection to the GMP
- *                              daemon layer, or NULL.
+ * @param[in]  fork_alert_child Function to fork an alert child for private
+ *                              task control, or NULL.
  * @param[in]  skip_db_check    Skip DB check.
  *
  * @return 0 success, -1 error, -2 database is too old,
@@ -89,12 +90,12 @@ int
 init_gmpd (GSList *log_config, const db_conn_info_t *database,
            int max_ips_per_target, int max_email_attachment_size,
            int max_email_include_size, int max_email_message_size,
-           manage_connection_forker_t fork_connection, int skip_db_check)
+           manage_alert_forker_t fork_alert_child, int skip_db_check)
 {
   return init_gmp (log_config, database, max_ips_per_target,
                    max_email_attachment_size, max_email_include_size,
                    max_email_message_size,
-                   fork_connection, skip_db_check);
+                   fork_alert_child, skip_db_check);
 }
 
 /**

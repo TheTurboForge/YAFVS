@@ -216,9 +216,9 @@ typedef struct print_report_context print_report_context_t;
 extern db_conn_info_t gvmd_db_conn_info;
 
 /**
- * @brief Function to fork a connection that will accept GMP requests.
+ * @brief Function to fork an alert child for a task-control request.
  */
-extern manage_connection_forker_t manage_fork_connection;
+extern manage_alert_forker_t manage_fork_alert_child;
 
 
 

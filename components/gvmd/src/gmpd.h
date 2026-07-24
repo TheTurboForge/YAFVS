@@ -1,4 +1,5 @@
 /* Copyright (C) 2009-2022 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -33,7 +34,7 @@
 
 int
 init_gmpd (GSList *, const db_conn_info_t *, int, int, int, int,
-           manage_connection_forker_t, int);
+           manage_alert_forker_t, int);
 
 void
 init_gmpd_process (const db_conn_info_t *, gchar **);

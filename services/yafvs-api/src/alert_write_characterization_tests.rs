@@ -60,8 +60,9 @@ fn alert_start_execution_uses_private_control_and_does_not_remove_gmp_owners() {
     let trigger = inherited_function(MANAGE_ALERTS_C, "trigger");
     assert!(!trigger.contains("gmp_start_task_report_c"));
     assert!(trigger.contains("yafvs_control_start_task_client (owner_id, task_id)"));
-    assert!(trigger.contains("manage_fork_connection (&connection, owner_id)"));
-    assert!(trigger.contains("gvm_connection_free (&connection)"));
+    assert!(trigger.contains("manage_fork_alert_child ()"));
+    assert!(!trigger.contains("manage_fork_connection"));
+    assert!(!trigger.contains("gvm_connection_free"));
 
     for required in [
         "YAFVS_CONTROL_START_TASK_COMMAND",

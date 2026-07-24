@@ -13,6 +13,8 @@ const MANAGE_SQL_C: &str = include_str!("../../../components/gvmd/src/manage_sql
 const MANAGE_SQL_SCHEDULES_C: &str =
     include_str!("../../../components/gvmd/src/manage_sql_schedules.c");
 const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
+const GMPD_C: &str = include_str!("../../../components/gvmd/src/gmpd.c");
+const GVMD_C: &str = include_str!("../../../components/gvmd/src/gvmd.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GVM_LIBS_GMP_C: &str = include_str!("../../../components/gvm-libs/gmp/gmp.c");
@@ -38,15 +40,87 @@ fn alert_and_scheduler_task_control_use_private_control_without_retiring_public_
     let alert_trigger = inherited_function(MANAGE_ALERTS_C, "trigger");
     assert!(!alert_trigger.contains("gmp_start_task_report_c"));
     for required in [
-        "manage_fork_connection (&connection, owner_id)",
-        "gvm_connection_free (&connection)",
+        "manage_fork_alert_child ()",
         "yafvs_control_start_task_client (owner_id, task_id)",
+        "alert_secure_gfree (task_id)",
+        "alert_secure_free (owner_id)",
         "gvm_close_sentry ()",
     ] {
         assert!(
             alert_trigger.contains(required),
             "alert start missing {required}"
         );
+    }
+    assert_eq!(
+        alert_trigger.matches("manage_fork_alert_child ()").count(),
+        1
+    );
+    assert!(alert_trigger.contains(
+        "default:\n                alert_secure_gfree (task_id);\n                alert_secure_free (owner_id);\n                return 0;"
+    ));
+    for retired in ["gvm_connection_t", "manage_fork_connection", "socketpair"] {
+        assert!(
+            !alert_trigger.contains(retired),
+            "alert start must not retain {retired}"
+        );
+    }
+
+    let alert_child = inherited_function(GVMD_C, "fork_alert_child");
+    assert_eq!(alert_child.matches("pid = fork ()").count(), 1);
+    for required in [
+        "init_sentry ()",
+        "is_parent = 0",
+        "cleanup_manage_process (FALSE)",
+        "pthread_sigmask (SIG_SETMASK, sigmask_normal, NULL)",
+        "return 0",
+        "return pid",
+    ] {
+        assert!(
+            alert_child.contains(required),
+            "alert child missing {required}"
+        );
+    }
+    let sentry_position = alert_child.find("init_sentry ()").unwrap();
+    let child_identity_position = alert_child.find("is_parent = 0").unwrap();
+    let cleanup_position = alert_child.find("cleanup_manage_process (FALSE)").unwrap();
+    let sigmask_position = alert_child
+        .find("pthread_sigmask (SIG_SETMASK, sigmask_normal, NULL)")
+        .unwrap();
+    assert!(
+        sentry_position < child_identity_position
+            && child_identity_position < cleanup_position
+            && cleanup_position < sigmask_position,
+        "alert child must establish child identity and clean inherited manager state before private control"
+    );
+    for retired in [
+        "socketpair",
+        "serve_client",
+        "init_gmpd_process",
+        "fork_with_handlers",
+        "gvm_server_new",
+        "gvm_server_attach",
+        "gvm_sleep (5)",
+        "sigaction",
+        "setup_signal_handler",
+    ] {
+        assert!(
+            !alert_child.contains(retired),
+            "alert child must not retain {retired}"
+        );
+    }
+    for source in [MANAGE_C, MANAGE_H, MANAGE_SQL_C, GVMD_C] {
+        for retired in [
+            "authenticate_allow_all",
+            "manage_auth_allow_all",
+            "schedule_user_uuid",
+            "get_scheduled_user_uuid",
+            "set_scheduled_user_uuid",
+        ] {
+            assert!(
+                !source.contains(retired),
+                "retired bypass remains: {retired}"
+            );
+        }
     }
 
     let private_start = inherited_function(YAFVS_CONTROL_C, "yafvs_control_start_task");
@@ -75,6 +149,9 @@ fn alert_and_scheduler_task_control_use_private_control_without_retiring_public_
         inherited_function(GVM_LIBS_GMP_C, "gmp_start_task_ext_c")
             .contains("<start_task task_id=\\\"%s\\\"/>")
     );
+    assert!(GVMD_C.contains("init_gmpd ("));
+    assert!(GVMD_C.contains("accept_and_maybe_fork"));
+    assert!(GMPD_C.contains("serve_gmp ("));
     let scheduler_start = inherited_function(MANAGE_C, "scheduled_task_start");
     for required in [
         "pid = fork ();",

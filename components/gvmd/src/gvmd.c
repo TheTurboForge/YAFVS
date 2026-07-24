@@ -663,233 +663,35 @@ accept_and_maybe_fork (int server_socket, sigset_t *sigmask_current)
 
 
 
-/* Connection forker for manager events. */
-
 /**
- * @brief Fork a child connected to the Manager.
- *
- * @param[in]  client_connection       Client connection.
- * @param[in]  uuid                    UUID of event owner.
+ * @brief Fork an alert child for a private task-control request.
  *
  * @return PID parent on success, 0 child on success, -1 error.
  */
 static int
-fork_connection_internal (gvm_connection_t *client_connection,
-                          const gchar* uuid)
+fork_alert_child (void)
 {
-  int pid, parent_client_socket, ret;
-  int sockets[2];
-  struct sigaction action;
-  gchar *auth_uuid;
+  int pid;
 
-  /* Fork a child to use as an event client and server. */
-
-  /* This must 'fork' and not 'fork_with_handlers' so that the next fork can
-   * decide about handlers. */
   pid = fork ();
   switch (pid)
     {
       case 0:
-        /* Child. */
         init_sentry ();
+        is_parent = 0;
         cleanup_manage_process (FALSE);
-        break;
+        if (sigmask_normal)
+          pthread_sigmask (SIG_SETMASK, sigmask_normal, NULL);
+        return 0;
 
       case -1:
-        /* Parent when error. */
         g_warning ("%s: fork: %s", __func__, strerror (errno));
         return -1;
-        break;
 
       default:
-        /* Parent.  Return to caller. */
         g_debug ("%s: %i forked %i", __func__, getpid (), pid);
         return pid;
-        break;
     }
-
-  /* This is now a child of the main Manager process.  It forks again.  The
-   * only case that returns is the process that the caller can use for GMP
-   * commands.  The caller must exit this process.
-   */
-
-  /* Restore the sigmask that was blanked for pselect. */
-  if (sigmask_normal)
-    pthread_sigmask (SIG_SETMASK, sigmask_normal, NULL);
-
-  /* Create a connected pair of sockets. */
-  if (socketpair (AF_UNIX, SOCK_STREAM, 0, sockets))
-    {
-      g_warning ("%s: socketpair: %s", __func__, strerror (errno));
-      gvm_close_sentry ();
-      exit (EXIT_FAILURE);
-    }
-
-  /* Split into a Manager client for the event, and a Manager serving
-   * GMP to that client. */
-
-  is_parent = 0;
-
-  /* As with accept_and_maybe_fork, use the default handlers for termination
-   * signals in the child.  This is required for signals to work when the
-   * child is waiting for spawns and forks. */
-  pid = fork_with_handlers ();
-  switch (pid)
-    {
-      case 0:
-        /* Child.  Serve the event GMP, then exit. */
-
-        init_sentry ();
-        setproctitle ("Serving GMP internally");
-
-        parent_client_socket = sockets[0];
-
-        memset (&action, '\0', sizeof (action));
-        sigemptyset (&action.sa_mask);
-        action.sa_handler = SIG_DFL;
-        if (sigaction (SIGCHLD, &action, NULL) == -1)
-          {
-            g_critical ("%s: failed to set client SIGCHLD handler: %s",
-                        __func__,
-                        strerror (errno));
-            shutdown (parent_client_socket, SHUT_RDWR);
-            close (parent_client_socket);
-            gvm_close_sentry ();
-            exit (EXIT_FAILURE);
-          }
-
-        /* The socket must have O_NONBLOCK set, in case an "asynchronous
-         * network error" removes the data between `select' and `read'.
-         */
-        if (fcntl (parent_client_socket, F_SETFL, O_NONBLOCK) == -1)
-          {
-            g_critical ("%s: failed to set client socket flag: %s",
-                        __func__,
-                        strerror (errno));
-            shutdown (parent_client_socket, SHUT_RDWR);
-            close (parent_client_socket);
-            gvm_close_sentry ();
-            exit (EXIT_FAILURE);
-          }
-
-        /* Copy the given uuid, because the caller may have passed a
-         * reference to some session variable that will be reset by
-         * the process initialisation. */
-        auth_uuid = g_strdup (uuid);
-
-        init_gmpd_process (&database, disabled_commands);
-
-        manage_auth_allow_all (FALSE);
-        set_scheduled_user_uuid (auth_uuid);
-        g_free (auth_uuid);
-
-        /* For TLS, create a new session, because the parent may have been in
-         * the middle of using the old one. */
-
-        if (use_tls)
-          {
-            if (gvm_server_new (GNUTLS_SERVER,
-                                CACERT,
-                                SCANNERCERT,
-                                SCANNERKEY,
-                                &client_session,
-                                &client_credentials))
-              {
-                g_critical ("%s: client server initialisation failed",
-                            __func__);
-                gvm_close_sentry ();
-                exit (EXIT_FAILURE);
-              }
-            set_gnutls_priority (&client_session, priorities_option);
-            if (dh_params_option
-                && set_gnutls_dhparams (client_credentials, dh_params_option))
-              g_warning ("Couldn't set DH parameters from %s", dh_params_option);
-          }
-
-        /* Serve client. */
-
-        g_debug ("%s: serving GMP to client on socket %i",
-                 __func__, parent_client_socket);
-
-        memset (client_connection, 0, sizeof (*client_connection));
-        client_connection->tls = use_tls;
-        client_connection->socket = parent_client_socket;
-        client_connection->session = client_session;
-        client_connection->credentials = client_credentials;
-        ret = serve_client (manager_socket, client_connection);
-
-        gvm_close_sentry ();
-        exit (ret);
-        break;
-
-      case -1:
-        /* Parent when error. */
-
-        g_warning ("%s: fork: %s", __func__, strerror (errno));
-        gvm_close_sentry ();
-        exit (EXIT_FAILURE);
-        break;
-
-      default:
-        /* Parent.  */
-
-        g_debug ("%s: %i forked %i", __func__, getpid (), pid);
-
-        setproctitle ("Requesting GMP internally");
-
-        /** @todo Give the parent time to prepare. */
-        gvm_sleep (5);
-
-        memset (client_connection, 0, sizeof (*client_connection));
-        client_connection->tls = use_tls;
-        client_connection->socket = sockets[1];
-
-        if (use_tls)
-          {
-            if (gvm_server_new (GNUTLS_CLIENT,
-                                CACERT,
-                                CLIENTCERT,
-                                CLIENTKEY,
-                                &client_connection->session,
-                                &client_connection->credentials))
-              {
-                gvm_close_sentry ();
-                exit (EXIT_FAILURE);
-              }
-
-            if (gvm_server_attach (client_connection->socket,
-                                   &client_connection->session))
-              {
-                gvm_close_sentry ();
-                exit (EXIT_FAILURE);
-              }
-          }
-
-        g_debug ("%s: all set to request GMP on socket %i",
-                 __func__, client_connection->socket);
-
-        return 0;
-        break;
-    }
-
-  gvm_close_sentry ();
-  exit (EXIT_FAILURE);
-  return -1;
-}
-
-/**
- * @brief Fork a child connected to the Manager.
- *
- * @param[in]  client_connection  Client connection.
- * @param[in]  uuid               UUID of user.
- *
- * @return PID parent on success, 0 child on success, -1 error.
- */
-static int
-fork_connection_for_event (gvm_connection_t *client_connection,
-                           const gchar* uuid)
-{
-  return fork_connection_internal (client_connection, uuid);
 }
 
 
@@ -3377,7 +3179,7 @@ gvmd (int argc, char** argv, char *env[])
   switch (init_gmpd (log_config, &database, max_ips_per_target,
                      max_email_attachment_size, max_email_include_size,
                      max_email_message_size,
-                     fork_connection_for_event, 0))
+                     fork_alert_child, 0))
     {
       case 0:
         break;

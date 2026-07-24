@@ -3615,14 +3615,11 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
         }
       case ALERT_METHOD_START_TASK:
         {
-          gvm_connection_t connection;
           char *task_id, *owner_id;
 
-          /* Run the callback to fork a child connected to the Manager. */
-
-          if (manage_fork_connection == NULL)
+          if (manage_fork_alert_child == NULL)
             {
-              g_warning ("%s: no connection fork available", __func__);
+              g_warning ("%s: no alert child fork available", __func__);
               return -1;
             }
 
@@ -3630,6 +3627,7 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
           if (task_id == NULL || strcmp (task_id, "") == 0)
             {
               g_warning ("%s: start_task_task missing or empty", __func__);
+              alert_secure_gfree (task_id);
               return -1;
             }
 
@@ -3639,43 +3637,38 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
             {
               g_warning ("%s: could not find alert owner",
                          __func__);
-              free (owner_id);
+              alert_secure_gfree (task_id);
+              alert_secure_free (owner_id);
               return -1;
             }
 
-          switch (manage_fork_connection (&connection, owner_id))
+          switch (manage_fork_alert_child ())
             {
               case 0:
-                /* Child.  Break, stop task, exit. */
                 break;
 
               case -1:
-                /* Parent on error. */
-                g_free (task_id);
+                alert_secure_gfree (task_id);
+                alert_secure_free (owner_id);
                 g_warning ("%s: fork failed", __func__);
                 return -1;
-                break;
 
               default:
-                /* Parent.  Continue with whatever lead to this escalation. */
-                g_free (task_id);
-                free (owner_id);
+                alert_secure_gfree (task_id);
+                alert_secure_free (owner_id);
                 return 0;
-                break;
             }
 
-          /* Do not reuse the forked manager connection in the alert child. */
-          gvm_connection_free (&connection);
           if (yafvs_control_start_task_client (owner_id, task_id))
             {
-              g_free (task_id);
-              free (owner_id);
+              alert_secure_gfree (task_id);
+              alert_secure_free (owner_id);
               gvm_close_sentry ();
               exit (EXIT_FAILURE);
             }
 
-          g_free (task_id);
-          free (owner_id);
+          alert_secure_gfree (task_id);
+          alert_secure_free (owner_id);
           gvm_close_sentry ();
           exit (EXIT_SUCCESS);
         }

@@ -120,17 +120,16 @@ typedef struct
 } name_value_t;
 
 /**
- * @brief Fork helper function type.
+ * @brief Fork an alert child for a task-control request.
  */
-typedef int (*manage_connection_forker_t) (gvm_connection_t * conn,
-                                           const gchar* uuid);
+typedef int (*manage_alert_forker_t) (void);
 
 void
 init_manage_funcs ();
 
 int
 init_manage (GSList*, const db_conn_info_t *, int, int, int, int,
-             manage_connection_forker_t, int);
+             manage_alert_forker_t, int);
 
 int
 init_manage_helper (GSList *, const db_conn_info_t *, int, int);
@@ -1995,15 +1994,6 @@ set_scanner_connection_retry (int);
  * @brief Seconds between calls to manage_asset_snapshot_delete_stale.
  */
 #define ASSET_SNAPSHOT_STALE_DELETE_PERIOD 3600 /* every hour */
-
-void
-manage_auth_allow_all (int);
-
-const gchar*
-get_scheduled_user_uuid ();
-
-void
-set_scheduled_user_uuid (const gchar* uuid);
 
 void
 manage_sync (sigset_t *, int (*fork_update_nvt_cache) (pid_t*), gboolean);

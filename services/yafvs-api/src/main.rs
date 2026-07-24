@@ -226,6 +226,7 @@ mod tag_writes;
 mod tags;
 mod target_alive_tests;
 mod target_handlers;
+mod target_host_syntax;
 mod target_host_validation;
 mod target_id_validation;
 mod target_query_sql;

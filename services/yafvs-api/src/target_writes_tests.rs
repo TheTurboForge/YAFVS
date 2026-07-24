@@ -6,7 +6,7 @@ use crate::{
     errors::ApiError,
     ssh_host_key_pins::SshHostKeyPin,
     target_alive_tests::validate_alive_tests,
-    target_host_validation::MAX_TARGET_HOSTS,
+    target_host_syntax::MAX_TARGET_HOSTS,
     target_text_validation::MAX_TARGET_TEXT_BYTES,
     target_write_db::ensure_target_is_human_owned,
     target_write_sql::*,
@@ -231,7 +231,7 @@ fn target_create_request_accepts_secret_free_credential_references() {
 #[test]
 fn target_create_request_rejects_unsafe_or_missing_inputs() {
     let mut request = create_request();
-    request.hosts = vec!["192.0.2.0/24".to_string()];
+    request.hosts = vec!["192.0.2.0/31".to_string()];
     assert!(matches!(
         validate_target_create_request(request),
         Err(ApiError::BadRequest(_))
@@ -531,11 +531,11 @@ fn target_patch_request_validates_simple_host_lists() {
         Err(ApiError::BadRequest(_))
     ));
     assert!(matches!(
-        validate_target_patch_request(hosts_patch_request(&["192.0.2.1/24"], &[])),
+        validate_target_patch_request(hosts_patch_request(&["192.0.2.1/31"], &[])),
         Err(ApiError::BadRequest(_))
     ));
     assert!(matches!(
-        validate_target_patch_request(hosts_patch_request(&["192.0.2.1-10"], &[])),
+        validate_target_patch_request(hosts_patch_request(&["192.0.2.10-1"], &[])),
         Err(ApiError::BadRequest(_))
     ));
     assert!(matches!(

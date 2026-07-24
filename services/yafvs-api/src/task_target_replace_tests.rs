@@ -44,7 +44,7 @@ fn task_target_replace_validation_reuses_target_host_rules() {
 
     for request in [
         replacement_request(&[], None),
-        replacement_request(&["192.0.2.10/24"], None),
+        replacement_request(&["192.0.2.10/31"], None),
         replacement_request(&["192.0.2.10"], Some(&["192.0.2.10"])),
     ] {
         assert!(matches!(

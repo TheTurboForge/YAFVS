@@ -9,6 +9,7 @@ use crate::{
     formatters::unix_ts_to_rfc3339,
     row_helpers::{alive_test_labels, boolean_int, csv_values, task_has_active_current_report},
     ssh_host_key_pins::{SshHostKeyPin, parse_stored_ssh_host_key_pins},
+    target_host_syntax::effective_host_count,
     user_tags::ReportUserTag,
 };
 
@@ -234,15 +235,20 @@ pub(crate) fn target_from_row_with_user_tags(
     row: &Row,
     user_tags: Vec<ReportUserTag>,
 ) -> TargetItem {
-    let hosts = csv_values(&row.get::<_, String>("hosts"));
+    let hosts_raw = row.get::<_, String>("hosts");
+    let exclude_hosts_raw = row.get::<_, String>("exclude_hosts");
+    let max_hosts = effective_host_count(&hosts_raw, &exclude_hosts_raw)
+        .ok()
+        .and_then(|count| i64::try_from(count).ok())
+        .unwrap_or_else(|| row.get("host_entry_count"));
     TargetItem {
         id: row.get("uuid"),
         name: row.get("name"),
         comment: row.get("comment"),
         owner_id: row.get("owner_id"),
-        max_hosts: row.get("host_entry_count"),
-        hosts,
-        exclude_hosts: csv_values(&row.get::<_, String>("exclude_hosts")),
+        max_hosts,
+        hosts: csv_values(&hosts_raw),
+        exclude_hosts: csv_values(&exclude_hosts_raw),
         alive_tests: alive_test_labels(row.get("alive_test")),
         allow_simultaneous_ips: boolean_int(row.get("allow_simultaneous_ips")),
         reverse_lookup_only: boolean_int(row.get("reverse_lookup_only")),

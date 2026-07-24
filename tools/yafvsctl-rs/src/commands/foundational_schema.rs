@@ -1,14 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
 // SPDX-License-Identifier: GPL-3.0-or-later
 // YAFVS-Derivation: behavioral-reimplementation
-// YAFVS-Source-Provenance: observed version-288 PostgreSQL catalog contract for foundational meta/users/settings plus credentials/scanners tables; components/gvmd/src/manage_pg.c create_tables behavior (AGPL-3.0-or-later)
+// YAFVS-Source-Provenance: observed version-288 PostgreSQL catalog contract for foundational meta/users/settings plus credentials/scanners, port-list, and target tables; components/gvmd/src/manage_pg.c create_tables behavior (AGPL-3.0-or-later)
 
 //! Fixed, fresh-schema ownership contract for the foundational public tables.
 
-/// The exact catalog digest for the nine stage tables created by
+/// The exact catalog digest for the seventeen stage tables created by
 /// [`FOUNDATIONAL_SCHEMA_SQL`].
 pub(crate) const FOUNDATIONAL_SCHEMA_FINGERPRINT: &str =
-    "d2d1de54355603502c47adaec9ec855290605edf6a4a05385f8b87ecb4ede800";
+    "ef99fef476c8bb7f09980f6a9c76702c2ba70be1b78cbc08656cfb827a173417";
 
 /// One idempotent transaction for the dependency-closed foundational table family.
 ///
@@ -109,6 +109,96 @@ CREATE TABLE IF NOT EXISTS scanners_trash (
     relay_host text,
     relay_port integer
 );
+CREATE TABLE IF NOT EXISTS port_lists (
+    id SERIAL PRIMARY KEY,
+    uuid text UNIQUE NOT NULL,
+    owner integer REFERENCES users (id) ON DELETE RESTRICT,
+    name text NOT NULL,
+    comment text,
+    predefined integer,
+    creation_time integer,
+    modification_time integer
+);
+CREATE TABLE IF NOT EXISTS port_lists_trash (
+    id SERIAL PRIMARY KEY,
+    uuid text UNIQUE NOT NULL,
+    owner integer REFERENCES users (id) ON DELETE RESTRICT,
+    name text NOT NULL,
+    comment text,
+    predefined integer,
+    creation_time integer,
+    modification_time integer
+);
+CREATE TABLE IF NOT EXISTS port_ranges (
+    id SERIAL PRIMARY KEY,
+    uuid text UNIQUE NOT NULL,
+    port_list integer REFERENCES port_lists (id) ON DELETE RESTRICT,
+    type integer,
+    start integer,
+    "end" integer,
+    comment text,
+    exclude integer
+);
+CREATE TABLE IF NOT EXISTS port_ranges_trash (
+    id SERIAL PRIMARY KEY,
+    uuid text UNIQUE NOT NULL,
+    port_list integer REFERENCES port_lists_trash (id) ON DELETE RESTRICT,
+    type integer,
+    start integer,
+    "end" integer,
+    comment text,
+    exclude integer
+);
+CREATE TABLE IF NOT EXISTS targets (
+    id SERIAL PRIMARY KEY,
+    uuid text UNIQUE NOT NULL,
+    owner integer REFERENCES users (id) ON DELETE RESTRICT,
+    name text NOT NULL,
+    hosts text,
+    exclude_hosts text,
+    reverse_lookup_only integer,
+    reverse_lookup_unify integer,
+    comment text,
+    port_list integer REFERENCES port_lists (id) ON DELETE RESTRICT,
+    alive_test integer,
+    creation_time integer,
+    modification_time integer,
+    allow_simultaneous_ips integer DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS targets_trash (
+    id SERIAL PRIMARY KEY,
+    uuid text UNIQUE NOT NULL,
+    owner integer REFERENCES users (id) ON DELETE RESTRICT,
+    name text NOT NULL,
+    hosts text,
+    exclude_hosts text,
+    reverse_lookup_only integer,
+    reverse_lookup_unify integer,
+    comment text,
+    port_list integer,
+    port_list_location integer,
+    alive_test integer,
+    creation_time integer,
+    modification_time integer,
+    allow_simultaneous_ips integer DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS targets_login_data (
+    id SERIAL PRIMARY KEY,
+    target integer REFERENCES targets (id) ON DELETE RESTRICT,
+    type text,
+    credential integer REFERENCES credentials (id) ON DELETE RESTRICT,
+    port integer,
+    host_key_pins text NOT NULL DEFAULT '[]'
+);
+CREATE TABLE IF NOT EXISTS targets_trash_login_data (
+    id SERIAL PRIMARY KEY,
+    target integer REFERENCES targets_trash (id) ON DELETE RESTRICT,
+    type text,
+    credential integer,
+    port integer,
+    credential_location integer,
+    host_key_pins text NOT NULL DEFAULT '[]'
+);
 COMMIT;
 "#;
 
@@ -139,7 +229,9 @@ FROM (
         WHERE table_schema = 'public'
           AND table_name IN (
               'meta', 'users', 'settings', 'credentials', 'credentials_trash',
-              'credentials_data', 'credentials_trash_data', 'scanners', 'scanners_trash'
+              'credentials_data', 'credentials_trash_data', 'scanners', 'scanners_trash',
+              'port_lists', 'port_lists_trash', 'port_ranges', 'port_ranges_trash',
+              'targets', 'targets_trash', 'targets_login_data', 'targets_trash_login_data'
           )
     ) AS columns
 
@@ -158,7 +250,9 @@ FROM (
     WHERE namespace.nspname = 'public'
       AND relation.relname IN (
           'meta', 'users', 'settings', 'credentials', 'credentials_trash',
-          'credentials_data', 'credentials_trash_data', 'scanners', 'scanners_trash'
+          'credentials_data', 'credentials_trash_data', 'scanners', 'scanners_trash',
+          'port_lists', 'port_lists_trash', 'port_ranges', 'port_ranges_trash',
+          'targets', 'targets_trash', 'targets_login_data', 'targets_trash_login_data'
       )
 
     UNION ALL
@@ -168,7 +262,9 @@ FROM (
     WHERE schemaname = 'public'
       AND tablename IN (
           'meta', 'users', 'settings', 'credentials', 'credentials_trash',
-          'credentials_data', 'credentials_trash_data', 'scanners', 'scanners_trash'
+          'credentials_data', 'credentials_trash_data', 'scanners', 'scanners_trash',
+          'port_lists', 'port_lists_trash', 'port_ranges', 'port_ranges_trash',
+          'targets', 'targets_trash', 'targets_login_data', 'targets_trash_login_data'
       )
 ) AS fingerprint
 ORDER BY item
@@ -206,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_owns_exactly_the_nine_stage_tables_in_dependency_order() {
+    fn contract_owns_exactly_the_seventeen_stage_tables_in_dependency_order() {
         let tables = [
             "meta",
             "users",
@@ -217,6 +313,14 @@ mod tests {
             "credentials_trash_data",
             "scanners",
             "scanners_trash",
+            "port_lists",
+            "port_lists_trash",
+            "port_ranges",
+            "port_ranges_trash",
+            "targets",
+            "targets_trash",
+            "targets_login_data",
+            "targets_trash_login_data",
         ];
         let positions = tables.map(|table| {
             FOUNDATIONAL_SCHEMA_SQL
@@ -228,7 +332,65 @@ mod tests {
             FOUNDATIONAL_SCHEMA_SQL
                 .matches("CREATE TABLE IF NOT EXISTS")
                 .count(),
-            9
+            17
+        );
+    }
+
+    #[test]
+    fn port_list_and_target_foreign_keys_match_the_inherited_contract() {
+        for clause in [
+            "port_lists (\n    id SERIAL PRIMARY KEY,\n    uuid text UNIQUE NOT NULL,\n    owner integer REFERENCES users (id) ON DELETE RESTRICT",
+            "port_lists_trash (\n    id SERIAL PRIMARY KEY,\n    uuid text UNIQUE NOT NULL,\n    owner integer REFERENCES users (id) ON DELETE RESTRICT",
+            "port_list integer REFERENCES port_lists (id) ON DELETE RESTRICT",
+            "port_list integer REFERENCES port_lists_trash (id) ON DELETE RESTRICT",
+            "targets (\n    id SERIAL PRIMARY KEY,\n    uuid text UNIQUE NOT NULL,\n    owner integer REFERENCES users (id) ON DELETE RESTRICT",
+            "targets_trash (\n    id SERIAL PRIMARY KEY,\n    uuid text UNIQUE NOT NULL,\n    owner integer REFERENCES users (id) ON DELETE RESTRICT",
+            "target integer REFERENCES targets (id) ON DELETE RESTRICT",
+            "credential integer REFERENCES credentials (id) ON DELETE RESTRICT",
+            "target integer REFERENCES targets_trash (id) ON DELETE RESTRICT",
+        ] {
+            assert!(FOUNDATIONAL_SCHEMA_SQL.contains(clause));
+        }
+    }
+
+    #[test]
+    fn trash_target_relations_preserve_intentionally_plain_foreign_keys() {
+        let targets_trash = FOUNDATIONAL_SCHEMA_SQL
+            .split("CREATE TABLE IF NOT EXISTS targets_trash")
+            .nth(1)
+            .unwrap();
+        assert!(targets_trash.contains("port_list integer,\n    port_list_location integer,"));
+        assert!(!targets_trash.contains("port_list integer REFERENCES"));
+
+        let targets_trash_login_data = FOUNDATIONAL_SCHEMA_SQL
+            .split("CREATE TABLE IF NOT EXISTS targets_trash_login_data")
+            .nth(1)
+            .unwrap();
+        assert!(
+            targets_trash_login_data.contains(
+                "credential integer,\n    port integer,\n    credential_location integer,"
+            )
+        );
+        assert!(!targets_trash_login_data.contains("credential integer REFERENCES"));
+    }
+
+    #[test]
+    fn port_ranges_and_target_login_data_preserve_inherited_column_details() {
+        assert_eq!(
+            FOUNDATIONAL_SCHEMA_SQL.matches("\"end\" integer").count(),
+            2
+        );
+        assert_eq!(
+            FOUNDATIONAL_SCHEMA_SQL
+                .matches("allow_simultaneous_ips integer DEFAULT 1")
+                .count(),
+            2
+        );
+        assert_eq!(
+            FOUNDATIONAL_SCHEMA_SQL
+                .matches("host_key_pins text NOT NULL DEFAULT '[]'")
+                .count(),
+            2
         );
     }
 
@@ -252,13 +414,14 @@ mod tests {
             .split("CREATE TABLE IF NOT EXISTS scanners_trash")
             .nth(1)
             .unwrap();
+        let scanners_trash = scanners_trash.split(");").next().unwrap();
         assert!(scanners_trash.contains("credential integer,\n    credential_location integer,"));
         assert!(!scanners_trash.contains("credential integer REFERENCES"));
         assert!(scanners_trash.contains("relay_host text,\n    relay_port integer"));
     }
 
     #[test]
-    fn fingerprint_is_normalized_and_limited_to_the_nine_stage_tables() {
+    fn fingerprint_is_normalized_and_limited_to_the_seventeen_stage_tables() {
         let sql = foundational_schema_fingerprint_sql();
         assert!(sql.contains("row_number() OVER"));
         for table in [
@@ -271,6 +434,14 @@ mod tests {
             "credentials_trash_data",
             "scanners",
             "scanners_trash",
+            "port_lists",
+            "port_lists_trash",
+            "port_ranges",
+            "port_ranges_trash",
+            "targets",
+            "targets_trash",
+            "targets_login_data",
+            "targets_trash_login_data",
         ] {
             assert_eq!(sql.matches(&format!("'{table}'")).count(), 3);
         }

@@ -78,7 +78,7 @@ pub(crate) async fn start_task(
     ))
 }
 
-async fn load_task_start_state(
+pub(crate) async fn load_task_start_state(
     tx: &Transaction<'_>,
     task_id: &str,
 ) -> Result<TaskStartState, ApiError> {
@@ -152,7 +152,7 @@ pub(crate) fn ensure_task_is_startable(task: &TaskStartState) -> Result<(), ApiE
     }
 }
 
-async fn ensure_task_is_not_already_queued(
+pub(crate) async fn ensure_task_is_not_already_queued(
     tx: &Transaction<'_>,
     task_internal_id: i32,
 ) -> Result<(), ApiError> {
@@ -170,7 +170,7 @@ async fn ensure_task_is_not_already_queued(
     }
 }
 
-async fn insert_task_start_report(
+pub(crate) async fn insert_task_start_report(
     tx: &Transaction<'_>,
     task: &TaskStartState,
     task_owner_id: i32,
@@ -186,7 +186,7 @@ async fn insert_task_start_report(
     Ok((row.get(0), row.get(1)))
 }
 
-async fn insert_task_start_scan_queue(
+pub(crate) async fn insert_task_start_scan_queue(
     tx: &Transaction<'_>,
     report_internal_id: i32,
 ) -> Result<(), ApiError> {
@@ -196,7 +196,7 @@ async fn insert_task_start_scan_queue(
     Ok(())
 }
 
-async fn mark_task_start_requested(
+pub(crate) async fn mark_task_start_requested(
     tx: &Transaction<'_>,
     task_internal_id: i32,
 ) -> Result<(), ApiError> {

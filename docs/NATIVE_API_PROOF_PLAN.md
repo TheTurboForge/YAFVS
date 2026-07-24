@@ -166,6 +166,15 @@ available through direct write-control and the authenticated browser proxy;
 operator tooling requires explicit write-control consent. Resume, credential
 handling, feed operations, and account administration remain separate proofs.
 
+The ignored
+`native_task_start_admission_rolls_back_live_database_fixture` Rust test is an
+explicit live-database characterization of the native-to-gvmd handoff. With an
+operator-supplied database URL and exact task UUID, it invokes the production
+admission helpers inside one transaction, proves the requested report, queue,
+status, and duplicate-rejection contract, rolls back before gvmd can observe
+the handoff, and verifies exact pre-test state afterward. It complements rather
+than replaces committed lifecycle and scanner-runtime proofs.
+
 ## Next Proofs
 
 After scope-report and raw-report evidence reads, scope metadata reads, and

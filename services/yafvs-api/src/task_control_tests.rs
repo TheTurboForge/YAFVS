@@ -4,10 +4,18 @@
 
 use crate::{
     errors::ApiError,
-    task_control::{TaskStartState, ensure_task_is_startable},
+    task_control::{
+        TaskStartState, ensure_task_is_not_already_queued, ensure_task_is_startable,
+        insert_task_start_report, insert_task_start_scan_queue, load_task_start_state,
+        mark_task_start_requested,
+    },
     task_control_sql::*,
     task_status::TaskStatus,
+    task_write_db::ensure_task_is_human_owned,
 };
+use std::{error::Error, io};
+use tokio_postgres::{GenericClient, NoTls};
+use uuid::Uuid;
 use yafvs_domain::ScannerType;
 
 fn startable_task(run_status: TaskStatus) -> TaskStartState {
@@ -21,6 +29,155 @@ fn startable_task(run_status: TaskStatus) -> TaskStartState {
         scanner_id: Some(23),
         scanner_type: Some(ScannerType::Openvas.database_value()),
     }
+}
+
+fn characterization_error(message: &'static str) -> Box<dyn Error> {
+    Box::new(io::Error::other(message))
+}
+
+async fn task_admission_observation(
+    client: &impl GenericClient,
+    task_id: &str,
+) -> Result<(i32, i64, i64), Box<dyn Error>> {
+    let row = client
+        .query_one(
+            "SELECT tasks.run_status::integer,
+                    (SELECT count(*)::bigint FROM reports WHERE task = tasks.id),
+                    (SELECT count(*)::bigint
+                       FROM scan_queue
+                       JOIN reports ON reports.id = scan_queue.report
+                      WHERE reports.task = tasks.id)
+               FROM tasks
+              WHERE tasks.uuid = $1;",
+            &[&task_id],
+        )
+        .await
+        .map_err(|_| characterization_error("could not observe task admission state"))?;
+    Ok((row.get(0), row.get(1), row.get(2)))
+}
+
+#[tokio::test]
+#[ignore = "requires YAFVS_TASK_CONTROL_DATABASE_URL and YAFVS_TASK_CONTROL_TASK_UUID"]
+async fn native_task_start_admission_rolls_back_live_database_fixture() -> Result<(), Box<dyn Error>>
+{
+    // This opt-in proof keeps the production handoff invisible to gvmd by
+    // validating it inside one transaction that is always rolled back.
+    let database_url = std::env::var("YAFVS_TASK_CONTROL_DATABASE_URL")
+        .map_err(|_| characterization_error("YAFVS_TASK_CONTROL_DATABASE_URL is required"))?;
+    let task_uuid = std::env::var("YAFVS_TASK_CONTROL_TASK_UUID")
+        .map_err(|_| characterization_error("YAFVS_TASK_CONTROL_TASK_UUID is required"))?
+        .parse::<Uuid>()
+        .map_err(|_| characterization_error("YAFVS_TASK_CONTROL_TASK_UUID must be a UUID"))?;
+    let config = database_url
+        .parse::<tokio_postgres::Config>()
+        .map_err(|_| characterization_error("YAFVS_TASK_CONTROL_DATABASE_URL is malformed"))?;
+    let task_id = task_uuid.to_string();
+    let (mut client, connection) = config
+        .connect(NoTls)
+        .await
+        .map_err(|_| characterization_error("could not connect to PostgreSQL"))?;
+    tokio::spawn(async move {
+        let _ = connection.await;
+    });
+
+    let before = task_admission_observation(&client, &task_id).await?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|_| characterization_error("could not begin task admission transaction"))?;
+    let admission_result = async {
+        let task = load_task_start_state(&tx, &task_id)
+            .await
+            .map_err(|_| characterization_error("task fixture could not be loaded and locked"))?;
+        ensure_task_is_startable(&task)
+            .map_err(|_| characterization_error("task fixture is not startable"))?;
+        ensure_task_is_not_already_queued(&tx, task.internal_id)
+            .await
+            .map_err(|_| characterization_error("task fixture is already queued"))?;
+        let task_owner_id = ensure_task_is_human_owned(task.owner_id)
+            .map_err(|_| characterization_error("task fixture is not human-owned"))?;
+        let (report_internal_id, _) = insert_task_start_report(&tx, &task, task_owner_id)
+            .await
+            .map_err(|_| characterization_error("could not insert requested report"))?;
+        insert_task_start_scan_queue(&tx, report_internal_id)
+            .await
+            .map_err(|_| characterization_error("could not insert scan queue handoff"))?;
+        mark_task_start_requested(&tx, task.internal_id)
+            .await
+            .map_err(|_| characterization_error("could not mark task requested"))?;
+
+        let during = task_admission_observation(&tx, &task_id).await?;
+        if during != (TaskStatus::Requested.as_i32(), before.1 + 1, before.2 + 1) {
+            return Err(characterization_error(
+                "task admission did not create exactly one requested report and queue entry",
+            ));
+        }
+        let report_status: i32 = tx
+            .query_one(
+                "SELECT scan_run_status::integer FROM reports WHERE id = $1;",
+                &[&report_internal_id],
+            )
+            .await
+            .map_err(|_| characterization_error("could not observe requested report status"))?
+            .get(0);
+        if report_status != TaskStatus::Requested.as_i32() {
+            return Err(characterization_error(
+                "new report does not have the requested status",
+            ));
+        }
+        let queue_for_report: i64 = tx
+            .query_one(
+                "SELECT count(*)::bigint FROM scan_queue WHERE report = $1;",
+                &[&report_internal_id],
+            )
+            .await
+            .map_err(|_| characterization_error("could not observe new scan queue handoff"))?
+            .get(0);
+        if queue_for_report != 1 {
+            return Err(characterization_error(
+                "requested report does not have exactly one scan queue handoff",
+            ));
+        }
+        let repeated_task = load_task_start_state(&tx, &task_id)
+            .await
+            .map_err(|_| characterization_error("could not reload requested task"))?;
+        if !matches!(
+            ensure_task_is_startable(&repeated_task),
+            Err(ApiError::Conflict(_))
+        ) {
+            return Err(characterization_error(
+                "repeated task admission was not rejected by requested status",
+            ));
+        }
+        if !matches!(
+            ensure_task_is_not_already_queued(&tx, task.internal_id).await,
+            Err(ApiError::Conflict(_))
+        ) {
+            return Err(characterization_error(
+                "duplicate task admission was not rejected",
+            ));
+        }
+        let after_duplicate = task_admission_observation(&tx, &task_id).await?;
+        if after_duplicate != during {
+            return Err(characterization_error(
+                "duplicate task admission changed report or queue state",
+            ));
+        }
+        Ok(())
+    }
+    .await;
+    tx.rollback()
+        .await
+        .map_err(|_| characterization_error("could not roll back task admission transaction"))?;
+    admission_result?;
+
+    let after = task_admission_observation(&client, &task_id).await?;
+    if after != before {
+        return Err(characterization_error(
+            "rollback did not restore the original task admission state",
+        ));
+    }
+    Ok(())
 }
 
 #[test]

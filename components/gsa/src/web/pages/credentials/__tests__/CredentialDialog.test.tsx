@@ -162,11 +162,11 @@ describe('CredentialDialog tests', () => {
     expect(select).toHaveValue('Username + Password');
 
     const selectItems = await getSelectItemElementsForSelect(select);
-    expect(selectItems.length).toEqual(7);
+    expect(selectItems.length).toEqual(6);
 
-    // change to password only
-    fireEvent.click(selectItems[5]);
-    expect(select).toHaveValue('Password only');
+    // change to PGP encryption key
+    fireEvent.click(selectItems[4]);
+    expect(select).toHaveValue('PGP Encryption Key');
 
     const saveButton = screen.getDialogSaveButton();
     fireEvent.click(saveButton);
@@ -178,7 +178,7 @@ describe('CredentialDialog tests', () => {
       comment: '',
       community: undefined,
       credentialLogin: undefined,
-      credentialType: 'pw',
+      credentialType: 'pgp',
       id: undefined,
       name: 'Unnamed',
       passphrase: undefined,
@@ -314,23 +314,6 @@ describe('CredentialDialog tests', () => {
 
     const certificate = screen.getByName('publicKey');
     expect(certificate).toHaveAttribute('type', 'file');
-  });
-
-  test('should render form fields for Password Only', () => {
-    const {render} = rendererWith({
-      gmp: createGmp(),
-    });
-
-    render(
-      <CredentialDialog credentialType="pw" types={ALL_CREDENTIAL_TYPES} />,
-    );
-
-    const select = screen.getSelectElement();
-    expect(select).toHaveValue('Password only');
-
-    const password = screen.getByTestId('password-input');
-    expect(password).toHaveValue('');
-    expect(password).toHaveAttribute('type', 'password');
   });
 
   test('should render form fields for KRB5', () => {

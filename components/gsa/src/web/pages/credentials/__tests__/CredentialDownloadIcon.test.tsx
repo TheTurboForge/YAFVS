@@ -10,7 +10,6 @@ import Credential, {
   type CredentialType,
   CERTIFICATE_CREDENTIAL_TYPE,
   KRB5_CREDENTIAL_TYPE,
-  PASSWORD_ONLY_CREDENTIAL_TYPE,
   PGP_CREDENTIAL_TYPE,
   SMIME_CREDENTIAL_TYPE,
   SNMP_CREDENTIAL_TYPE,
@@ -96,7 +95,6 @@ describe('CredentialDownloadIcon tests', () => {
   test.each([
     {name: 'SNMP', credentialType: SNMP_CREDENTIAL_TYPE},
     {name: 'Kerberos', credentialType: KRB5_CREDENTIAL_TYPE},
-    {name: 'Password Only', credentialType: PASSWORD_ONLY_CREDENTIAL_TYPE},
     {name: 'PGP Key', credentialType: PGP_CREDENTIAL_TYPE},
     {name: 'SMIME', credentialType: SMIME_CREDENTIAL_TYPE},
   ] as {name: string; credentialType: CredentialType}[])(

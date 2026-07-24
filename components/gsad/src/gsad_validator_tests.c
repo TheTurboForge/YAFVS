@@ -25,6 +25,22 @@ Ensure (gsad_validator, reject_removed_credential_download_transport)
                is_equal_to (1));
 }
 
+Ensure (gsad_validator, reject_retired_password_only_credential_type)
+{
+  validator_t validator = gsad_get_validator ();
+
+  assert_that (gvm_validate (validator, "credential_type", "pw"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "credential_type", "up"),
+               is_equal_to (0));
+  assert_that (gvm_validate (validator, "credential_type", "usk"),
+               is_equal_to (0));
+  assert_that (gvm_validate (validator, "credential_type", "krb5"),
+               is_equal_to (0));
+  assert_that (gvm_validate (validator, "credential_type", "snmp"),
+               is_equal_to (0));
+}
+
 Ensure (gsad_validator, reject_removed_native_only_commands)
 {
   validator_t validator = gsad_get_validator ();
@@ -386,6 +402,8 @@ main (int argc, char **argv)
                          reject_removed_scan_config_commands);
   add_test_with_context (suite, gsad_validator,
                          reject_removed_credential_download_transport);
+  add_test_with_context (suite, gsad_validator,
+                         reject_retired_password_only_credential_type);
   add_test_with_context (suite, gsad_validator, validate_kdcs_name_and_value);
   add_test_with_context (suite, gsad_validator, validate_ca_pub);
   add_test_with_context (suite, gsad_validator,

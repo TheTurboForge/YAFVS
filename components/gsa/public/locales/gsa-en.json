@@ -1432,7 +1432,6 @@
   "Passphrase for private key or PKCS#12 file (if encrypted)": "Passphrase for private key or PKCS#12 file (if encrypted)",
   "Passphrase for Private SSH Key": "Passphrase for Private SSH Key",
   "Password": "Password",
-  "Password only": "Password only",
   "Password: Use existing Password": "Password: Use existing Password",
   "Path": "Path",
   "Percentile": "Percentile",

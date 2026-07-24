@@ -17,6 +17,10 @@ const GSA_CREDENTIAL_COMMAND: &str =
     include_str!("../../../components/gsa/src/gmp/commands/credential.ts");
 const GSA_CREDENTIALS_COMMAND: &str =
     include_str!("../../../components/gsa/src/gmp/commands/credentials.ts");
+const GSA_CREDENTIAL_MODEL: &str =
+    include_str!("../../../components/gsa/src/gmp/models/credential.ts");
+const GSA_CREDENTIAL_DIALOG: &str =
+    include_str!("../../../components/gsa/src/web/pages/credentials/CredentialDialog.tsx");
 const GSA_NATIVE_CREDENTIALS: &str =
     include_str!("../../../components/gsa/src/gmp/native-api/credentials.ts");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
@@ -101,6 +105,69 @@ fn credential_create_gsa_routes_only_manual_up_and_usk_to_native_api() {
         GSA_CREDENTIAL_COMMAND.contains("cmd: 'create_credential'"),
         "raw inherited CREATE_CREDENTIAL must remain for compatibility paths"
     );
+}
+
+#[test]
+fn password_only_credential_type_is_retired_full_stack() {
+    for (owner, source, retired) in [
+        (
+            "GSA credential model",
+            GSA_CREDENTIAL_MODEL,
+            "PASSWORD_ONLY_CREDENTIAL_TYPE",
+        ),
+        (
+            "GSA credential dialog",
+            GSA_CREDENTIAL_DIALOG,
+            "PASSWORD_ONLY_CREDENTIAL_TYPE",
+        ),
+        (
+            "gsad create/save bridge",
+            GSAD_GMP_C,
+            "str_equal (type, \"pw\")",
+        ),
+        (
+            "gsad validator",
+            GSAD_VALIDATOR_C,
+            "gvm_validator_add (validator, \"pw\"",
+        ),
+        (
+            "gvmd create validation",
+            GVMD_MANAGE_SQL,
+            "strcmp (given_type, \"pw\")",
+        ),
+        (
+            "gvmd modify validation",
+            GVMD_MANAGE_SQL,
+            "strcmp (type, \"pw\")",
+        ),
+        ("GMP schema", GMP_SCHEMA, "<alt>pw</alt>"),
+        ("GMP schema", GMP_SCHEMA, "pw: Password only"),
+    ] {
+        assert!(
+            !source.contains(retired),
+            "retired password-only credential support remains in {owner}: {retired}"
+        );
+    }
+
+    for retained in [
+        "export const USERNAME_PASSWORD_CREDENTIAL_TYPE = 'up';",
+        "export const USERNAME_SSH_KEY_CREDENTIAL_TYPE = 'usk';",
+    ] {
+        assert!(
+            GSA_CREDENTIAL_MODEL.contains(retained),
+            "retained authenticated-scanning credential type is missing: {retained}"
+        );
+    }
+    for retained in [
+        "quoted_type = g_strdup (\"up\")",
+        "strcmp (quoted_type, \"up\") == 0",
+        "strcmp (quoted_type, \"krb5\") == 0",
+    ] {
+        assert!(
+            GVMD_MANAGE_SQL.contains(retained),
+            "retained password credential behavior is missing: {retained}"
+        );
+    }
 }
 
 #[test]

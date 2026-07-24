@@ -13,7 +13,6 @@ import {
   CERTIFICATE_CREDENTIAL_TYPE,
   getCredentialTypeName,
   KRB5_CREDENTIAL_TYPE,
-  PASSWORD_ONLY_CREDENTIAL_TYPE,
   PGP_CREDENTIAL_TYPE,
   SMIME_CREDENTIAL_TYPE,
   SNMP_AUTH_ALGORITHM_MD5,
@@ -400,8 +399,7 @@ const CredentialDialog = ({
 
             {(state.credentialType === USERNAME_PASSWORD_CREDENTIAL_TYPE ||
               state.credentialType === SNMP_CREDENTIAL_TYPE ||
-              state.credentialType === KRB5_CREDENTIAL_TYPE ||
-              state.credentialType === PASSWORD_ONLY_CREDENTIAL_TYPE) && (
+              state.credentialType === KRB5_CREDENTIAL_TYPE) && (
               <FormGroup direction="row" title={_('Password')}>
                 {isEdit && (
                   <Checkbox<boolean>

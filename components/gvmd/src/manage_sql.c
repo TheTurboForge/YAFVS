@@ -16004,7 +16004,7 @@ validate_credential_realm_format (const char *realm)
  * @param[in]  comment         Comment on LSC credential.
  * @param[in]  login           Name of LSC credential user.  Must be at least
  *                             one character long.
- * @param[in]  given_password  Password for password-only credential, NULL to
+ * @param[in]  given_password  Password for a password credential, NULL to
  *                             generate credentials.
  * @param[in]  key_private     Private key, or NULL.
  * @param[in]  key_public      Public key, or NULL.
@@ -16083,15 +16083,10 @@ create_credential (const char* name, const char* comment, const char* login,
 
   if (given_type && strcmp (given_type, ""))
     {
-      if (strcmp (given_type, "cc")
-          && strcmp (given_type, "pgp")
-          && strcmp (given_type, "pw")
-          && strcmp (given_type, "snmp")
-          && strcmp (given_type, "smime")
-          && strcmp (given_type, "up")
-          && strcmp (given_type, "usk")
-          && strcmp (given_type, "krb5")
-      )
+      if (strcmp (given_type, "cc") && strcmp (given_type, "pgp")
+          && strcmp (given_type, "snmp") && strcmp (given_type, "smime")
+          && strcmp (given_type, "up") && strcmp (given_type, "usk")
+          && strcmp (given_type, "krb5"))
         {
           sql_rollback ();
           return 4;
@@ -16135,19 +16130,13 @@ create_credential (const char* name, const char* comment, const char* login,
 
   using_snmp_v3 = 0;
 
-  if (login == NULL
-      && strcmp (quoted_type, "cc")
-      && strcmp (quoted_type, "pgp")
-      && strcmp (quoted_type, "pw")
-      && strcmp (quoted_type, "smime")
-      && strcmp (quoted_type, "snmp")
-    )
+  if (login == NULL && strcmp (quoted_type, "cc") && strcmp (quoted_type, "pgp")
+      && strcmp (quoted_type, "smime") && strcmp (quoted_type, "snmp"))
     ret = 5;
   else if (given_password == NULL && auto_generate == 0
            && (strcmp (quoted_type, "up") == 0
-               || strcmp (quoted_type, "pw") == 0
                || strcmp (quoted_type, "krb5") == 0))
-      // (username) password requires a password
+    // (username) password requires a password
     ret = 6;
   else if (key_private == NULL && auto_generate == 0
            && (strcmp (quoted_type, "cc") == 0
@@ -16414,12 +16403,12 @@ create_credential (const char* name, const char* comment, const char* login,
       return 0;
     }
 
-  /* Password only */
+  /* Store a supplied password. */
   if (given_password)
     {
       lsc_crypt_ctx_t crypt_ctx;
 
-      /* Password-only credential. */
+      /* Password credential. */
 
       if (!disable_encrypted_credentials)
         {
@@ -16730,8 +16719,7 @@ modify_credential (const char *credential_id,
       const char *key_private_to_use;
       const char *type = credential_iterator_type (&iterator);
 
-      if (strcmp (type, "cc") && strcmp (type, "up")
-          && strcmp (type, "pw") && strcmp (type, "usk")
+      if (strcmp (type, "cc") && strcmp (type, "up") && strcmp (type, "usk")
           && strcmp (type, "snmp") && strcmp (type, "pgp")
           && strcmp (type, "smime") && strcmp (type, "krb5"))
         {
@@ -16772,8 +16760,7 @@ modify_credential (const char *credential_id,
       else
         key_private_to_use = NULL;
 
-      if (strcmp (type, "up") == 0
-               || strcmp (type, "pw") == 0)
+      if (strcmp (type, "up") == 0)
         {
           if (password)
             set_credential_password (credential, password);

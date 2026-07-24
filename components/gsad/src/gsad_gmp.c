@@ -1826,20 +1826,6 @@ create_credential_gmp (gvm_connection_t *connection,
                       "</create_credential>",
                       name, comment ? comment : "", type, certificate);
         }
-      else if (type && (strcmp (type, "pw") == 0))
-        {
-          CHECK_VARIABLE_INVALID (password, "Create Credential");
-
-          ret =
-            gmpf (connection, credentials, NULL, &entity, response_data,
-                  "<create_credential>"
-                  "<name>%s</name>"
-                  "<comment>%s</comment>"
-                  "<type>%s</type>"
-                  "<password>%s</password>"
-                  "</create_credential>",
-                  name, comment ? comment : "", type, password ? password : "");
-        }
       else
         {
           gsad_command_response_data_set_status_code (
@@ -1978,7 +1964,7 @@ save_credential_gmp (gvm_connection_t *connection,
       if (params_given (params, "community"))
         CHECK_VARIABLE_INVALID (community, "Save Credential");
     }
-  else if (str_equal (type, "up") || str_equal (type, "pw"))
+  else if (str_equal (type, "up"))
     {
       if (params_given (params, "password"))
         CHECK_VARIABLE_INVALID (password, "Save Credential");
@@ -2099,7 +2085,7 @@ save_credential_gmp (gvm_connection_t *connection,
           xml_string_append (command, "</key>");
         }
     }
-  else if (str_equal (type, "up") || str_equal (type, "pw"))
+  else if (str_equal (type, "up"))
     {
       if (password)
         xml_string_append (command, "<password>%s</password>", password);

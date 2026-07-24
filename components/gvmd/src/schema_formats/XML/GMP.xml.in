@@ -3207,10 +3207,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         requiring authentication.
       </p>
       <p>
-        If the command includes a key, then the manager creates a key-based
-        credential from the key.  If the command includes a password, then
-        the manager creates a password only credential.  Otherwise the
-        manager autogenerates a key-based credential.
+        If no type is specified, the manager infers a compatible credential
+        type from the supplied credential data.  With only a login, it
+        autogenerates a username + SSH key credential.
       </p>
     </description>
     <pattern>
@@ -3373,7 +3372,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         <p>cc: Client certificate</p>
         <p>krb5: Kerberos 5</p>
         <p>pgp: PGP encryption key</p>
-        <p>pw: Password only</p>
         <p>smime: S/MIME certificate</p>
         <p>snmp: SNMP</p>
         <p>up: User name + password</p>
@@ -3384,7 +3382,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
           <alt>cc</alt>
           <alt>krb5</alt>
           <alt>pgp</alt>
-          <alt>pw</alt>
           <alt>smime</alt>
           <alt>snmp</alt>
           <alt>up</alt>
@@ -5979,7 +5976,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             <p>cc: Client certificate</p>
             <p>krb5: Kerberos 5</p>
             <p>pgp: PGP encryption key</p>
-            <p>pw: Password only</p>
             <p>smime: S/MIME certificate</p>
             <p>snmp: SNMP</p>
             <p>up: User name + password</p>
@@ -5990,7 +5986,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
               <alt>cc</alt>
               <alt>krb5</alt>
               <alt>pgp</alt>
-              <alt>pw</alt>
               <alt>smime</alt>
               <alt>snmp</alt>
               <alt>up</alt>

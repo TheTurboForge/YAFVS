@@ -1433,7 +1433,6 @@
   "Passphrase for private key or PKCS#12 file (if encrypted)": "私钥或PKCS#12文件的密码短语（如果加密）",
   "Passphrase for Private SSH Key": "SSH私钥密码短语",
   "Password": "密码",
-  "Password only": "仅密码",
   "Password: Use existing Password": "密码: 使用现有密码",
   "Path": "路径",
   "Percentile": "百分位",

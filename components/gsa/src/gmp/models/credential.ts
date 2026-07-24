@@ -14,7 +14,6 @@ import {isDefined} from 'gmp/utils/identity';
 export type CredentialType =
   | typeof CERTIFICATE_CREDENTIAL_TYPE
   | typeof KRB5_CREDENTIAL_TYPE
-  | typeof PASSWORD_ONLY_CREDENTIAL_TYPE
   | typeof PGP_CREDENTIAL_TYPE
   | typeof SMIME_CREDENTIAL_TYPE
   | typeof SNMP_CREDENTIAL_TYPE
@@ -111,7 +110,6 @@ export const USERNAME_SSH_KEY_CREDENTIAL_TYPE = 'usk';
 export const SNMP_CREDENTIAL_TYPE = 'snmp';
 export const SMIME_CREDENTIAL_TYPE = 'smime';
 export const PGP_CREDENTIAL_TYPE = 'pgp';
-export const PASSWORD_ONLY_CREDENTIAL_TYPE = 'pw';
 export const CERTIFICATE_CREDENTIAL_TYPE = 'cc';
 export const KRB5_CREDENTIAL_TYPE = 'krb5';
 
@@ -151,7 +149,6 @@ export const ALL_CREDENTIAL_TYPES: readonly CredentialType[] = [
   SNMP_CREDENTIAL_TYPE,
   SMIME_CREDENTIAL_TYPE,
   PGP_CREDENTIAL_TYPE,
-  PASSWORD_ONLY_CREDENTIAL_TYPE,
   CERTIFICATE_CREDENTIAL_TYPE,
   KRB5_CREDENTIAL_TYPE,
 ];
@@ -176,9 +173,6 @@ export const email_credential_filter = (credential: Credential) =>
   credential.credentialType === SMIME_CREDENTIAL_TYPE ||
   credential.credentialType === PGP_CREDENTIAL_TYPE;
 
-export const password_only_credential_filter = (credential: Credential) =>
-  credential.credentialType === PASSWORD_ONLY_CREDENTIAL_TYPE;
-
 export const SNMP_AUTH_ALGORITHM_MD5 = 'md5';
 export const SNMP_AUTH_ALGORITHM_SHA1 = 'sha1';
 
@@ -197,7 +191,6 @@ const TYPE_NAMES = {
   [CERTIFICATE_CREDENTIAL_TYPE]: _l('Client Certificate'),
   [SNMP_CREDENTIAL_TYPE]: _l('SNMP'),
   [PGP_CREDENTIAL_TYPE]: _l('PGP Encryption Key'),
-  [PASSWORD_ONLY_CREDENTIAL_TYPE]: _l('Password only'),
   [SMIME_CREDENTIAL_TYPE]: _l('S/MIME Certificate'),
   [KRB5_CREDENTIAL_TYPE]: _l('SMB (Kerberos)'),
 } as const;

@@ -102,7 +102,7 @@ gsad_init_validator ()
   gvm_validator_add (validator, "condition", "^[[:alnum:] ]*$");
   gvm_validator_add (validator, "create_credentials_type", "^(gen|pass|key)$");
   gvm_validator_add (validator, "credential_type",
-                     "^(cc|up|usk|smime|pgp|snmp|krb5|pw)$");
+                     "^(cc|up|usk|smime|pgp|snmp|krb5)$");
   gvm_validator_add (validator, "credential_login", "^[-_[:alnum:]\\.@\\\\]*$");
   gvm_validator_add (validator, "condition_data:name", "^.*$");
   gvm_validator_add (validator, "condition_data:value", "(?s)^.*$");
@@ -215,7 +215,6 @@ gsad_init_validator ()
                      "^(normal|high|very_high)$");
   gvm_validator_add (validator, "private_key", "(?s)^.*$");
   gvm_validator_add (validator, "public_key", "(?s)^.*$");
-  gvm_validator_add (validator, "pw", "^[[:alnum:]]+$");
   gvm_validator_add (validator, "xml_file", "(?s)^.*$");
   gvm_validator_add (validator, "definitions_file", "(?s)^.*$");
   gvm_validator_add (validator, "ca_pub", "(?s)^.*$");

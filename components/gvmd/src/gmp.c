@@ -1,5 +1,6 @@
 /* Copyright (C) 2009-2022 Greenbone AG
  * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -8648,6 +8649,25 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                                   "Login must be at"
                                   " least one character long"));
             }
+          /* The historic login-only request selected and generated a USK. */
+          else if (create_credential_data->type == NULL
+                   && create_credential_data->login
+                   && create_credential_data->password == NULL
+                   && create_credential_data->key_private == NULL
+                   && create_credential_data->key_public == NULL
+                   && create_credential_data->certificate == NULL
+                   && create_credential_data->community == NULL
+                   && create_credential_data->auth_algorithm == NULL
+                   && create_credential_data->privacy_password == NULL
+                   && create_credential_data->privacy_algorithm == NULL
+                   && create_credential_data->kdc == NULL
+                   && create_credential_data->realm == NULL
+                   && (create_credential_data->kdcs == NULL
+                       || create_credential_data->kdcs->len == 0))
+            {
+              SEND_TO_CLIENT_OR_FAIL (XML_ERROR_SYNTAX (
+                "create_credential", "Credential secret material is required"));
+            }
           else if (create_credential_data->key
                    && create_credential_data->key_private == NULL
                    && create_credential_data->key_public == NULL)
@@ -8760,12 +8780,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                 SEND_TO_CLIENT_OR_FAIL
                  (XML_ERROR_SYNTAX ("create_credential",
                                     "Selected type requires a public key"));
-                break;
-              case 10:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_credential",
-                                    "Selected type cannot be generated"
-                                    " automatically"));
                 break;
               case 11:
                 SEND_TO_CLIENT_OR_FAIL

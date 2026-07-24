@@ -1553,7 +1553,6 @@ create_credential_gmp (gvm_connection_t *connection,
   const char *name, *comment, *credential_login, *type, *password, *passphrase;
   const char *private_key, *public_key, *certificate, *community;
   const char *privacy_password, *auth_algorithm, *privacy_algorithm;
-  const char *autogenerate;
   const char *kdc, *realm;
   params_t *kdcs_param;
   entity_t entity;
@@ -1571,7 +1570,6 @@ create_credential_gmp (gvm_connection_t *connection,
   privacy_password = params_value (params, "privacy_password");
   auth_algorithm = params_value (params, "auth_algorithm");
   privacy_algorithm = params_value (params, "privacy_algorithm");
-  autogenerate = params_value (params, "autogenerate");
   kdc = params_value (params, "kdc");
   realm = params_value (params, "realm");
   kdcs_param = params_values (params, "kdcs:");
@@ -1579,39 +1577,7 @@ create_credential_gmp (gvm_connection_t *connection,
   CHECK_VARIABLE_INVALID (name, "Create Credential");
   CHECK_VARIABLE_INVALID (comment, "Create Credential");
   CHECK_VARIABLE_INVALID (type, "Create Credential");
-  CHECK_VARIABLE_INVALID (autogenerate, "Create Credential");
-
-  if (str_equal (autogenerate, "1"))
-    {
-      if (str_equal (type, "cc"))
-        {
-          // Auto-generate types without username
-          ret = gmpf (connection, credentials, NULL, &entity, response_data,
-                      "<create_credential>"
-                      "<name>%s</name>"
-                      "<comment>%s</comment>"
-                      "<type>%s</type>"
-                      "</create_credential>",
-                      name, comment ? comment : "", type);
-        }
-      else
-        {
-          // Auto-generate types with username
-          CHECK_VARIABLE_INVALID (credential_login, "Create Credential");
-
-          ret = gmpf (connection, credentials, NULL, &entity, response_data,
-                      "<create_credential>"
-                      "<name>%s</name>"
-                      "<comment>%s</comment>"
-                      "<type>%s</type>"
-                      "<login>%s</login>"
-                      "</create_credential>",
-                      name, comment ? comment : "", type, credential_login);
-        }
-    }
-  else
-    {
-      if (str_equal (type, "up"))
+  if (str_equal (type, "up"))
         {
           CHECK_VARIABLE_INVALID (credential_login, "Create Credential");
           CHECK_VARIABLE_INVALID (password, "Create Credential");
@@ -1837,8 +1803,6 @@ create_credential_gmp (gvm_connection_t *connection,
             "Diagnostics: Unrecognized credential type.",
             response_data);
         }
-    }
-
   /* Create the credential. */
   switch (ret)
     {

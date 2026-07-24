@@ -310,9 +310,13 @@ write-only and are never returned. Any secret update, login change, key or
 certificate replacement, Kerberos detail change, or SNMP mutation remains
 inherited. Other credential-type creation, store selectors, type/allow-insecure
 mutation, and scanner/target links also remain inherited. The inherited
-gsad/gvmd/GMP autogeneration implementation is temporarily retained only for
-separately classified raw compatibility and is the next deletion slice; this
-does not retire credentials or GMP as a whole.
+gsad/gvmd/GMP autogeneration implementation is deleted. Raw GMP creation
+requires the manual secret material for the selected type; the former
+secretless login-only request is rejected at the GMP boundary and cannot reach
+credential creation. This does not retire credentials or GMP as a whole.
+For retained manager callers, typeless secretless input returns 18, explicit
+UP without a password returns 6, and explicit USK without a private key returns
+7; each validation failure occurs before the credential row insert.
 Native metadata export, clone, restore, trash movement, hard delete, SSH
 public-key retrieval, and stored client-certificate retrieval are separately
 classified native operations.

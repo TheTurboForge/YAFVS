@@ -1,5 +1,6 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
  * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -250,6 +251,18 @@ Ensure (gmp, gmp_read_create_response_returns_error_on_read_failure)
 
   assert_that (result, is_equal_to (-1));
   assert_that (uuid, is_null);
+}
+
+Ensure (gmp, gmp_create_lsc_credential_rejects_missing_password_without_send)
+{
+  never_expect (__wrap_gvm_server_sendf);
+  never_expect (__wrap_gvm_server_sendf_xml);
+  never_expect (__wrap_gvm_server_sendf_xml_quiet);
+
+  int result =
+    gmp_create_lsc_credential (NULL, "name", "login", NULL, NULL, NULL);
+
+  assert_that (result, is_equal_to (-1));
 }
 
 /* gmp_check_response */
@@ -631,6 +644,9 @@ main (int argc, char **argv)
                          gmp_read_create_response_returns_error_when_no_status);
   add_test_with_context (
     suite, gmp, gmp_read_create_response_returns_error_on_read_failure);
+  add_test_with_context (
+    suite, gmp,
+    gmp_create_lsc_credential_rejects_missing_password_without_send);
 
   add_test_with_context (suite, gmp,
                          gmp_check_response_succeeds_with_valid_response);

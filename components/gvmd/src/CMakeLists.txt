@@ -231,7 +231,6 @@ set(
   gvmd_config.c
   gmpd.c
   ipc.c
-  credential_key.c
   lsc_crypt.c
   yafvs_control.c
   utils.c
@@ -419,7 +418,6 @@ set(
   $<TARGET_OBJECTS:all-sql-obj>
 )
 add_unit_test(utils "${ALL_OBJECTS}" "${ALL_MISC_SRC}")
-add_unit_test(credential-key "${ALL_OBJECTS}" "${ALL_MISC_SRC}")
 
 set(
   ALL_OBJECTS

@@ -383,7 +383,6 @@ gsad_init_validator ()
   gvm_validator_alias (validator, "alive_tests:name", "number");
   gvm_validator_alias (validator, "allow_simultaneous_ips", "boolean");
   gvm_validator_alias (validator, "apply_overrides", "boolean");
-  gvm_validator_alias (validator, "autogenerate", "boolean");
   gvm_validator_alias (validator, "auto_cache_rebuild", "boolean");
   gvm_validator_alias (validator, "base", "name");
   gvm_validator_alias (validator, "build_filter", "boolean");

@@ -1,5 +1,6 @@
 /* Copyright (C) 2009-2022 Greenbone AG
  * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -59,7 +60,6 @@
 #include "manage_commands.h"
 #include "manage_authentication.h"
 #include "manage_users.h"
-#include "credential_key.h"
 #include "sql.h"
 #include "utils.h"
 /* TODO This is for buffer_get_filter_xml, for print_report_xml_start.  We
@@ -15992,11 +15992,6 @@ validate_credential_realm_format (const char *realm)
 }
 
 /**
- * @brief Length of password generated in create_credential.
- */
-#define PASSWORD_LENGTH 10
-
-/**
  * @brief Create a Credential.
  *
  * @param[in]  name            Name of LSC credential.  Must be at least one
@@ -16004,8 +15999,7 @@ validate_credential_realm_format (const char *realm)
  * @param[in]  comment         Comment on LSC credential.
  * @param[in]  login           Name of LSC credential user.  Must be at least
  *                             one character long.
- * @param[in]  given_password  Password for a password credential, NULL to
- *                             generate credentials.
+ * @param[in]  given_password  Password for a password credential, or NULL.
  * @param[in]  key_private     Private key, or NULL.
  * @param[in]  key_public      Public key, or NULL.
  * @param[in]  certificate     Certificate, or NULL.
@@ -16024,7 +16018,7 @@ validate_credential_realm_format (const char *realm)
  *         3 Failed to create public key from private key/password,
  *         4 Invalid credential type, 5 login username missing,
  *         6 password missing, 7 private key missing, 8 certificate missing,
- *         9 public key missing, 10 autogenerate not supported,
+ *         9 public key missing,
  *         11 community missing, 12 auth algorithm missing,
  *         14 privacy algorithm missing,
  *         15 invalid auth algorithm, 16 invalid privacy algorithm,
@@ -16046,12 +16040,8 @@ create_credential (const char* name, const char* comment, const char* login,
                    credential_t *credential)
 {
   gchar *quoted_name, *quoted_comment, *quoted_type;
-  int i;
-  GRand *rand;
-  gchar generated_password[PASSWORD_LENGTH];
-  gchar *generated_private_key;
   credential_t new_credential;
-  int auto_generate, allow_insecure_int;
+  int allow_insecure_int;
   int using_snmp_v3;
   int ret;
   gchar *kdc_value = NULL;
@@ -16105,8 +16095,6 @@ create_credential (const char* name, const char* comment, const char* login,
     quoted_type = g_strdup ("krb5");
   else if (login && given_password)
     quoted_type = g_strdup ("up");
-  else if (login && key_private == NULL && given_password == NULL)
-    quoted_type = g_strdup ("usk"); /* auto-generate */
   else
     {
       g_warning ("%s: Cannot determine type of new credential", __func__);
@@ -16115,39 +16103,27 @@ create_credential (const char* name, const char* comment, const char* login,
     }
 
   /* Validate credential data */
-  auto_generate = ((given_password == NULL) && (key_private == NULL)
-                   && (key_public == NULL) && (certificate == NULL)
-                   && (community == NULL));
   ret = 0;
-
-  if (auto_generate
-      && (strcmp (quoted_type, "cc") == 0
-          || strcmp (quoted_type, "pgp") == 0
-          || strcmp (quoted_type, "smime") == 0
-          || strcmp (quoted_type, "snmp") == 0
-          || strcmp (quoted_type, "krb5") == 0))
-    ret = 10; // Type does not support autogenerate
 
   using_snmp_v3 = 0;
 
   if (login == NULL && strcmp (quoted_type, "cc") && strcmp (quoted_type, "pgp")
       && strcmp (quoted_type, "smime") && strcmp (quoted_type, "snmp"))
     ret = 5;
-  else if (given_password == NULL && auto_generate == 0
+  else if (given_password == NULL
            && (strcmp (quoted_type, "up") == 0
                || strcmp (quoted_type, "krb5") == 0))
     // (username) password requires a password
     ret = 6;
-  else if (key_private == NULL && auto_generate == 0
+  else if (key_private == NULL
            && (strcmp (quoted_type, "cc") == 0
                || strcmp (quoted_type, "usk") == 0))
     ret = 7;
-  else if (certificate == NULL && auto_generate == 0
+  else if (certificate == NULL
            && (strcmp (quoted_type, "cc") == 0
                || strcmp (quoted_type, "smime") == 0))
     ret = 8;
-  else if (key_public == NULL && auto_generate == 0
-           && strcmp (quoted_type, "pgp") == 0)
+  else if (key_public == NULL && strcmp (quoted_type, "pgp") == 0)
     ret = 9;
   else if (strcmp (quoted_type, "krb5") == 0)
     {
@@ -16176,7 +16152,7 @@ create_credential (const char* name, const char* comment, const char* login,
         }
       if (ret == 0)
         {
-          if (realm == NULL && auto_generate == 0)
+          if (realm == NULL)
             ret = 20;
           else if (!validate_credential_realm_format (realm))
             ret = 22;
@@ -16440,75 +16416,7 @@ create_credential (const char* name, const char* comment, const char* login,
       return 0;
     }
 
-  /*
-   * Auto-generate credential
-   */
-
-  /* Create the keys and packages. */
-
-  rand = g_rand_new ();
-  for (i = 0; i < PASSWORD_LENGTH - 1; i++)
-    {
-      generated_password[i] = (gchar) g_rand_int_range (rand, '0', 'z');
-      if (generated_password[i] == '\\')
-        generated_password[i] = '{';
-    }
-  generated_password[PASSWORD_LENGTH - 1] = '\0';
-  g_rand_free (rand);
-
-  if (given_type == NULL || strcmp (given_type, "usk") == 0)
-    {
-      if (credential_ssh_key_create (generated_password,
-                                     &generated_private_key))
-        {
-          sql_rollback ();
-          return -1;
-        }
-    }
-  else
-    generated_private_key = NULL;
-
-  {
-    lsc_crypt_ctx_t crypt_ctx;
-
-    /* Generated key credential. */
-
-    if (!disable_encrypted_credentials)
-      {
-        gchar *secret;
-        char *encryption_key_uid = current_encryption_key_uid (TRUE);
-        crypt_ctx = lsc_crypt_new (encryption_key_uid);
-        free (encryption_key_uid);
-        if (generated_private_key)
-          secret = lsc_crypt_encrypt (crypt_ctx,
-                                      "password", generated_password,
-                                      "private_key", generated_private_key,
-                                      NULL);
-        else
-          secret = lsc_crypt_encrypt (crypt_ctx,
-                                      "password", generated_password,
-                                      NULL);
-
-        if (!secret)
-          {
-            lsc_crypt_release (crypt_ctx);
-            sql_rollback ();
-            return -1;
-          }
-        set_credential_data (new_credential, "secret", secret);
-        g_free (secret);
-      }
-    else
-      {
-        set_credential_data (new_credential, "password", generated_password);
-        if (generated_private_key)
-          set_credential_data (new_credential,
-                               "private_key", generated_private_key);
-        crypt_ctx = NULL;
-      }
-    lsc_crypt_release (crypt_ctx);
-    g_free (generated_private_key);
-  }
+  /* Remaining credential types have no secret data to store here. */
 
   if (credential)
     *credential = new_credential;

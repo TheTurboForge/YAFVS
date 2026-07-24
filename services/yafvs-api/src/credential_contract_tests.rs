@@ -32,6 +32,7 @@ const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_v
 const GVMD_GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GVMD_MANAGE_HEADER: &str = include_str!("../../../components/gvmd/src/manage.h");
 const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
+const GVM_LIBS_GMP_C: &str = include_str!("../../../components/gvm-libs/gmp/gmp.c");
 const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 
 fn openapi_path_block(path: &str) -> String {
@@ -54,7 +55,7 @@ fn openapi_path_block(path: &str) -> String {
 }
 
 #[test]
-fn credential_autogeneration_contract_is_browser_native_while_raw_deletion_is_pending() {
+fn credential_autogeneration_is_browser_native_and_raw_generation_is_retired() {
     let schema = &OPENAPI[OPENAPI
         .find("    CredentialCreateRequest:")
         .expect("credential create schema")..];
@@ -78,17 +79,127 @@ fn credential_autogeneration_contract_is_browser_native_while_raw_deletion_is_pe
             "browser-native autogeneration migration marker missing"
         );
         assert!(
-            documentation
-                .contains("temporarily retained only for\nseparately classified raw compatibility")
-                || documentation.contains(
-                    "temporarily retained only for separately classified raw compatibility"
-                ),
-            "raw compatibility deletion-pending marker missing"
+            documentation.contains("gsad/gvmd/GMP autogeneration implementation is deleted"),
+            "raw autogeneration deletion marker missing"
         );
         assert!(
-            documentation.contains("next deletion slice")
-                || documentation.contains("pending deletion in the next slice"),
-            "legacy deletion must remain explicitly pending"
+            !documentation.contains("autogeneration implementation is temporarily retained",)
+                && !documentation.contains("autogeneration implementation is pending deletion",),
+            "legacy autogeneration must not remain documented as pending"
+        );
+    }
+
+    let raw_create_base = GSA_CREDENTIAL_COMMAND
+        .split_once("private createBase({")
+        .expect("raw credential create payload")
+        .1
+        .split_once("  async create(")
+        .expect("raw credential create payload boundary")
+        .0;
+    assert!(
+        !raw_create_base.contains("autogenerate"),
+        "retained non-UP/USK browser creation must not emit the retired field"
+    );
+    assert!(
+        !GSAD_GMP_C.contains("autogenerate") && !GSAD_VALIDATOR_C.contains("\"autogenerate\""),
+        "retired gsad autogeneration bridge or validator remains"
+    );
+
+    let credential_handler = GVMD_GMP_C
+        .split_once("case CLIENT_CREATE_CREDENTIAL:")
+        .expect("credential GMP handler")
+        .1
+        .split_once("create_credential_data_reset (create_credential_data);")
+        .expect("credential GMP handler boundary")
+        .0;
+    let rejection = credential_handler
+        .find("Credential secret material is required")
+        .expect("secretless GMP rejection");
+    let manager_call = credential_handler
+        .find("else switch (create_credential")
+        .expect("retained manager create call");
+    assert!(
+        rejection < manager_call,
+        "secretless raw requests must be rejected before manager creation"
+    );
+
+    let manager_create = GVMD_MANAGE_SQL
+        .split_once("\ncreate_credential (")
+        .expect("credential manager create")
+        .1
+        .split_once("\nmodify_credential (")
+        .expect("credential manager create boundary")
+        .0;
+    let classification_failure = manager_create
+        .find("Cannot determine type of new credential")
+        .expect("typeless secretless classification failure");
+    let return_18 = manager_create[classification_failure..]
+        .find("return 18;")
+        .map(|offset| classification_failure + offset)
+        .expect("typeless secretless return 18");
+    let validation_start = manager_create
+        .find("/* Validate credential data */")
+        .expect("credential manager validation");
+    let insert = manager_create
+        .find("INSERT INTO credentials")
+        .expect("credential manager insert");
+    assert!(
+        classification_failure < return_18
+            && return_18 < validation_start
+            && validation_start < insert,
+        "typeless secretless classification and manual-secret validation must precede insert"
+    );
+
+    let manager_validation = GVMD_MANAGE_SQL
+        .split_once("/* Validate credential data */")
+        .expect("credential manager validation")
+        .1
+        .split_once("/* Create base credential */")
+        .expect("credential manager validation boundary")
+        .0;
+    for required in [
+        "given_password == NULL",
+        "strcmp (quoted_type, \"up\") == 0",
+        "ret = 6;",
+        "key_private == NULL",
+        "strcmp (quoted_type, \"usk\") == 0",
+        "ret = 7;",
+    ] {
+        assert!(
+            manager_validation.contains(required),
+            "manual-secret manager validation marker missing: {required}"
+        );
+    }
+    for retired in [
+        "auto_generate",
+        "credential_ssh_key_create",
+        "#define PASSWORD_LENGTH",
+        "g_rand_",
+    ] {
+        assert!(
+            !GVMD_MANAGE_SQL.contains(retired),
+            "retired manager generator remains: {retired}"
+        );
+    }
+    assert!(
+        GVM_LIBS_GMP_C.contains("if (password == NULL)\n    return -1;"),
+        "gvm-libs must reject a missing password without sending XML"
+    );
+    assert!(
+        GMP_SCHEMA.contains("Secretless\n        credential creation requests are rejected."),
+        "live GMP schema must document fail-closed secretless creation"
+    );
+
+    let gvmd_source =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../components/gvmd/src");
+    for retired in [
+        "credential_key.c",
+        "credential_key.h",
+        "credential_key_tests.c",
+    ] {
+        assert!(
+            !gvmd_source.join(retired).exists(),
+            "retired credential generator file remains: {retired}"
         );
     }
 }

@@ -244,7 +244,6 @@ describe('CredentialCommand tests', () => {
       data: {
         cmd: 'create_credential',
         auth_algorithm: undefined,
-        autogenerate: 0,
         certificate: undefined,
         comment: 'KRB5 credential with empty kdcs',
         community: undefined,
@@ -276,7 +275,6 @@ describe('CredentialCommand tests', () => {
         cmd: 'create_credential',
         name: 'test-credential',
         comment: undefined,
-        autogenerate: 0,
         community: undefined,
         credential_login: undefined,
         lsc_password: undefined,
@@ -581,7 +579,6 @@ describe('CredentialCommand tests', () => {
         name: 'full-credential',
         comment: 'a full credential',
         auth_algorithm: 'md5',
-        autogenerate: 1,
         certificate,
         community: 'community',
         credential_login: 'login',
@@ -615,7 +612,6 @@ describe('CredentialCommand tests', () => {
     expect(fakeHttp.request).toHaveBeenCalledWith('post', {
       data: {
         cmd: 'create_credential',
-        autogenerate: 0,
         certificate: undefined,
         comment: 'Regular KRB5 credential',
         community: undefined,
@@ -1198,7 +1194,6 @@ describe('CredentialCommand tests', () => {
       data: {
         cmd: 'create_credential',
         auth_algorithm: undefined,
-        autogenerate: 0,
         certificate: undefined,
         comment: 'Testing base functionality',
         community: undefined,

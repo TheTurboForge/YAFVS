@@ -28,7 +28,6 @@ import {
   fetchNativeCredentialPublicKey,
   patchNativeCredential,
 } from 'gmp/native-api/credentials';
-import {parseYesNo} from 'gmp/parser';
 import {isDefined} from 'gmp/utils/identity';
 
 export type CredentialDownloadFormat = 'pem' | 'key';
@@ -159,7 +158,6 @@ class CredentialCommand extends EntityCommand<
   private createBase({
     name,
     comment,
-    autogenerate,
     community,
     credentialLogin,
     password,
@@ -175,7 +173,6 @@ class CredentialCommand extends EntityCommand<
     return {
       cmd: 'create_credential',
       auth_algorithm: authAlgorithm,
-      autogenerate: parseYesNo(autogenerate),
       certificate,
       comment,
       community,

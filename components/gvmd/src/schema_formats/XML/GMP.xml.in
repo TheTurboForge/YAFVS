@@ -3208,8 +3208,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       </p>
       <p>
         If no type is specified, the manager infers a compatible credential
-        type from the supplied credential data.  With only a login, it
-        autogenerates a username + SSH key credential.
+        type only from sufficient supplied credential data.  Secretless
+        credential creation requests are rejected.
       </p>
     </description>
     <pattern>

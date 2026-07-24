@@ -60,6 +60,7 @@
 #include "manage_tags.h"
 #include "sql.h"
 #include "utils.h"
+#include "yafvs_control.h"
 
 #include <assert.h>
 #include <ctype.h>
@@ -2942,21 +2943,15 @@ scheduled_task_free (scheduled_task_t *scheduled_task)
  * @brief Start a task, for the scheduler.
  *
  * @param[in]  scheduled_task   Scheduled task.
- * @param[in]  fork_connection  Function that forks a child which is connected
- *                              to the Manager.  Must return PID in parent, 0
- *                              in child, or -1 on error.
  * @param[in]  sigmask_current  Sigmask to restore in child.
  *
  * @return 0 success, -1 error.  Child does not return.
  */
 static int
 scheduled_task_start (scheduled_task_t *scheduled_task,
-                      manage_connection_forker_t fork_connection,
                       sigset_t *sigmask_current)
 {
   int pid;
-  gvm_connection_t connection;
-  gmp_authenticate_info_opts_t auth_opts;
 
   /* Fork a child to start the task and wait for the response, so that the
    * parent can return to the main loop.  Only the parent returns. */
@@ -2987,18 +2982,47 @@ scheduled_task_start (scheduled_task_t *scheduled_task,
         return 0;
     }
 
-  /* Run the callback to fork a child connected to the Manager. */
+  /* Keep a dedicated start child so this scheduler child can wait before
+   * deciding schedule accounting or rescheduling. */
 
-  pid = fork_connection (&connection, scheduled_task->owner_uuid);
+  pid = fork ();
   switch (pid)
     {
       case 0:
-        /* Child.  Break, start task, exit. */
-        break;
+        /* Do not retain the scheduler database process in the start child. */
+        init_sentry ();
+        cleanup_manage_process (FALSE);
+        pthread_sigmask (SIG_SETMASK, sigmask_current, NULL);
+        setup_signal_handler (SIGTERM, SIG_DFL, 0);
+        setup_signal_handler (SIGINT, SIG_DFL, 0);
+        setup_signal_handler (SIGQUIT, SIG_DFL, 0);
+
+        setproctitle ("scheduler: starting %s", scheduled_task->task_uuid);
+        switch (yafvs_control_start_task_client (scheduled_task->owner_uuid,
+                                                  scheduled_task->task_uuid))
+          {
+            case YAFVS_CONTROL_START_TASK_OK:
+              scheduled_task_free (scheduled_task);
+              gvm_close_sentry ();
+              exit (EXIT_SUCCESS);
+
+            case YAFVS_CONTROL_START_TASK_FORBIDDEN:
+              g_warning ("%s: user denied permission to start task", __func__);
+              scheduled_task_free (scheduled_task);
+              gvm_close_sentry ();
+              /* Consume this schedule rather than retrying permission denial. */
+              exit (EXIT_SUCCESS);
+
+            default:
+              g_warning ("%s: private task start failed", __func__);
+              scheduled_task_free (scheduled_task);
+              gvm_close_sentry ();
+              exit (EXIT_FAILURE);
+          }
 
       case -1:
         /* Parent on error. */
-        g_warning ("%s: fork_connection failed", __func__);
+        g_warning ("%s: start fork failed", __func__);
         reschedule_task (scheduled_task->task_uuid);
         scheduled_task_free (scheduled_task);
         gvm_close_sentry ();
@@ -3013,7 +3037,7 @@ scheduled_task_start (scheduled_task_t *scheduled_task,
 
           setproctitle ("scheduler: waiting for %i", pid);
 
-          g_debug ("%s: %i fork_connectioned %i",
+          g_debug ("%s: %i forked start child %i",
                    __func__, getpid (), pid);
 
           if (signal (SIGCHLD, SIG_DFL) == SIG_ERR)
@@ -3110,53 +3134,6 @@ scheduled_task_start (scheduled_task_t *scheduled_task,
         }
     }
 
-  /* Start the task. */
-
-  setproctitle ("scheduler: starting %s", scheduled_task->task_uuid);
-
-  auth_opts = gmp_authenticate_info_opts_defaults;
-  auth_opts.username = scheduled_task->owner_name;
-  if (gmp_authenticate_info_ext_c (&connection, auth_opts))
-    {
-      g_warning ("%s: gmp_authenticate failed", __func__);
-      scheduled_task_free (scheduled_task);
-      gvm_connection_free (&connection);
-      gvm_close_sentry ();
-      exit (EXIT_FAILURE);
-    }
-
-  {
-    gmp_start_task_opts_t opts;
-
-    opts = gmp_start_task_opts_defaults;
-    opts.task_id = scheduled_task->task_uuid;
-
-    switch (gmp_start_task_ext_c (&connection, opts))
-      {
-        case 0:
-          break;
-
-        case 99:
-          g_warning ("%s: user denied permission to start task", __func__);
-          scheduled_task_free (scheduled_task);
-          gvm_connection_free (&connection);
-          gvm_close_sentry ();
-          /* Return success, so that parent stops trying to start the task. */
-          exit (EXIT_SUCCESS);
-
-        default:
-          g_warning ("%s: gmp_start_task failed", __func__);
-          scheduled_task_free (scheduled_task);
-          gvm_connection_free (&connection);
-          gvm_close_sentry ();
-          exit (EXIT_FAILURE);
-      }
-  }
-
-  scheduled_task_free (scheduled_task);
-  gvm_connection_free (&connection);
-  gvm_close_sentry ();
-  exit (EXIT_SUCCESS);
 }
 
 /**
@@ -3858,9 +3835,7 @@ manage_schedule (manage_connection_forker_t fork_connection,
       starts = starts->next;
       g_slist_free_1 (head);
 
-      if (scheduled_task_start (scheduled_task,
-                                fork_connection,
-                                sigmask_current))
+      if (scheduled_task_start (scheduled_task, sigmask_current))
         /* Error.  Reschedule and continue to next task. */
         reschedule_task (scheduled_task->task_uuid);
       scheduled_task_free (scheduled_task);

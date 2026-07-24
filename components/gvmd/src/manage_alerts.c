@@ -3666,7 +3666,7 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
 
           /* Do not reuse the forked manager connection in the alert child. */
           gvm_connection_free (&connection);
-          if (yafvs_control_start_alert_task (owner_id, task_id))
+          if (yafvs_control_start_task_client (owner_id, task_id))
             {
               g_free (task_id);
               free (owner_id);

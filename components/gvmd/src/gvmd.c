@@ -3590,7 +3590,7 @@ gvmd (int argc, char** argv, char *env[])
                          &yafvs_control_socket))
     return EXIT_FAILURE;
   if (yafvs_control_socket_path
-      && !yafvs_control_configure_alert_client (yafvs_control_socket_path))
+      && !yafvs_control_configure_task_client (yafvs_control_socket_path))
     return EXIT_FAILURE;
 
   /* Initialise the process for manage_schedule. */

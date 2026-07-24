@@ -60,12 +60,18 @@
 void
 yafvs_control_accept_and_fork (int, int, int, sigset_t *);
 
-/* Configure the alert self-client only after the private listener is bound. */
-gboolean
-yafvs_control_configure_alert_client (const char *);
+enum
+{
+  YAFVS_CONTROL_START_TASK_OK = 0,
+  YAFVS_CONTROL_START_TASK_FORBIDDEN = 99
+};
 
-/* Start an alert task through the private listener; never retries a sent frame. */
+/* Configure the private task-start client only after the listener is bound. */
+gboolean
+yafvs_control_configure_task_client (const char *);
+
+/* Start a task through the private listener; never retries a sent frame. */
 int
-yafvs_control_start_alert_task (const char *, const char *);
+yafvs_control_start_task_client (const char *, const char *);
 
 #endif /* not _GVMD_YAFVS_CONTROL_H */

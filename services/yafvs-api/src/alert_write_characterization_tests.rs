@@ -59,7 +59,7 @@ fn inherited_function(source: &str, name: &str) -> String {
 fn alert_start_execution_uses_private_control_and_does_not_remove_gmp_owners() {
     let trigger = inherited_function(MANAGE_ALERTS_C, "trigger");
     assert!(!trigger.contains("gmp_start_task_report_c"));
-    assert!(trigger.contains("yafvs_control_start_alert_task (owner_id, task_id)"));
+    assert!(trigger.contains("yafvs_control_start_task_client (owner_id, task_id)"));
     assert!(trigger.contains("manage_fork_connection (&connection, owner_id)"));
     assert!(trigger.contains("gvm_connection_free (&connection)"));
 

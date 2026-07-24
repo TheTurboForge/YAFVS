@@ -333,13 +333,11 @@ typedef struct
   char credential_uuid[37];
 } yafvs_control_credential_public_key_request_t;
 
-typedef enum
+enum
 {
-  YAFVS_CONTROL_START_TASK_OK = 0,
   YAFVS_CONTROL_START_TASK_ACTIVE = 1,
   YAFVS_CONTROL_START_TASK_NOT_FOUND = 3,
   YAFVS_CONTROL_START_TASK_RESUME_UNSUPPORTED = 4,
-  YAFVS_CONTROL_START_TASK_FORBIDDEN = 99,
   YAFVS_CONTROL_START_TASK_MISSING_TARGET = -2,
   YAFVS_CONTROL_START_TASK_REPORT_CREATE = -3,
   YAFVS_CONTROL_START_TASK_TARGET_MISSING_HOSTS = -4,
@@ -350,9 +348,9 @@ typedef enum
   YAFVS_CONTROL_START_TASK_CONFIGURATION = -101,
   YAFVS_CONTROL_START_TASK_UNAVAILABLE = -102,
   YAFVS_CONTROL_START_TASK_INDETERMINATE = -103
-} yafvs_control_start_task_result_t;
+};
 
-static gchar *yafvs_control_alert_client_socket_path;
+static gchar *yafvs_control_task_client_socket_path;
 
 static gboolean
 yafvs_control_decode_base64_field (const char *, size_t, size_t, gboolean,
@@ -3425,7 +3423,7 @@ yafvs_control_set_timeouts (int socket)
 }
 
 gboolean
-yafvs_control_configure_alert_client (const char *socket_path)
+yafvs_control_configure_task_client (const char *socket_path)
 {
   size_t socket_path_len;
   gchar *socket_path_copy;
@@ -3440,13 +3438,13 @@ yafvs_control_configure_alert_client (const char *socket_path)
   socket_path_copy = g_strdup (socket_path);
   if (socket_path_copy == NULL)
     return FALSE;
-  yafvs_control_secure_free (yafvs_control_alert_client_socket_path);
-  yafvs_control_alert_client_socket_path = socket_path_copy;
+  yafvs_control_secure_free (yafvs_control_task_client_socket_path);
+  yafvs_control_task_client_socket_path = socket_path_copy;
   return TRUE;
 }
 
 static gboolean
-yafvs_control_alert_client_wait (int socket, short events)
+yafvs_control_task_client_wait (int socket, short events)
 {
   struct pollfd descriptor = { socket, events, 0 };
   int ret;
@@ -3458,7 +3456,7 @@ yafvs_control_alert_client_wait (int socket, short events)
 }
 
 static gboolean
-yafvs_control_alert_client_connect (int socket, const char *socket_path)
+yafvs_control_task_client_connect (int socket, const char *socket_path)
 {
   struct sockaddr_un address = {0};
   int flags;
@@ -3473,7 +3471,7 @@ yafvs_control_alert_client_connect (int socket, const char *socket_path)
   g_strlcpy (address.sun_path, socket_path, sizeof (address.sun_path));
   if (connect (socket, (struct sockaddr *) &address, sizeof (address)) == 0)
     return TRUE;
-  if (errno != EINPROGRESS || !yafvs_control_alert_client_wait (socket, POLLOUT)
+  if (errno != EINPROGRESS || !yafvs_control_task_client_wait (socket, POLLOUT)
       || getsockopt (socket, SOL_SOCKET, SO_ERROR, &socket_error,
                      &socket_error_len)
            == -1)
@@ -3482,7 +3480,7 @@ yafvs_control_alert_client_connect (int socket, const char *socket_path)
 }
 
 static gboolean
-yafvs_control_alert_client_write (int socket, const char *request,
+yafvs_control_task_client_write (int socket, const char *request,
                                   size_t request_len, gboolean *fully_sent)
 {
   size_t written = 0;
@@ -3500,7 +3498,7 @@ yafvs_control_alert_client_write (int socket, const char *request,
       if (ret < 0 && errno == EINTR)
         continue;
       if ((ret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
-          && yafvs_control_alert_client_wait (socket, POLLOUT))
+          && yafvs_control_task_client_wait (socket, POLLOUT))
         continue;
       return FALSE;
     }
@@ -3509,7 +3507,7 @@ yafvs_control_alert_client_write (int socket, const char *request,
 }
 
 static gboolean
-yafvs_control_alert_client_read (int socket,
+yafvs_control_task_client_read (int socket,
                                  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES + 2],
                                  size_t *response_len)
 {
@@ -3522,7 +3520,7 @@ yafvs_control_alert_client_read (int socket,
       ssize_t ret;
       char *newline;
 
-      if (!yafvs_control_alert_client_wait (socket, POLLIN | POLLHUP))
+      if (!yafvs_control_task_client_wait (socket, POLLIN | POLLHUP))
         return FALSE;
       ret = read (socket, response + length,
                   YAFVS_CONTROL_MAX_RESPONSE_BYTES + 1 - length);
@@ -3588,8 +3586,8 @@ yafvs_control_parse_start_task_response (char *response, size_t response_len)
 }
 
 int
-yafvs_control_start_alert_task (const char *operator_uuid,
-                                const char *task_uuid)
+yafvs_control_start_task_client (const char *operator_uuid,
+                                 const char *task_uuid)
 {
   char request[YAFVS_CONTROL_START_TASK_MAX_REQUEST_BYTES] = {0};
   char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES + 2] = {0};
@@ -3601,7 +3599,7 @@ yafvs_control_start_alert_task (const char *operator_uuid,
   int socket_fd = -1;
   int result = YAFVS_CONTROL_START_TASK_CONFIGURATION;
 
-  if (yafvs_control_alert_client_socket_path == NULL
+  if (yafvs_control_task_client_socket_path == NULL
       || !yafvs_control_uuid_is_valid (operator_uuid)
       || !yafvs_control_uuid_is_valid (task_uuid)
       || !yafvs_control_configured_secret (&secret, &secret_len))
@@ -3614,15 +3612,15 @@ yafvs_control_start_alert_task (const char *operator_uuid,
 
   socket_fd = socket (AF_UNIX, SOCK_STREAM, 0);
   if (socket_fd == -1
-      || !yafvs_control_alert_client_connect (
-           socket_fd, yafvs_control_alert_client_socket_path))
+      || !yafvs_control_task_client_connect (
+           socket_fd, yafvs_control_task_client_socket_path))
     {
       result = YAFVS_CONTROL_START_TASK_UNAVAILABLE;
       goto done;
     }
-  if (!yafvs_control_alert_client_write (socket_fd, request, request_len,
-                                         &fully_sent)
-      || !yafvs_control_alert_client_read (socket_fd, response, &response_len))
+  if (!yafvs_control_task_client_write (socket_fd, request, request_len,
+                                        &fully_sent)
+      || !yafvs_control_task_client_read (socket_fd, response, &response_len))
     {
       result = fully_sent ? YAFVS_CONTROL_START_TASK_INDETERMINATE
                           : YAFVS_CONTROL_START_TASK_UNAVAILABLE;

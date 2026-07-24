@@ -31,13 +31,13 @@ fn inherited_function(source: &str, name: &str) -> String {
 }
 
 #[test]
-fn alert_start_uses_the_private_control_without_retiring_public_or_scheduler_gmp() {
+fn alert_and_scheduler_start_use_private_control_without_retiring_public_or_stop_gmp() {
     let alert_trigger = inherited_function(MANAGE_ALERTS_C, "trigger");
     assert!(!alert_trigger.contains("gmp_start_task_report_c"));
     for required in [
         "manage_fork_connection (&connection, owner_id)",
         "gvm_connection_free (&connection)",
-        "yafvs_control_start_alert_task (owner_id, task_id)",
+        "yafvs_control_start_task_client (owner_id, task_id)",
         "gvm_close_sentry ()",
     ] {
         assert!(
@@ -66,9 +66,61 @@ fn alert_start_uses_the_private_control_without_retiring_public_or_scheduler_gmp
             .contains("<start_task task_id=\\\"%s\\\"/>")
     );
     assert!(
-        inherited_function(MANAGE_C, "scheduled_task_start")
-            .contains("gmp_start_task_ext_c (&connection, opts)")
+        inherited_function(GVM_LIBS_GMP_C, "gmp_start_task_ext_c")
+            .contains("<start_task task_id=\\\"%s\\\"/>")
     );
+    let scheduler_start = inherited_function(MANAGE_C, "scheduled_task_start");
+    for required in [
+        "pid = fork ();",
+        "cleanup_manage_process (FALSE)",
+        "pthread_sigmask (SIG_SETMASK, sigmask_current, NULL)",
+        "setup_signal_handler (SIGTERM, SIG_DFL, 0)",
+        "setup_signal_handler (SIGINT, SIG_DFL, 0)",
+        "setup_signal_handler (SIGQUIT, SIG_DFL, 0)",
+        "yafvs_control_start_task_client (scheduled_task->owner_uuid,",
+        "scheduled_task->task_uuid)",
+        "case YAFVS_CONTROL_START_TASK_OK:",
+        "case YAFVS_CONTROL_START_TASK_FORBIDDEN:",
+        "while (waitpid (pid, &status, 0) < 0)",
+        "if (errno == EINTR)",
+        "set_task_schedule_uuid (task_uuid, 0, -1)",
+        "set_task_schedule_periods (task_uuid,",
+        "set_task_schedule_next_time_uuid (task_uuid, 0)",
+        "reschedule_task (scheduled_task->task_uuid)",
+    ] {
+        assert!(
+            scheduler_start.contains(required),
+            "scheduler start missing {required}"
+        );
+    }
+    for forbidden in [
+        "gmp_authenticate_info_ext_c",
+        "gmp_start_task_ext_c",
+        "fork_connection (",
+    ] {
+        assert!(
+            !scheduler_start.contains(forbidden),
+            "scheduler start must not retain {forbidden}"
+        );
+    }
+    for success in [
+        "case YAFVS_CONTROL_START_TASK_OK:\n              scheduled_task_free (scheduled_task);\n              gvm_close_sentry ();\n              exit (EXIT_SUCCESS);",
+        "case YAFVS_CONTROL_START_TASK_FORBIDDEN:\n              g_warning (\"%s: user denied permission to start task\", __func__);\n              scheduled_task_free (scheduled_task);\n              gvm_close_sentry ();\n              /* Consume this schedule rather than retrying permission denial. */\n              exit (EXIT_SUCCESS);",
+    ] {
+        assert!(
+            scheduler_start.contains(success),
+            "scheduler success policy changed: {success}"
+        );
+    }
+    assert!(
+        scheduler_start.contains(
+            "default:\n              g_warning (\"%s: private task start failed\", __func__);\n              scheduled_task_free (scheduled_task);\n              gvm_close_sentry ();\n              exit (EXIT_FAILURE);"
+        ),
+        "scheduler must reschedule every non-success/non-forbidden result"
+    );
+    let scheduler_stop = inherited_function(MANAGE_C, "scheduled_task_stop");
+    assert!(scheduler_stop.contains("gmp_authenticate_info_ext_c (&connection, auth_opts)"));
+    assert!(scheduler_stop.contains("gmp_stop_task_c (&connection, scheduled_task->task_uuid)"));
 }
 
 #[test]

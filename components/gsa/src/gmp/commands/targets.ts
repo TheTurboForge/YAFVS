@@ -183,61 +183,81 @@ class TargetsCommand extends EntitiesCommand<Target> {
 
   async deleteByFilter(filter: Filter) {
     requireNativeTargetApi(this.http);
-    const targets: Target[] = [];
     const query = nativeTargetQueryFromFilter(filter);
+    let targets: Target[];
 
     if (shouldApplyToAllFilteredTargets(filter)) {
-      let snapshotTotal: number | undefined;
-      const seenIds = new Set<string>();
-      for (let page = 1; ; page += 1) {
-        const nativeResponse = await fetchNativeTargets(this.http, {
-          ...query,
-          page,
-          pageSize: NATIVE_COMMAND_PAGE_SIZE,
-        });
-        if (snapshotTotal === undefined) {
-          snapshotTotal = nativeResponse.page.total;
-        } else if (nativeResponse.page.total !== snapshotTotal) {
-          throw new Error(
-            'Native target bulk delete preflight detected collection drift',
-          );
-        }
-        for (const target of nativeResponse.targets) {
-          const id = requiredTargetId(target.id, targets.length);
-          if (seenIds.has(id)) {
-            throw new Error(
-              'Native target bulk delete preflight detected duplicate-ID drift',
-            );
-          }
-          seenIds.add(id);
-          targets.push(target);
-        }
-        if (targets.length === snapshotTotal) {
-          break;
-        }
-        if (
-          nativeResponse.targets.length === 0 ||
-          targets.length > snapshotTotal ||
-          page >= snapshotTotal
-        ) {
-          throw new Error(
-            'Native target bulk delete preflight detected collection drift',
-          );
-        }
-      }
-      if (targets.length !== snapshotTotal) {
+      const firstTargets = await this.traverseAllFilteredTargets(query);
+      const firstIds = targetIds(firstTargets);
+      targets = await this.traverseAllFilteredTargets(query);
+      const ids = targetIds(targets);
+      if (
+        firstIds.length !== ids.length ||
+        firstIds.some((id, index) => id !== ids[index])
+      ) {
         throw new Error(
-          'Native target bulk delete preflight detected collection drift',
+          'Native target bulk delete preflight stabilization detected candidate-set drift',
         );
       }
     } else {
       const nativeResponse = await fetchNativeTargets(this.http, query);
-      targets.push(...nativeResponse.targets);
+      targets = nativeResponse.targets;
     }
 
     const ids = targetIds(targets);
     await this.deleteIds(ids);
     return new Response(targets);
+  }
+
+  private async traverseAllFilteredTargets(
+    query: ReturnType<typeof nativeTargetQueryFromFilter>,
+  ): Promise<Target[]> {
+    const targets: Target[] = [];
+    const seenIds = new Set<string>();
+    let traversalTotal: number | undefined;
+
+    for (let page = 1; ; page += 1) {
+      const nativeResponse = await fetchNativeTargets(this.http, {
+        ...query,
+        page,
+        pageSize: NATIVE_COMMAND_PAGE_SIZE,
+      });
+      if (traversalTotal === undefined) {
+        traversalTotal = nativeResponse.page.total;
+      } else if (nativeResponse.page.total !== traversalTotal) {
+        throw new Error(
+          'Native target bulk delete preflight detected collection drift',
+        );
+      }
+      for (const target of nativeResponse.targets) {
+        const id = requiredTargetId(target.id, targets.length);
+        if (seenIds.has(id)) {
+          throw new Error(
+            'Native target bulk delete preflight detected duplicate-ID drift',
+          );
+        }
+        seenIds.add(id);
+        targets.push(target);
+      }
+      if (targets.length === traversalTotal) {
+        break;
+      }
+      if (
+        nativeResponse.targets.length === 0 ||
+        targets.length > traversalTotal ||
+        page >= traversalTotal
+      ) {
+        throw new Error(
+          'Native target bulk delete preflight detected collection drift',
+        );
+      }
+    }
+    if (targets.length !== traversalTotal) {
+      throw new Error(
+        'Native target bulk delete preflight detected collection drift',
+      );
+    }
+    return targets;
   }
 
   private async deleteIds(ids: readonly string[]): Promise<string[]> {

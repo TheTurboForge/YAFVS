@@ -31,6 +31,19 @@ const createNativeHttp = () => {
   return fakeHttp;
 };
 
+const targetPageResponse = (
+  items: Array<{id?: string; name?: string}>,
+  total: number,
+  page: number,
+) => ({
+  json: testing.fn().mockResolvedValue({
+    page: {page, page_size: 500, total},
+    items,
+  }),
+  ok: true,
+  status: 200,
+});
+
 describe('TargetsCommand tests', () => {
   test('should refuse target lists locally when native API is unavailable', async () => {
     const fetchMock = testing.fn();
@@ -424,25 +437,17 @@ describe('TargetsCommand tests', () => {
     );
   });
 
-  test('should snapshot every all-filter page before ordered deletion', async () => {
+  test('should stabilize every all-filter page before ordered deletion', async () => {
     const fetchMock = testing
       .fn()
-      .mockResolvedValueOnce({
-        json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2},
-          items: [{id: 'target-2', name: 'Two'}],
-        }),
-        ok: true,
-        status: 200,
-      })
-      .mockResolvedValueOnce({
-        json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 500, total: 2},
-          items: [{id: 'target-1', name: 'One'}],
-        }),
-        ok: true,
-        status: 200,
-      })
+      .mockResolvedValueOnce(targetPageResponse([{id: 'target-2'}], 2, 1))
+      .mockResolvedValueOnce(targetPageResponse([{id: 'target-1'}], 2, 2))
+      .mockResolvedValueOnce(
+        targetPageResponse([{id: 'target-2', name: 'Two'}], 2, 1),
+      )
+      .mockResolvedValueOnce(
+        targetPageResponse([{id: 'target-1', name: 'One'}], 2, 2),
+      )
       .mockResolvedValueOnce({ok: true, status: 204})
       .mockResolvedValueOnce({ok: true, status: 204});
     testing.stubGlobal('fetch', fetchMock);
@@ -471,12 +476,125 @@ describe('TargetsCommand tests', () => {
       sort: 'name',
       filter: 'web',
     });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(3, 'api/v1/targets', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: 'web',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(4, 'api/v1/targets', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'name',
+      filter: 'web',
+    });
     expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
-      3,
+      5,
       'api/v1/targets/target-2',
     );
     expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
-      4,
+      6,
+      'api/v1/targets/target-1',
+    );
+  });
+
+  test('should reject same-total replacement between passes before deletion', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce(targetPageResponse([{id: 'target-1'}], 2, 1))
+      .mockResolvedValueOnce(targetPageResponse([{id: 'target-2'}], 2, 2))
+      .mockResolvedValueOnce(targetPageResponse([{id: 'target-1'}], 2, 1))
+      .mockResolvedValueOnce(targetPageResponse([{id: 'target-3'}], 2, 2));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TargetsCommand(fakeHttp);
+
+    await expect(
+      cmd.deleteByFilter(Filter.fromString('rows=1').all()),
+    ).rejects.toThrow('stabilization detected candidate-set drift');
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({method: 'DELETE'}),
+    );
+  });
+
+  test('should reject same-size reorder between passes before deletion', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce(
+        targetPageResponse([{id: 'target-1'}, {id: 'target-2'}], 2, 1),
+      )
+      .mockResolvedValueOnce(
+        targetPageResponse([{id: 'target-2'}, {id: 'target-1'}], 2, 1),
+      );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TargetsCommand(fakeHttp);
+
+    await expect(
+      cmd.deleteByFilter(Filter.fromString('rows=1').all()),
+    ).rejects.toThrow('stabilization detected candidate-set drift');
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({method: 'DELETE'}),
+    );
+  });
+
+  test('should require two empty all-filter observations without deleting', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce(targetPageResponse([], 0, 1))
+      .mockResolvedValueOnce(targetPageResponse([], 0, 1));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TargetsCommand(fakeHttp);
+
+    const result = await cmd.deleteByFilter(Filter.fromString('rows=1').all());
+
+    expect(result.data).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({method: 'DELETE'}),
+    );
+  });
+
+  test('should complete two 501-target traversals before deletion', async () => {
+    const targets = Array.from({length: 501}, (_, index) => ({
+      id: 'target-' + (index + 1),
+    }));
+    const pages = [
+      targetPageResponse(targets.slice(0, 500), targets.length, 1),
+      targetPageResponse(targets.slice(500), targets.length, 2),
+      targetPageResponse(targets.slice(0, 500), targets.length, 1),
+      targetPageResponse(targets.slice(500), targets.length, 2),
+    ];
+    const fetchMock = testing
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(pages.shift() ?? {ok: true, status: 204}),
+      );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new TargetsCommand(fakeHttp);
+
+    const result = await cmd.deleteByFilter(Filter.fromString('rows=1').all());
+
+    expect(result.data.map(target => target.id)).toEqual(
+      targets.map(target => target.id),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(505);
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(4, 'api/v1/targets', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'name',
+      filter: '',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      5,
       'api/v1/targets/target-1',
     );
   });

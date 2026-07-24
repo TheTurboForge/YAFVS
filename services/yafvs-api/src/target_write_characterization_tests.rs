@@ -529,6 +529,24 @@ fn target_delete_is_native_only_while_raw_gmp_and_create_save_bridges_remain() {
             "TargetsCommand {name} calls super"
         );
     }
+    assert_eq!(
+        delete_targets_by_filter
+            .matches("await this.traverseAllFilteredTargets(query)")
+            .count(),
+        2,
+        "all-filter deletion must complete two preflight traversals"
+    );
+    for stabilization_contract in [
+        "pageSize: NATIVE_COMMAND_PAGE_SIZE",
+        "firstIds.some((id, index) => id !== ids[index])",
+        "preflight stabilization detected candidate-set drift",
+        "const ids = targetIds(targets)",
+    ] {
+        assert!(
+            delete_targets_by_filter.contains(stabilization_contract),
+            "target delete stabilization missing {stabilization_contract}"
+        );
+    }
     assert!(GSA_TARGETS_COMMAND.contains("deleteNativeTarget(this.http, id)"));
     assert!(!GSA_TARGETS_COMMAND.contains("bulk_delete"));
     assert!(!GSA_TARGETS_COMMAND.contains("super.delete"));

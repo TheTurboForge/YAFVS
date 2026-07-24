@@ -4024,13 +4024,7 @@ init_manage_internal (GSList *log_config,
    *                           gmp_auth, gmp_start_task_report.
    *                 ...
    *             manage_schedule
-   *                 fork_connection_for_scheduler
-   *                     fork one
-   *                         init_gmpd_process
-   *                             init_manage_process
-   *                         serve_client
-   *                     fork two
-   *                         gmp_auth, gmp_start_task_report.
+   *                 private task-control start/stop requests
    *     --create-user --delete-user
    *         manage_create, ...
    *             init_manage_helper

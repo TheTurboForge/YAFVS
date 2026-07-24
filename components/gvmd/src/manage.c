@@ -2898,7 +2898,6 @@ set_scheduled_user_uuid (const gchar* user_uuid)
 typedef struct
 {
   gchar *owner_uuid;   ///< UUID of owner.
-  gchar *owner_name;   ///< Name of owner.
   gchar *task_uuid;    ///< UUID of task.
 } scheduled_task_t;
 
@@ -2907,26 +2906,23 @@ typedef struct
  *
  * @param[in] task_uuid   UUID of task.
  * @param[in] owner_uuid  UUID of owner.
- * @param[in] owner_name  Name of owner.
  *
  * @return Scheduled task structure.
  */
 static scheduled_task_t *
-scheduled_task_new (const gchar* task_uuid, const gchar* owner_uuid,
-                    const gchar* owner_name)
+scheduled_task_new (const gchar* task_uuid, const gchar* owner_uuid)
 {
   scheduled_task_t *scheduled_task;
 
   scheduled_task = g_malloc (sizeof (*scheduled_task));
   scheduled_task->task_uuid = g_strdup (task_uuid);
   scheduled_task->owner_uuid = g_strdup (owner_uuid);
-  scheduled_task->owner_name = g_strdup (owner_name);
 
   return scheduled_task;
 }
 
 /**
- * @brief Set UUID of user that scheduled the current task.
+ * @brief Free scheduled task information.
  *
  * @param[in] scheduled_task  Scheduled task.
  */
@@ -2935,7 +2931,6 @@ scheduled_task_free (scheduled_task_t *scheduled_task)
 {
   g_free (scheduled_task->task_uuid);
   g_free (scheduled_task->owner_uuid);
-  g_free (scheduled_task->owner_name);
   g_free (scheduled_task);
 }
 
@@ -3140,30 +3135,46 @@ scheduled_task_start (scheduled_task_t *scheduled_task,
  * @brief Stop a task, for the scheduler.
  *
  * @param[in]  scheduled_task   Scheduled task.
- * @param[in]  fork_connection  Function that forks a child which is connected
- *                              to the Manager.  Must return PID in parent, 0
- *                              in child, or -1 on error.
  * @param[in]  sigmask_current  Sigmask to restore in child.
  *
  * @return 0 success, -1 error.  Child does not return.
  */
 static int
 scheduled_task_stop (scheduled_task_t *scheduled_task,
-                     manage_connection_forker_t fork_connection,
                      sigset_t *sigmask_current)
 {
-  gvm_connection_t connection;
-  gmp_authenticate_info_opts_t auth_opts;
+  int pid;
 
-  /* TODO As with starts above, this should retry if the stop failed. */
-
-  /* Run the callback to fork a child connected to the Manager. */
-
-  switch (fork_connection (&connection, scheduled_task->owner_uuid))
+  /* Stop requests retain their inherited fire-and-forget scheduler policy. */
+  pid = fork ();
+  switch (pid)
     {
       case 0:
-        /* Child.  Break, stop task, exit. */
-        break;
+        /* Do not retain the scheduler database process in the stop child. */
+        init_sentry ();
+        cleanup_manage_process (FALSE);
+        pthread_sigmask (SIG_SETMASK, sigmask_current, NULL);
+        setup_signal_handler (SIGTERM, SIG_DFL, 0);
+        setup_signal_handler (SIGINT, SIG_DFL, 0);
+        setup_signal_handler (SIGQUIT, SIG_DFL, 0);
+
+        setproctitle ("scheduler: stopping %s", scheduled_task->task_uuid);
+        switch (yafvs_control_stop_task_client (scheduled_task->owner_uuid,
+                                                scheduled_task->task_uuid))
+          {
+            case YAFVS_CONTROL_STOP_TASK_STOPPED:
+            case YAFVS_CONTROL_STOP_TASK_REQUESTED:
+            case YAFVS_CONTROL_STOP_TASK_INACTIVE:
+              scheduled_task_free (scheduled_task);
+              gvm_close_sentry ();
+              exit (EXIT_SUCCESS);
+
+            default:
+              g_warning ("%s: private task stop failed", __func__);
+              scheduled_task_free (scheduled_task);
+              gvm_close_sentry ();
+              exit (EXIT_FAILURE);
+          }
 
       case -1:
         /* Parent on error. */
@@ -3171,37 +3182,10 @@ scheduled_task_stop (scheduled_task_t *scheduled_task,
         return -1;
 
       default:
-        /* Parent.  Continue to next task. */
+        /* Parent.  Continue to next task without observing the request. */
+        g_debug ("%s: %i forked stop child %i", __func__, getpid (), pid);
         return 0;
     }
-
-  /* Stop the task. */
-
-  setproctitle ("scheduler: stopping %s",
-            scheduled_task->task_uuid);
-
-  auth_opts = gmp_authenticate_info_opts_defaults;
-  auth_opts.username = scheduled_task->owner_name;
-  if (gmp_authenticate_info_ext_c (&connection, auth_opts))
-    {
-      scheduled_task_free (scheduled_task);
-      gvm_connection_free (&connection);
-      gvm_close_sentry ();
-      exit (EXIT_FAILURE);
-    }
-
-  if (gmp_stop_task_c (&connection, scheduled_task->task_uuid))
-    {
-      scheduled_task_free (scheduled_task);
-      gvm_connection_free (&connection);
-      gvm_close_sentry ();
-      exit (EXIT_FAILURE);
-    }
-
-  scheduled_task_free (scheduled_task);
-  gvm_connection_free (&connection);
-  gvm_close_sentry ();
-  exit (EXIT_SUCCESS);
 }
 
 /**
@@ -3695,17 +3679,13 @@ manage_rebuild_gvmd_data_from_feed (const char *types,
  *
  * In gvmd, periodically called from the main daemon loop.
  *
- * @param[in]  fork_connection  Function that forks a child which is connected
- *                              to the Manager.  Must return PID in parent, 0
- *                              in child, or -1 on error.
  * @param[in]  run_tasks        Whether to run scheduled tasks.
  * @param[in]  sigmask_current  Sigmask to restore in child.
  *
  * @return 0 success, 1 failed to get lock, -1 error.
  */
 int
-manage_schedule (manage_connection_forker_t fork_connection,
-                 gboolean run_tasks,
+manage_schedule (gboolean run_tasks,
                  sigset_t *sigmask_current)
 {
   iterator_t schedules;
@@ -3738,8 +3718,8 @@ manage_schedule (manage_connection_forker_t fork_connection,
   if (run_tasks == 0)
     return 0;
 
-  /* Assemble "starts" and "stops" list containing task uuid, owner name and
-   * owner UUID for each (scheduled) task to start or stop. */
+  /* Assemble "starts" and "stops" lists containing task and owner UUIDs for
+   * each scheduled task to start or stop. */
 
   ret = init_task_schedule_iterator (&schedules);
   if (ret)
@@ -3793,14 +3773,13 @@ manage_schedule (manage_connection_forker_t fork_connection,
 
         previous_start_task = task_schedule_iterator_task (&schedules);
 
-        /* Add task UUID and owner name and UUID to the list. */
+        /* Add task and owner UUIDs to the list. */
 
         starts = g_slist_prepend
                   (starts,
                    scheduled_task_new
                     (task_schedule_iterator_task_uuid (&schedules),
-                     task_schedule_iterator_owner_uuid (&schedules),
-                     task_schedule_iterator_owner_name (&schedules)));
+                     task_schedule_iterator_owner_uuid (&schedules)));
       }
     else if (task_schedule_iterator_stop_due (&schedules))
       {
@@ -3811,14 +3790,13 @@ manage_schedule (manage_connection_forker_t fork_connection,
           continue;
         previous_stop_task = task_schedule_iterator_task (&schedules);
 
-        /* Add task UUID and owner name and UUID to the list. */
+        /* Add task and owner UUIDs to the list. */
 
         stops = g_slist_prepend
                  (stops,
                   scheduled_task_new
                    (task_schedule_iterator_task_uuid (&schedules),
-                    task_schedule_iterator_owner_uuid (&schedules),
-                    task_schedule_iterator_owner_name (&schedules)));
+                    task_schedule_iterator_owner_uuid (&schedules)));
       }
   cleanup_task_schedule_iterator (&schedules);
 
@@ -3853,9 +3831,7 @@ manage_schedule (manage_connection_forker_t fork_connection,
       stops = stops->next;
       g_slist_free_1 (head);
 
-      if (scheduled_task_stop (scheduled_task,
-                               fork_connection,
-                               sigmask_current))
+      if (scheduled_task_stop (scheduled_task, sigmask_current))
         {
           /* Error.  Exit. */
           scheduled_task_free (scheduled_task);

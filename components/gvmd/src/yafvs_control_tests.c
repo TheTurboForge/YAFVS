@@ -81,6 +81,9 @@ static modify_setting_result_t modify_setting_result;
 static int reinit_calls;
 static int session_init_calls;
 static int stop_task_calls;
+static int stop_task_result;
+static int stop_task_audit_fail_calls;
+static int stop_task_audit_success_calls;
 static int clone_task_calls;
 static int clone_task_result;
 static gboolean task_uuid_lookup_fails;
@@ -143,6 +146,7 @@ static gchar *received_smb_file_path;
 static gchar *received_smb_max_protocol;
 static gchar *received_smb_share_path;
 static gchar *received_scp_credential;
+static gchar *received_task_audit_action;
 static gchar *received_scp_host;
 static gchar *received_scp_port;
 static gchar *received_scp_known_hosts;
@@ -1044,6 +1048,9 @@ __wrap_log_event (const char *resource, const char *resource_name,
       assert_that (resource_name, is_equal_to_string ("Task"));
       if (strcmp (action, "requested to start") == 0)
         start_task_audit_success_calls++;
+      else if (strcmp (action, "stopped") == 0
+               || strcmp (action, "requested to stop") == 0)
+        stop_task_audit_success_calls++;
       else
         {
           assert_that (action, is_equal_to_string ("created"));
@@ -1051,6 +1058,8 @@ __wrap_log_event (const char *resource, const char *resource_name,
         }
       g_free (received_audit_uuid);
       received_audit_uuid = g_strdup (uuid);
+      g_free (received_task_audit_action);
+      received_task_audit_action = g_strdup (action);
     }
   else if (strcmp (resource, "user") == 0)
     {
@@ -1114,6 +1123,8 @@ __wrap_log_event_fail (const char *resource, const char *resource_name,
       assert_that (resource_name, is_equal_to_string ("Task"));
       if (strcmp (action, "started") == 0)
         start_task_audit_fail_calls++;
+      else if (strcmp (action, "stopped") == 0)
+        stop_task_audit_fail_calls++;
       else
         {
           assert_that (action, is_equal_to_string ("created"));
@@ -1121,6 +1132,8 @@ __wrap_log_event_fail (const char *resource, const char *resource_name,
         }
       g_free (received_audit_uuid);
       received_audit_uuid = g_strdup (uuid);
+      g_free (received_task_audit_action);
+      received_task_audit_action = g_strdup (action);
     }
   else if (strcmp (resource, "user") == 0)
     {
@@ -4424,9 +4437,13 @@ Ensure (yafvs_control, maps_schedule_modify_responses)
 int
 __wrap_stop_task (const char *task_uuid)
 {
-  (void) task_uuid;
+  assert_that (current_credentials.uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (current_credentials.username, is_equal_to_string ("operator"));
+  assert_that (task_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
   stop_task_calls++;
-  return 0;
+  return stop_task_result;
 }
 
 int
@@ -4669,6 +4686,101 @@ Ensure (yafvs_control, maps_only_protocol_responses)
                is_equal_to_string ("-4 scanner_delete\n"));
   assert_that (yafvs_control_response (-5),
                is_equal_to_string ("-5 scanner_verify\n"));
+}
+
+Ensure (yafvs_control, decodes_only_exact_bounded_stop_responses)
+{
+  struct
+  {
+    const char *response;
+    yafvs_control_stop_task_result_t result;
+  } responses[] = {
+    {"0 stopped\n", YAFVS_CONTROL_STOP_TASK_STOPPED},
+    {"1 requested\n", YAFVS_CONTROL_STOP_TASK_REQUESTED},
+    {"2 inactive\n", YAFVS_CONTROL_STOP_TASK_INACTIVE},
+    {"3 not_found\n", YAFVS_CONTROL_STOP_TASK_NOT_FOUND},
+    {"99 forbidden\n", YAFVS_CONTROL_STOP_TASK_FORBIDDEN},
+    {"-1 internal\n", YAFVS_CONTROL_STOP_TASK_INTERNAL},
+    {"-2 scanner_status\n", YAFVS_CONTROL_STOP_TASK_SCANNER_STATUS},
+    {"-3 scanner_stop\n", YAFVS_CONTROL_STOP_TASK_SCANNER_STOP},
+    {"-4 scanner_delete\n", YAFVS_CONTROL_STOP_TASK_SCANNER_DELETE},
+    {"-5 scanner_verify\n", YAFVS_CONTROL_STOP_TASK_SCANNER_VERIFY},
+  };
+  const char *invalid[] = {
+    "0 stopped",
+    "0 stopped\nextra",
+    "0 stopped\n1 requested\n",
+    "0 stopped \n",
+  };
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES + 2];
+  char ambiguous[] = "0 stopped\0\n";
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (responses); index++)
+    {
+      g_strlcpy (response, responses[index].response, sizeof (response));
+      assert_that (yafvs_control_parse_stop_task_response (
+                     response, strlen (response)),
+                   is_equal_to (responses[index].result));
+    }
+  for (index = 0; index < G_N_ELEMENTS (invalid); index++)
+    {
+      g_strlcpy (response, invalid[index], sizeof (response));
+      assert_that (yafvs_control_parse_stop_task_response (
+                     response, strlen (response)),
+                   is_equal_to (YAFVS_CONTROL_STOP_TASK_MALFORMED));
+    }
+  assert_that (yafvs_control_parse_stop_task_response (
+                 ambiguous, sizeof (ambiguous) - 1),
+               is_equal_to (YAFVS_CONTROL_STOP_TASK_MALFORMED));
+  memset (response, 'x', sizeof (response));
+  response[sizeof (response) - 1] = '\n';
+  assert_that (yafvs_control_parse_stop_task_response (
+                 response, sizeof (response)),
+               is_equal_to (YAFVS_CONTROL_STOP_TASK_MALFORMED));
+}
+
+Ensure (yafvs_control, audits_private_stop_outcomes_in_operator_session)
+{
+  const char *operator_uuid = "123e4567-e89b-12d3-a456-426614174000";
+  const char *task_uuid = "123e4567-e89b-12d3-a456-426614174001";
+
+  mock_operator_name = "operator";
+  stop_task_calls = 0;
+  stop_task_audit_success_calls = 0;
+  stop_task_audit_fail_calls = 0;
+  g_clear_pointer (&received_audit_uuid, g_free);
+  g_clear_pointer (&received_task_audit_action, g_free);
+
+  stop_task_result = 0;
+  assert_that (yafvs_control_stop_task (operator_uuid, task_uuid),
+               is_equal_to (0));
+  assert_that (stop_task_audit_success_calls, is_equal_to (1));
+  assert_that (stop_task_audit_fail_calls, is_equal_to (0));
+  assert_that (received_audit_uuid, is_equal_to_string (task_uuid));
+  assert_that (received_task_audit_action, is_equal_to_string ("stopped"));
+
+  stop_task_result = 1;
+  assert_that (yafvs_control_stop_task (operator_uuid, task_uuid),
+               is_equal_to (1));
+  assert_that (stop_task_audit_success_calls, is_equal_to (2));
+  assert_that (received_task_audit_action,
+               is_equal_to_string ("requested to stop"));
+
+  stop_task_result = 99;
+  assert_that (yafvs_control_stop_task (operator_uuid, task_uuid),
+               is_equal_to (99));
+  assert_that (stop_task_audit_fail_calls, is_equal_to (1));
+  assert_that (received_task_audit_action, is_equal_to_string ("stopped"));
+
+  stop_task_result = 2;
+  assert_that (yafvs_control_stop_task (operator_uuid, task_uuid),
+               is_equal_to (2));
+  assert_that (stop_task_calls, is_equal_to (4));
+  assert_that (stop_task_audit_success_calls, is_equal_to (2));
+  assert_that (stop_task_audit_fail_calls, is_equal_to (1));
+  g_clear_pointer (&received_audit_uuid, g_free);
+  g_clear_pointer (&received_task_audit_action, g_free);
 }
 
 Ensure (yafvs_control, parses_canonical_bounded_alert_smb_requests)
@@ -6769,6 +6881,10 @@ main (int argc, char **argv)
                          rejects_missing_weak_or_incorrect_secrets);
   add_test_with_context (suite, yafvs_control,
                          maps_only_protocol_responses);
+  add_test_with_context (suite, yafvs_control,
+                         decodes_only_exact_bounded_stop_responses);
+  add_test_with_context (suite, yafvs_control,
+                         audits_private_stop_outcomes_in_operator_session);
   add_test_with_context (suite, yafvs_control,
                          parses_canonical_task_clone_request);
   add_test_with_context (suite, yafvs_control,

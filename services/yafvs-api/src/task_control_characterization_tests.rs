@@ -31,7 +31,7 @@ fn inherited_function(source: &str, name: &str) -> String {
 }
 
 #[test]
-fn alert_and_scheduler_start_use_private_control_without_retiring_public_or_stop_gmp() {
+fn alert_and_scheduler_task_control_use_private_control_without_retiring_public_gmp() {
     let alert_trigger = inherited_function(MANAGE_ALERTS_C, "trigger");
     assert!(!alert_trigger.contains("gmp_start_task_report_c"));
     for required in [
@@ -119,8 +119,54 @@ fn alert_and_scheduler_start_use_private_control_without_retiring_public_or_stop
         "scheduler must reschedule every non-success/non-forbidden result"
     );
     let scheduler_stop = inherited_function(MANAGE_C, "scheduled_task_stop");
-    assert!(scheduler_stop.contains("gmp_authenticate_info_ext_c (&connection, auth_opts)"));
-    assert!(scheduler_stop.contains("gmp_stop_task_c (&connection, scheduled_task->task_uuid)"));
+    for required in [
+        "pid = fork ();",
+        "cleanup_manage_process (FALSE)",
+        "pthread_sigmask (SIG_SETMASK, sigmask_current, NULL)",
+        "setup_signal_handler (SIGTERM, SIG_DFL, 0)",
+        "setup_signal_handler (SIGINT, SIG_DFL, 0)",
+        "setup_signal_handler (SIGQUIT, SIG_DFL, 0)",
+        "yafvs_control_stop_task_client (scheduled_task->owner_uuid,",
+        "scheduled_task->task_uuid)",
+        "case YAFVS_CONTROL_STOP_TASK_STOPPED:",
+        "case YAFVS_CONTROL_STOP_TASK_REQUESTED:",
+        "case YAFVS_CONTROL_STOP_TASK_INACTIVE:",
+    ] {
+        assert!(
+            scheduler_stop.contains(required),
+            "scheduler stop missing {required}"
+        );
+    }
+    for forbidden in [
+        "gmp_authenticate_info_ext_c",
+        "gmp_stop_task_c",
+        "fork_connection (",
+        "waitpid (",
+        "log_event (",
+    ] {
+        assert!(
+            !scheduler_stop.contains(forbidden),
+            "scheduler stop must not retain {forbidden}"
+        );
+    }
+
+    let private_stop = inherited_function(YAFVS_CONTROL_C, "yafvs_control_stop_task");
+    for required in [
+        "yafvs_control_start_operator_session (operator_uuid)",
+        "result = stop_task (task_uuid)",
+        "case 0:",
+        "log_event (\"task\", \"Task\", task_uuid, \"stopped\")",
+        "case 1:",
+        "\"requested to stop\"",
+        "case 99:",
+        "log_event_fail (\"task\", \"Task\", task_uuid, \"stopped\")",
+        "yafvs_control_finish_operator_session ()",
+    ] {
+        assert!(
+            private_stop.contains(required),
+            "private stop missing {required}"
+        );
+    }
 }
 
 #[test]

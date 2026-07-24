@@ -663,27 +663,26 @@ accept_and_maybe_fork (int server_socket, sigset_t *sigmask_current)
 
 
 
-/* Connection forker for scheduler. */
+/* Connection forker for manager events. */
 
 /**
  * @brief Fork a child connected to the Manager.
  *
  * @param[in]  client_connection       Client connection.
- * @param[in]  uuid                    UUID of schedule user.
- * @param[in]  scheduler               Whether this is for the scheduler.
+ * @param[in]  uuid                    UUID of event owner.
  *
  * @return PID parent on success, 0 child on success, -1 error.
  */
 static int
 fork_connection_internal (gvm_connection_t *client_connection,
-                          const gchar* uuid, int scheduler)
+                          const gchar* uuid)
 {
   int pid, parent_client_socket, ret;
   int sockets[2];
   struct sigaction action;
   gchar *auth_uuid;
 
-  /* Fork a child to use as scheduler/event client and server. */
+  /* Fork a child to use as an event client and server. */
 
   /* This must 'fork' and not 'fork_with_handlers' so that the next fork can
    * decide about handlers. */
@@ -726,7 +725,7 @@ fork_connection_internal (gvm_connection_t *client_connection,
       exit (EXIT_FAILURE);
     }
 
-  /* Split into a Manager client for the scheduler, and a Manager serving
+  /* Split into a Manager client for the event, and a Manager serving
    * GMP to that client. */
 
   is_parent = 0;
@@ -738,7 +737,7 @@ fork_connection_internal (gvm_connection_t *client_connection,
   switch (pid)
     {
       case 0:
-        /* Child.  Serve the scheduler GMP, then exit. */
+        /* Child.  Serve the event GMP, then exit. */
 
         init_sentry ();
         setproctitle ("Serving GMP internally");
@@ -780,10 +779,7 @@ fork_connection_internal (gvm_connection_t *client_connection,
 
         init_gmpd_process (&database, disabled_commands);
 
-        /* Make any further authentications to this process succeed.  This
-         * enables the scheduler to login as the owner of the scheduled
-         * task. */
-        manage_auth_allow_all (scheduler);
+        manage_auth_allow_all (FALSE);
         set_scheduled_user_uuid (auth_uuid);
         g_free (auth_uuid);
 
@@ -841,21 +837,6 @@ fork_connection_internal (gvm_connection_t *client_connection,
 
         setproctitle ("Requesting GMP internally");
 
-        /* This process is returned as the child of
-         * fork_connection_for_scheduler so that the returned parent can wait
-         * on this process. */
-
-        if (scheduler)
-          {
-            /* When used for scheduling this parent process waits for the
-             * child.  That means it does not use the loops which handle
-             * termination_signal.  So we need to use the regular handlers
-             * for termination signals. */
-            setup_signal_handler (SIGTERM, SIG_DFL, 0);
-            setup_signal_handler (SIGINT, SIG_DFL, 0);
-            setup_signal_handler (SIGQUIT, SIG_DFL, 0);
-          }
-
         /** @todo Give the parent time to prepare. */
         gvm_sleep (5);
 
@@ -899,21 +880,6 @@ fork_connection_internal (gvm_connection_t *client_connection,
 /**
  * @brief Fork a child connected to the Manager.
  *
- * @param[in]  client_connection   Client connection.
- * @param[in]  uuid                UUID of schedule user.
- *
- * @return PID parent on success, 0 child on success, -1 error.
- */
-static int
-fork_connection_for_scheduler (gvm_connection_t *client_connection,
-                               const gchar* uuid)
-{
-  return fork_connection_internal (client_connection, uuid, 1);
-}
-
-/**
- * @brief Fork a child connected to the Manager.
- *
  * @param[in]  client_connection  Client connection.
  * @param[in]  uuid               UUID of user.
  *
@@ -923,7 +889,7 @@ static int
 fork_connection_for_event (gvm_connection_t *client_connection,
                            const gchar* uuid)
 {
-  return fork_connection_internal (client_connection, uuid, 0);
+  return fork_connection_internal (client_connection, uuid);
 }
 
 
@@ -1681,8 +1647,7 @@ run_schedule (periodic_times_t *t)
   if (!time_to_run (t->last_schedule, SCHEDULE_PERIOD, start))
     return;
 
-  int rc = manage_schedule (fork_connection_for_scheduler,
-                            scheduling_enabled,
+  int rc = manage_schedule (scheduling_enabled,
                             sigmask_normal);
   switch (rc)
     {

@@ -46,7 +46,10 @@
 #define YAFVS_CONTROL_SECRET_ENV "YAFVS_GVMD_CONTROL_SECRET"
 #define YAFVS_CONTROL_SECRET_MIN_BYTES 32
 #define YAFVS_CONTROL_SECRET_MAX_BYTES 128
-#define YAFVS_CONTROL_STOP_MAX_REQUEST_BYTES 256
+#define YAFVS_CONTROL_STOP_TASK_COMMAND "stop "
+#define YAFVS_CONTROL_STOP_TASK_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_STOP_TASK_COMMAND) - 1)
+#define YAFVS_CONTROL_STOP_TASK_MAX_REQUEST_BYTES 256
 #define YAFVS_CONTROL_MAX_REQUEST_BYTES 65536
 #define YAFVS_CONTROL_MAX_RESPONSE_BYTES 64
 #define YAFVS_CONTROL_TIMEOUT_SECONDS 5
@@ -57,6 +60,7 @@
 #define YAFVS_CONTROL_TRASH_EMPTY_COMMAND "trash-empty "
 #define YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH \
   (sizeof (YAFVS_CONTROL_TRASH_EMPTY_COMMAND) - 1)
+#define YAFVS_CONTROL_TRASH_EMPTY_MAX_REQUEST_BYTES 256
 #define YAFVS_CONTROL_TRASH_EMPTY_SNAPSHOT_DIGEST_LENGTH 64
 #define YAFVS_CONTROL_SCHEDULE_CREATE_COMMAND "schedule-create "
 #define YAFVS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH \
@@ -1590,9 +1594,10 @@ yafvs_control_parse_request (const char *request, size_t request_len,
   const char *task_start;
   size_t secret_len;
 
-  if (request_len > YAFVS_CONTROL_STOP_MAX_REQUEST_BYTES
+  if (request_len > YAFVS_CONTROL_STOP_TASK_MAX_REQUEST_BYTES
       || request_len < 80 + YAFVS_CONTROL_SECRET_MIN_BYTES
-      || memcmp (request, "stop ", 5)
+      || memcmp (request, YAFVS_CONTROL_STOP_TASK_COMMAND,
+                 YAFVS_CONTROL_STOP_TASK_COMMAND_LENGTH)
       || request[request_len - 1] != '\n'
       || !yafvs_control_secret_is_valid (expected_secret,
                                             expected_secret_len))
@@ -1706,7 +1711,7 @@ yafvs_control_parse_trash_empty_request
 
   if (request == NULL || expected_total == NULL
       || expected_snapshot_digest == NULL
-      || request_len > YAFVS_CONTROL_STOP_MAX_REQUEST_BYTES
+      || request_len > YAFVS_CONTROL_TRASH_EMPTY_MAX_REQUEST_BYTES
       || request_len
            < YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH
                + YAFVS_CONTROL_SECRET_MIN_BYTES + 1 + 36 + 1 + 1 + 1
@@ -3585,6 +3590,37 @@ yafvs_control_parse_start_task_response (char *response, size_t response_len)
   return YAFVS_CONTROL_START_TASK_MALFORMED;
 }
 
+static yafvs_control_stop_task_result_t
+yafvs_control_parse_stop_task_response (char *response, size_t response_len)
+{
+  if (response_len == 0 || response_len > YAFVS_CONTROL_MAX_RESPONSE_BYTES
+      || response[response_len - 1] != '\n'
+      || memchr (response, 0, response_len - 1) != NULL)
+    return YAFVS_CONTROL_STOP_TASK_MALFORMED;
+  response[response_len - 1] = 0;
+  if (strcmp (response, "0 stopped") == 0)
+    return YAFVS_CONTROL_STOP_TASK_STOPPED;
+  if (strcmp (response, "1 requested") == 0)
+    return YAFVS_CONTROL_STOP_TASK_REQUESTED;
+  if (strcmp (response, "2 inactive") == 0)
+    return YAFVS_CONTROL_STOP_TASK_INACTIVE;
+  if (strcmp (response, "3 not_found") == 0)
+    return YAFVS_CONTROL_STOP_TASK_NOT_FOUND;
+  if (strcmp (response, "99 forbidden") == 0)
+    return YAFVS_CONTROL_STOP_TASK_FORBIDDEN;
+  if (strcmp (response, "-1 internal") == 0)
+    return YAFVS_CONTROL_STOP_TASK_INTERNAL;
+  if (strcmp (response, "-2 scanner_status") == 0)
+    return YAFVS_CONTROL_STOP_TASK_SCANNER_STATUS;
+  if (strcmp (response, "-3 scanner_stop") == 0)
+    return YAFVS_CONTROL_STOP_TASK_SCANNER_STOP;
+  if (strcmp (response, "-4 scanner_delete") == 0)
+    return YAFVS_CONTROL_STOP_TASK_SCANNER_DELETE;
+  if (strcmp (response, "-5 scanner_verify") == 0)
+    return YAFVS_CONTROL_STOP_TASK_SCANNER_VERIFY;
+  return YAFVS_CONTROL_STOP_TASK_MALFORMED;
+}
+
 int
 yafvs_control_start_task_client (const char *operator_uuid,
                                  const char *task_uuid)
@@ -3627,6 +3663,58 @@ yafvs_control_start_task_client (const char *operator_uuid,
       goto done;
     }
   result = yafvs_control_parse_start_task_response (response, response_len);
+
+done:
+  if (socket_fd != -1)
+    close (socket_fd);
+  yafvs_control_secure_clear (response, sizeof (response));
+  yafvs_control_secure_clear (request, sizeof (request));
+  return result;
+}
+
+yafvs_control_stop_task_result_t
+yafvs_control_stop_task_client (const char *operator_uuid,
+                                const char *task_uuid)
+{
+  char request[YAFVS_CONTROL_STOP_TASK_MAX_REQUEST_BYTES] = {0};
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES + 2] = {0};
+  const char *secret;
+  size_t secret_len;
+  size_t request_len;
+  size_t response_len = 0;
+  gboolean fully_sent = FALSE;
+  int socket_fd = -1;
+  yafvs_control_stop_task_result_t result =
+    YAFVS_CONTROL_STOP_TASK_CONFIGURATION;
+
+  if (yafvs_control_task_client_socket_path == NULL
+      || !yafvs_control_uuid_is_valid (operator_uuid)
+      || !yafvs_control_uuid_is_valid (task_uuid)
+      || !yafvs_control_configured_secret (&secret, &secret_len))
+    goto done;
+  request_len = (size_t) g_snprintf (
+    request, sizeof (request), "%s%s %s %s\n",
+    YAFVS_CONTROL_STOP_TASK_COMMAND, secret, operator_uuid, task_uuid);
+  if (request_len >= sizeof (request))
+    goto done;
+
+  socket_fd = socket (AF_UNIX, SOCK_STREAM, 0);
+  if (socket_fd == -1
+      || !yafvs_control_task_client_connect (
+           socket_fd, yafvs_control_task_client_socket_path))
+    {
+      result = YAFVS_CONTROL_STOP_TASK_UNAVAILABLE;
+      goto done;
+    }
+  if (!yafvs_control_task_client_write (socket_fd, request, request_len,
+                                        &fully_sent)
+      || !yafvs_control_task_client_read (socket_fd, response, &response_len))
+    {
+      result = fully_sent ? YAFVS_CONTROL_STOP_TASK_INDETERMINATE
+                          : YAFVS_CONTROL_STOP_TASK_UNAVAILABLE;
+      goto done;
+    }
+  result = yafvs_control_parse_stop_task_response (response, response_len);
 
 done:
   if (socket_fd != -1)
@@ -3737,6 +3825,21 @@ yafvs_control_stop_task (const char *operator_uuid, const char *task_uuid)
     return 99;
 
   result = stop_task (task_uuid);
+
+  switch (result)
+    {
+      case 0:
+        log_event ("task", "Task", task_uuid, "stopped");
+        break;
+      case 1:
+        log_event ("task", "Task", task_uuid, "requested to stop");
+        break;
+      case 99:
+        log_event_fail ("task", "Task", task_uuid, "stopped");
+        break;
+      default:
+        break;
+    }
 
   yafvs_control_finish_operator_session ();
 

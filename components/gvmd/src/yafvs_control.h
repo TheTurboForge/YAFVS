@@ -32,6 +32,7 @@
  *                         <comment_b64> <status_b64> <task_uuid>\n
  *
  * start <secret> <operator_uuid> <task_uuid>\n
+ * stop <secret> <operator_uuid> <task_uuid>\n
  *
  * alert-test <secret> <operator_uuid> <alert_uuid>\n
  *
@@ -66,12 +67,33 @@ enum
   YAFVS_CONTROL_START_TASK_FORBIDDEN = 99
 };
 
-/* Configure the private task-start client only after the listener is bound. */
+typedef enum
+{
+  YAFVS_CONTROL_STOP_TASK_STOPPED = 0,
+  YAFVS_CONTROL_STOP_TASK_REQUESTED = 1,
+  YAFVS_CONTROL_STOP_TASK_INACTIVE = 2,
+  YAFVS_CONTROL_STOP_TASK_NOT_FOUND = 3,
+  YAFVS_CONTROL_STOP_TASK_FORBIDDEN = 99,
+  YAFVS_CONTROL_STOP_TASK_INTERNAL = -1,
+  YAFVS_CONTROL_STOP_TASK_SCANNER_STATUS = -2,
+  YAFVS_CONTROL_STOP_TASK_SCANNER_STOP = -3,
+  YAFVS_CONTROL_STOP_TASK_SCANNER_DELETE = -4,
+  YAFVS_CONTROL_STOP_TASK_SCANNER_VERIFY = -5,
+  YAFVS_CONTROL_STOP_TASK_MALFORMED = -100,
+  YAFVS_CONTROL_STOP_TASK_CONFIGURATION = -101,
+  YAFVS_CONTROL_STOP_TASK_UNAVAILABLE = -102,
+  YAFVS_CONTROL_STOP_TASK_INDETERMINATE = -103
+} yafvs_control_stop_task_result_t;
+
+/* Configure the private task-control client only after the listener is bound. */
 gboolean
 yafvs_control_configure_task_client (const char *);
 
-/* Start a task through the private listener; never retries a sent frame. */
+/* Task-control clients never retry a sent frame. */
 int
 yafvs_control_start_task_client (const char *, const char *);
+
+yafvs_control_stop_task_result_t
+yafvs_control_stop_task_client (const char *, const char *);
 
 #endif /* not _GVMD_YAFVS_CONTROL_H */

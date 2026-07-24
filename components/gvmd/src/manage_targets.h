@@ -86,25 +86,9 @@ target_ssh_port (target_t);
 char*
 target_ssh_host_key_pins (target_t);
 
-int
-copy_target (const char *, const char *, const char *, target_t *);
 
-int
-delete_target (const char *, int);
 
-int
-create_target (const char *, const char *, const char *, const char *,
-               const char *, const char *, const char *, credential_t,
-               credential_t, const char *, credential_t, credential_t,
-               credential_t, credential_t, const char *, const char *,
-               GPtrArray *, const char *, const char *, target_t*);
 
-int
-modify_target (const char *, const char *, const char *, const char *,
-               const char *, const char *, const char *, const char *,
-               const char *, const char *, const char *, const char *,
-               const char *, const char *, const char *, GPtrArray *,
-               const char *, const char *);
 
 int
 target_count (const get_data_t *);

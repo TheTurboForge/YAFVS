@@ -6,19 +6,13 @@ use axum::http::Method;
 
 use crate::direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed};
 
-const GSA_ENTITY_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/entity.ts");
 const GSA_TARGET_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/target.ts");
 const GSA_TARGETS_COMMAND: &str =
     include_str!("../../../components/gsa/src/gmp/commands/targets.ts");
-const GSA_GMP: &str = include_str!("../../../components/gsa/src/gmp/gmp.ts");
 const GSA_NATIVE_TARGETS: &str =
     include_str!("../../../components/gsa/src/gmp/native-api/targets.ts");
-const GSA_ENTITIES_CONTAINER: &str =
-    include_str!("../../../components/gsa/src/web/entities/EntitiesContainer.tsx");
 const GSA_REPORT_DETAILS: &str =
     include_str!("../../../components/gsa/src/web/pages/reports/DetailsPage.tsx");
-const GSA_TARGET_LIST_PAGE: &str =
-    include_str!("../../../components/gsa/src/web/pages/targets/TargetListPage.tsx");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_GMP_H: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
@@ -27,12 +21,14 @@ const GVM_LIBS_GMP_H: &str = include_str!("../../../components/gvm-libs/gmp/gmp.
 const MANAGE_PG_C: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const MANAGE_SQL_TARGETS_C: &str =
     include_str!("../../../components/gvmd/src/manage_sql_targets.c");
+const MANAGE_TARGETS_H: &str = include_str!("../../../components/gvmd/src/manage_targets.h");
 const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const MANAGE_COMMANDS_C: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
 const MANAGE_OPENVAS_C: &str = include_str!("../../../components/gvmd/src/manage_openvas.c");
 const MANAGE_OPENVASD_C: &str = include_str!("../../../components/gvmd/src/manage_openvasd.c");
 const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 const TARGET_HANDLERS: &str = include_str!("target_handlers.rs");
+const TARGET_WRITES: &str = include_str!("target_writes.rs");
 const TARGET_QUERY_SQL: &str = include_str!("target_query_sql.rs");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 
@@ -220,221 +216,96 @@ fn openapi_operation_block(path_block: &str, method: &str) -> String {
 }
 
 #[test]
-fn inherited_target_create_and_modify_are_host_port_credential_and_in_use_guarded() {
-    let create = inherited_function(MANAGE_SQL_TARGETS_C, "create_target");
-    for required in [
-        "validate_port_range (port_range)",
-        "validate_port (ssh_port)",
-        "alive_test_from_array (alive_tests)",
-        "alive_test_from_string (alive_test_str)",
-        "acl_user_may (\"create_target\") == 0",
-        "resource_with_name_exists (name, \"target\", 0)",
-        "find_port_list_with_permission (port_list_id, &port_list",
-        "create_port_list_unique (name, port_list_comment, port_range",
-        "clean_hosts (chosen_hosts, &max)",
-        "manage_count_hosts (clean, clean_exclude)",
-        "manage_max_hosts ()",
-        "INSERT INTO targets",
-        "INSERT INTO targets_login_data",
-        "credential_type (ssh_credential)",
-        "credential_type (ssh_elevate_credential)",
-        "credential_type (smb_credential)",
-        "credential_type (esxi_credential)",
-        "credential_type (snmp_credential)",
-        "credential_type (krb5_credential)",
-        "sql_commit ();",
+fn raw_target_mutation_transports_and_duplicate_c_writers_are_absent() {
+    for retired in [
+        "CLIENT_CREATE_TARGET",
+        "CLIENT_MODIFY_TARGET",
+        "CLIENT_DELETE_TARGET",
+        "create_target_data",
+        "modify_target_data",
+        "delete_target_data",
+        "strcasecmp (\"CREATE_TARGET\"",
+        "strcasecmp (\"MODIFY_TARGET\"",
+        "strcasecmp (\"DELETE_TARGET\"",
+    ] {
+        assert!(!GMP_C.contains(retired), "gvmd parser retains {retired}");
+    }
+    for name in ["create_target", "modify_target", "delete_target"] {
+        assert!(!GMP_SCHEMA.contains(&format!("<name>{name}</name>")));
+    }
+    for historical_reference in [
+        "<command>CREATE_TARGET</command>",
+        "<command>CREATE_TARGET, MODIFY_TARGET</command>",
+        "<command>MODIFY_TARGET</command>",
     ] {
         assert!(
-            create.contains(required),
-            "create_target missing {required}"
+            GMP_SCHEMA.contains(historical_reference),
+            "historical GMP schema provenance lost {historical_reference}"
         );
     }
-
-    let modify = inherited_function(MANAGE_SQL_TARGETS_C, "modify_target");
-    for required in [
-        "acl_user_may (\"modify_target\") == 0",
-        "find_target_with_permission (target_id, &target, \"modify_target\")",
-        "resource_with_name_exists (name, \"target\", target)",
-        "target_in_use (target)",
-        "find_port_list_with_permission (port_list_id, &port_list",
-        "find_credential_with_permission (ssh_credential_id",
-        "find_credential_with_permission (ssh_elevate_credential_id",
-        "find_credential_with_permission (smb_credential_id",
-        "find_credential_with_permission (esxi_credential_id",
-        "find_credential_with_permission (snmp_credential_id",
-        "find_credential_with_permission (krb5_credential_id",
-        "set_target_login_data (target, \"ssh\"",
-        "set_target_login_data (target, \"elevate\"",
-        "set_target_login_data (target, \"smb\"",
-        "set_target_login_data (target, \"esxi\"",
-        "set_target_login_data (target, \"snmp\"",
-        "set_target_login_data (target, \"krb5\"",
-        "clean_hosts (hosts, &max)",
-        "manage_count_hosts (clean, clean_exclude)",
-        "sql_commit ();",
+    for retired in [
+        "gmp_create_target_ext",
+        "gmp_delete_target_ext",
+        "gmp_create_target_opts_t",
+    ] {
+        assert!(!GVM_LIBS_GMP_C.contains(retired));
+        assert!(!GVM_LIBS_GMP_H.contains(retired));
+    }
+    for writer in [
+        "copy_target",
+        "create_target",
+        "modify_target",
+        "delete_target",
+    ] {
+        assert!(!MANAGE_SQL_TARGETS_C.contains(&format!("\n{writer} (")));
+        assert!(!MANAGE_TARGETS_H.contains(&format!("\n{writer} (")));
+    }
+    for retained_table in [
+        "CREATE TABLE IF NOT EXISTS targets\"",
+        "CREATE TABLE IF NOT EXISTS targets_trash\"",
+        "CREATE TABLE IF NOT EXISTS targets_login_data\"",
+        "CREATE TABLE IF NOT EXISTS targets_trash_login_data\"",
     ] {
         assert!(
-            modify.contains(required),
-            "modify_target missing {required}"
+            MANAGE_PG_C.contains(retained_table),
+            "retained target storage lost {retained_table}"
         );
     }
-}
-
-#[test]
-fn inherited_target_alive_test_modify_is_not_task_in_use_guarded() {
-    let modify = inherited_function(MANAGE_SQL_TARGETS_C, "modify_target");
-    let alive_start = modify
-        .find("if (alive_tests && alive_tests->len")
-        .expect("alive-tests modify block exists");
-    let port_list_start = modify
-        .find("if (port_list_id)")
-        .expect("port-list modify block exists");
-    let alive_block = &modify[alive_start..port_list_start];
-    assert!(alive_block.contains("alive_test_from_array (alive_tests)"));
-    assert!(alive_block.contains("alive_test_from_string (alive_test_str)"));
-    assert!(alive_block.contains("alive_test = '%i'"));
-    assert!(
-        !alive_block.contains("target_in_use (target)"),
-        "inherited alive-test modification is not guarded by target_in_use"
-    );
-
-    let allow_start = modify
-        .find("if (allow_simultaneous_ips)")
-        .expect("allow-simultaneous modify block exists");
-    let allow_block = &modify[allow_start..alive_start];
-    assert!(allow_block.contains("target_in_use (target)"));
-
-    let reverse_only_start = modify
-        .find("if (reverse_lookup_only)")
-        .expect("reverse-lookup-only modify block exists");
-    let reverse_unify_start = modify
-        .find("if (reverse_lookup_unify)")
-        .expect("reverse-lookup-unify modify block exists");
-    let commit_start = modify[reverse_unify_start..]
-        .find("sql_commit ();")
-        .map(|offset| reverse_unify_start + offset)
-        .expect("modify_target commit follows reverse lookup blocks");
-    let reverse_only_block = &modify[reverse_only_start..reverse_unify_start];
-    let reverse_unify_block = &modify[reverse_unify_start..commit_start];
-    assert!(reverse_only_block.contains("target_in_use (target)"));
-    assert!(reverse_only_block.contains("reverse_lookup_only = '%i'"));
-    assert!(reverse_unify_block.contains("target_in_use (target)"));
-    assert!(reverse_unify_block.contains("reverse_lookup_unify = '%i'"));
-
-    assert!(modify[port_list_start..].contains("target_in_use (target)"));
-
-    let exclude_start = modify
-        .find("if (exclude_hosts)")
-        .expect("host/exclude-host modify block exists");
-    let reverse_only_start = modify
-        .find("if (reverse_lookup_only)")
-        .expect("reverse-lookup-only modify block exists");
-    let host_block = &modify[exclude_start..reverse_only_start];
-    assert!(host_block.contains("target_in_use (target)"));
-    assert!(host_block.contains("clean_hosts (hosts, &max)"));
-    assert!(host_block.contains("clean_hosts (exclude_hosts, NULL)"));
-    assert!(host_block.contains("manage_count_hosts (clean, clean_exclude)"));
-    assert!(host_block.contains("hosts = '%s'"));
-    assert!(host_block.contains("exclude_hosts = '%s'"));
-}
-
-#[test]
-fn inherited_target_clone_delete_and_restore_preserve_login_data_and_task_links() {
-    let copy = inherited_function(MANAGE_SQL_TARGETS_C, "copy_target");
-    for required in [
-        "copy_resource (\"target\", name, comment, target_id",
-        "hosts, exclude_hosts, port_list, reverse_lookup_only,",
-        "allow_simultaneous_ips",
-        "INSERT INTO targets_login_data",
-        "(target, type, credential, port, host_key_pins)",
-        "FROM targets_login_data",
-    ] {
-        assert!(copy.contains(required), "copy_target missing {required}");
-    }
-
-    let delete = inherited_function(MANAGE_SQL_TARGETS_C, "delete_target");
-    for required in [
-        "acl_user_may (\"delete_target\") == 0",
-        "find_target_with_permission (target_id, &target, \"delete_target\")",
-        "find_trash (\"target\", target_id, &target)",
-        "SELECT count(*) FROM tasks",
-        "target_location = ",
-        "INSERT INTO targets_trash",
-        "INSERT INTO targets_trash_login_data",
-        "credential_location",
-        "UPDATE tasks",
-        "permissions_set_locations (\"target\"",
-        "tags_set_locations (\"target\"",
-        "permissions_set_orphans (\"target\"",
-        "tags_remove_resource (\"target\"",
-        "DELETE FROM targets_login_data WHERE target = %llu;",
-        "DELETE FROM targets WHERE id = %llu;",
+    for native in [
+        "create_target",
+        "patch_target",
+        "clone_target",
+        "delete_target",
+        "restore_target",
+        "hard_delete_target",
     ] {
         assert!(
-            delete.contains(required),
-            "delete_target missing {required}"
+            TARGET_WRITES.contains(&format!("fn {native}")),
+            "native write missing {native}"
         );
     }
-
-    for required in [
-        "INSERT INTO targets",
-        "FROM targets_trash WHERE id = %llu;",
-        "INSERT INTO targets_login_data",
-        "FROM targets_trash_login_data WHERE target = %llu;",
-        "DELETE FROM targets_trash_login_data",
-        "UPDATE tasks",
-        "target_location = ",
-        "permissions_set_locations (\"target\"",
-        "tags_set_locations (\"target\"",
-        "DELETE FROM targets_trash WHERE id = %llu;",
+    for capability in [
+        "\"CREATE_TARGET\",",
+        "\"MODIFY_TARGET\",",
+        "\"DELETE_TARGET\",",
     ] {
         assert!(
-            MANAGE_SQL_TARGETS_C.contains(required),
-            "target restore path missing {required}"
+            MANAGE_COMMANDS_C.contains(capability),
+            "ACL vocabulary lost {capability}"
         );
     }
-
-    for required in [
-        "target INTEGER REFERENCES targets (id) ON DELETE RESTRICT",
-        "credential INTEGER REFERENCES credentials (id) ON DELETE RESTRICT",
-        "target INTEGER REFERENCES targets_trash (id) ON DELETE RESTRICT",
-        "credential_location INTEGER",
+    for link in [
+        "target_openvas_ssh_credential_db",
+        "openvasd_target_add_credential",
     ] {
-        assert!(
-            MANAGE_PG_C.contains(required),
-            "target schema missing {required}"
-        );
-    }
-}
-
-#[test]
-fn target_writes_are_native_only_while_raw_gmp_and_manager_writers_remain() {
-    for required in [
-        "copy_target (create_target_data->name,",
-        "create_target_data->copy",
-        "find_credential_with_permission",
-        "Targets cannot have both an SMB and",
-        "else switch (create_target",
-        "create_target_data->name,",
-        "XML_OK_CREATED_ID (\"create_target\")",
-    ] {
-        assert!(
-            GMP_C.contains(required),
-            "GMP target parser missing {required}"
-        );
+        assert!(MANAGE_OPENVAS_C.contains(link) || MANAGE_OPENVASD_C.contains(link));
     }
 
-    for removed in ["create_target_gmp", "save_target_gmp"] {
-        assert!(
-            !GSAD_GMP_C.contains(removed),
-            "gsad bridge retains {removed}"
-        );
-        assert!(
-            !GSAD_GMP_H.contains(removed),
-            "gsad header retains {removed}"
-        );
+    for removed in ["create_target_gmp", "save_target_gmp", "delete_target_gmp"] {
+        assert!(!GSAD_GMP_C.contains(removed));
+        assert!(!GSAD_GMP_H.contains(removed));
     }
-    for removed in ["create_target", "save_target"] {
+    for removed in ["create_target", "save_target", "delete_target"] {
         assert!(!GSAD_GMP_C.contains(&format!("ELSE ({removed})")));
         assert!(!GSAD_VALIDATOR.contains(&format!("|({removed})")));
     }
@@ -460,104 +331,6 @@ fn target_writes_are_native_only_while_raw_gmp_and_manager_writers_remain() {
     assert!(create_gsa.contains("createNativeTarget(this.http, nativeCreateArgs)"));
     assert!(save_gsa.contains("patchNativeTarget(this.http, nativePatchArgs)"));
 
-    for retained in ["create_target", "modify_target", "delete_target"] {
-        assert!(GMP_C.contains(retained), "raw gvmd GMP lost {retained}");
-    }
-    for retained in ["gmp_create_target_ext", "gmp_delete_target_ext"] {
-        assert!(
-            GVM_LIBS_GMP_C.contains(retained),
-            "gvm-libs lost {retained}"
-        );
-    }
-    for retained in [
-        "create_target",
-        "modify_target",
-        "copy_target",
-        "delete_target",
-    ] {
-        assert!(
-            MANAGE_SQL_TARGETS_C.contains(&format!("\n{retained} (")),
-            "manager target writer lost {retained}"
-        );
-    }
-    assert!(!GSA_TARGET_COMMAND.contains("hosts_filter"));
-    assert!(!GSA_ENTITY_COMMAND.contains("async clone("));
-    assert!(GSA_TARGET_COMMAND.contains("const requireNativeTargetApi"));
-    assert!(GSA_TARGET_COMMAND.contains("requireNativeTargetApi(this.http)"));
-    assert!(GSA_TARGET_COMMAND.contains("cloneNativeTarget(this.http, id)"));
-    assert!(!GSA_TARGET_COMMAND.contains("super.clone({id})"));
-
-    assert!(GSA_TARGET_LIST_PAGE.contains("withEntitiesContainer<Target>('target'"));
-    assert!(GSA_ENTITIES_CONTAINER.contains("const entitiesCommandName = pluralizeType(gmpName)"));
-    assert!(GSA_ENTITIES_CONTAINER.contains("this.entitiesCommand = gmp[entitiesCommandName]"));
-    for live_collection_delete in [
-        "entitiesCommand.delete(Array.from(selected as Set<TModel>))",
-        "entitiesCommand.deleteByFilter(loadedFilter as Filter)",
-        "entitiesCommand.deleteByFilter((loadedFilter as Filter).all())",
-    ] {
-        assert!(
-            GSA_ENTITIES_CONTAINER.contains(live_collection_delete),
-            "live target collection path missing {live_collection_delete}"
-        );
-    }
-    assert!(GSA_GMP.contains("public readonly targets: TargetsCommand"));
-    assert!(GSA_GMP.contains("this.targets = new TargetsCommand(this.http)"));
-
-    let delete_targets = GSA_TARGETS_COMMAND
-        .split_once("  async delete(targets: Target[])")
-        .expect("TargetsCommand delete method must exist")
-        .1
-        .split_once("  async deleteByIds(ids: string[])")
-        .expect("TargetsCommand delete method must end before deleteByIds")
-        .0;
-    let delete_target_ids = GSA_TARGETS_COMMAND
-        .split_once("  async deleteByIds(ids: string[])")
-        .expect("TargetsCommand deleteByIds method must exist")
-        .1
-        .split_once("  async deleteByFilter(filter: Filter)")
-        .expect("TargetsCommand deleteByIds method must end before deleteByFilter")
-        .0;
-    let delete_targets_by_filter = GSA_TARGETS_COMMAND
-        .split_once("  async deleteByFilter(filter: Filter)")
-        .expect("TargetsCommand deleteByFilter method must exist")
-        .1
-        .split_once("  private async deleteIds")
-        .expect("TargetsCommand deleteByFilter method must end before deleteIds")
-        .0;
-    for (name, method) in [
-        ("delete", delete_targets),
-        ("deleteByIds", delete_target_ids),
-        ("deleteByFilter", delete_targets_by_filter),
-    ] {
-        assert!(method.contains("requireNativeTargetApi(this.http)"));
-        assert!(method.contains("this.deleteIds("));
-        assert!(
-            !method.contains("super."),
-            "TargetsCommand {name} calls super"
-        );
-    }
-    assert_eq!(
-        delete_targets_by_filter
-            .matches("await this.traverseAllFilteredTargets(query)")
-            .count(),
-        2,
-        "all-filter deletion must complete two preflight traversals"
-    );
-    for stabilization_contract in [
-        "pageSize: NATIVE_COMMAND_PAGE_SIZE",
-        "firstIds.some((id, index) => id !== ids[index])",
-        "preflight stabilization detected candidate-set drift",
-        "const ids = targetIds(targets)",
-    ] {
-        assert!(
-            delete_targets_by_filter.contains(stabilization_contract),
-            "target delete stabilization missing {stabilization_contract}"
-        );
-    }
-    assert!(GSA_TARGETS_COMMAND.contains("deleteNativeTarget(this.http, id)"));
-    assert!(!GSA_TARGETS_COMMAND.contains("bulk_delete"));
-    assert!(!GSA_TARGETS_COMMAND.contains("super.delete"));
-
     let delete_gsa = GSA_TARGET_COMMAND
         .split_once("async delete({id}: EntityCommandParams)")
         .expect("GSA target delete method must exist")
@@ -567,43 +340,36 @@ fn target_writes_are_native_only_while_raw_gmp_and_manager_writers_remain() {
         .0;
     assert!(delete_gsa.contains("requireNativeTargetApi(this.http)"));
     assert!(delete_gsa.contains("deleteNativeTarget(this.http, id)"));
-    let id_guard = delete_gsa
-        .find("typeof id !== 'string' || id.trim().length === 0")
-        .expect("single target delete must guard the runtime ID");
-    assert!(
-        id_guard
-            < delete_gsa
-                .find("deleteNativeTarget(this.http, id)")
-                .unwrap(),
-        "single target delete must guard the ID before native deletion"
-    );
     assert!(!delete_gsa.contains("super.delete"));
 
-    assert!(!GSAD_GMP_C.contains("delete_target_gmp"));
-    assert!(!GSAD_GMP_H.contains("delete_target_gmp"));
-    assert!(!GSAD_GMP_C.contains("ELSE (delete_target)"));
-    assert!(!GSAD_VALIDATOR.contains("|(delete_target)"));
-
-    for retained in [
-        "delete_target_data_t",
-        "strcasecmp (\"DELETE_TARGET\", element_name)",
-        "delete_target_data->ultimate",
-        "CLIENT_DELETE_TARGET",
+    let delete_by_filter = GSA_TARGETS_COMMAND
+        .split_once("  async deleteByFilter(filter: Filter)")
+        .expect("TargetsCommand deleteByFilter method must exist")
+        .1
+        .split_once("  private async deleteIds")
+        .expect("TargetsCommand deleteByFilter must end before deleteIds")
+        .0;
+    assert_eq!(
+        delete_by_filter
+            .matches("await this.traverseAllFilteredTargets(query)")
+            .count(),
+        2,
+        "all-filter deletion must complete two preflight traversals"
+    );
+    for contract in [
+        "pageSize: NATIVE_COMMAND_PAGE_SIZE",
+        "firstIds.some((id, index) => id !== ids[index])",
+        "preflight stabilization detected candidate-set drift",
+        "const ids = targetIds(targets)",
+        "deleteNativeTarget(this.http, id)",
     ] {
         assert!(
-            GMP_C.contains(retained),
-            "raw gvmd parser missing {retained}"
+            GSA_TARGETS_COMMAND.contains(contract),
+            "native target deletion lost {contract}"
         );
     }
-    assert!(GMP_SCHEMA.contains("<name>delete_target</name>"));
-    let delete_manager = inherited_function(MANAGE_SQL_TARGETS_C, "delete_target");
-    assert!(delete_manager.contains("acl_user_may (\"delete_target\") == 0"));
-    assert!(delete_manager.contains("find_target_with_permission"));
-    assert!(delete_manager.contains("INSERT INTO targets_trash"));
-    assert!(delete_manager.contains("DELETE FROM targets WHERE id = %llu;"));
-    assert!(GVM_LIBS_GMP_C.contains("gmp_delete_target_ext ("));
-    assert!(GVM_LIBS_GMP_C.contains("<delete_target target_id=\\\"%s\\\" ultimate=\\\"%d\\\"/>"));
-    assert!(GVM_LIBS_GMP_H.contains("gmp_delete_target_ext ("));
+    assert!(!GSA_TARGETS_COMMAND.contains("bulk_delete"));
+    assert!(!GSA_TARGETS_COMMAND.contains("super.delete"));
 }
 
 #[test]

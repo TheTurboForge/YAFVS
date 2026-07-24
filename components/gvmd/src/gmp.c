@@ -473,76 +473,6 @@ create_credential_data_reset (create_credential_data_t *data)
 }
 
 /**
- * @brief Command data for the create_target command.
- */
-typedef struct
-{
-  GPtrArray *alive_tests;           ///< Alive tests list.
-  char *alive_tests_str;            ///< Alive tests string.
-  char *alive_test;                 ///< Current alive tests list item.
-  char *allow_simultaneous_ips;     ///< Boolean. Whether to scan multiple IPs of a host simultaneously.
-  char *asset_hosts_filter;         ///< Asset hosts.
-  char *comment;                    ///< Comment.
-  char *exclude_hosts;              ///< Hosts to exclude from set.
-  char *reverse_lookup_only;        ///< Boolean. Whether to consider only hosts that reverse lookup.
-  char *reverse_lookup_unify;       ///< Boolean. Whether to unify based on reverse lookup.
-  char *copy;                       ///< UUID of resource to copy.
-  char *hosts;                      ///< Hosts for new target.
-  char *port_list_id;               ///< Port list for new target.
-  char *port_range;                 ///< Port range for new target.
-  char *ssh_credential_id;          ///< SSH credential for new target.
-  char *ssh_lsc_credential_id;      ///< SSH credential (deprecated).
-  char *ssh_elevate_credential_id;  ///< SSH elevation credential.
-  char *ssh_port;                   ///< Port for SSH.
-  char *ssh_lsc_port;               ///< Port for SSH (deprecated).
-  char *smb_credential_id;          ///< SMB credential for new target.
-  char *smb_lsc_credential_id;      ///< SMB credential (deprecated).
-  char *esxi_credential_id;         ///< ESXi credential for new target.
-  char *esxi_lsc_credential_id;     ///< ESXi credential (deprecated).
-  char *snmp_credential_id;         ///< SNMP credential for new target.
-  char *krb5_credential_id;         ///< Kerberos 5 credential for new target.
-  char *name;                       ///< Name of new target.
-} create_target_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-create_target_data_reset (create_target_data_t *data)
-{
-  if (data->alive_tests)
-    g_ptr_array_free (data->alive_tests, TRUE);
-  free (data->alive_test);
-  free (data->alive_tests_str);
-  free (data->allow_simultaneous_ips);
-  free (data->asset_hosts_filter);
-  free (data->comment);
-  free (data->exclude_hosts);
-  free (data->reverse_lookup_only);
-  free (data->reverse_lookup_unify);
-  free (data->copy);
-  free (data->hosts);
-  free (data->port_list_id);
-  free (data->port_range);
-  free (data->ssh_credential_id);
-  free (data->ssh_lsc_credential_id);
-  free (data->ssh_elevate_credential_id);
-  free (data->ssh_port);
-  free (data->ssh_lsc_port);
-  free (data->smb_credential_id);
-  free (data->smb_lsc_credential_id);
-  free (data->esxi_credential_id);
-  free (data->esxi_lsc_credential_id);
-  free (data->snmp_credential_id);
-  free (data->krb5_credential_id);
-  free (data->name);
-
-  memset (data, 0, sizeof (create_target_data_t));
-}
-
-/**
  * @brief Command data for the create_task command.
  */
 typedef struct
@@ -647,28 +577,6 @@ delete_report_data_reset (delete_report_data_t *data)
   memset (data, 0, sizeof (delete_report_data_t));
 }
 
-
-/**
- * @brief Command data for the delete_target command.
- */
-typedef struct
-{
-  char *target_id;   ///< ID of target to delete.
-  int ultimate;      ///< Boolean.  Whether to remove entirely or to trashcan.
-} delete_target_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_target_data_reset (delete_target_data_t *data)
-{
-  free (data->target_id);
-
-  memset (data, 0, sizeof (delete_target_data_t));
-}
 
 /**
  * @brief Command data for the delete_task command.
@@ -1077,72 +985,6 @@ modify_setting_data_reset (modify_setting_data_t *data)
 }
 
 /**
- * @brief Command data for the modify_target command.
- */
-typedef struct
-{
-  GPtrArray *alive_tests;            ///< Alive tests list.
-  char *alive_test;                  ///< Current Alive tests list item.
-  char *alive_tests_str;             ///< Alive tests string.
-  char *allow_simultaneous_ips;      ///< Boolean. Whether to scan multiple IPs of a host simultaneously.
-  char *comment;                     ///< Comment.
-  char *exclude_hosts;               ///< Hosts to exclude from set.
-  char *reverse_lookup_only;         ///< Boolean. Whether to consider only hosts that reverse lookup.
-  char *reverse_lookup_unify;        ///< Boolean. Whether to unify based on reverse lookup.
-  char *hosts;                       ///< Hosts for target.
-  char *name;                        ///< Name of target.
-  char *port_list_id;                ///< Port list for target.
-  char *ssh_credential_id;           ///< SSH credential for target.
-  char *ssh_lsc_credential_id;       ///< SSH credential for target (deprecated).
-  char *ssh_elevate_credential_id;   ///< SSH credential for target (deprecated).
-  char *ssh_port;                    ///< Port for SSH.
-  char *ssh_lsc_port;                ///< Port for SSH (deprecated).
-  char *smb_credential_id;           ///< SMB credential for target.
-  char *smb_lsc_credential_id;       ///< SMB credential for target (deprecated).
-  char *esxi_credential_id;          ///< ESXi credential for target.
-  char *esxi_lsc_credential_id;      ///< ESXi credential for target (deprecated).
-  char *snmp_credential_id;          ///< SNMP credential for target.
-  char *krb5_credential_id;          ///< Kerberos 5 credential for target.
-  char *target_id;                   ///< Target UUID.
-} modify_target_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-modify_target_data_reset (modify_target_data_t *data)
-{
-  if (data->alive_tests)
-    g_ptr_array_free (data->alive_tests, TRUE);
-  free (data->alive_test);
-  free (data->alive_tests_str);
-  free (data->allow_simultaneous_ips);
-  free (data->exclude_hosts);
-  free (data->reverse_lookup_only);
-  free (data->reverse_lookup_unify);
-  free (data->comment);
-  free (data->hosts);
-  free (data->name);
-  free (data->port_list_id);
-  free (data->ssh_credential_id);
-  free (data->ssh_lsc_credential_id);
-  free (data->ssh_elevate_credential_id);
-  free (data->ssh_port);
-  free (data->ssh_lsc_port);
-  free (data->smb_credential_id);
-  free (data->smb_lsc_credential_id);
-  free (data->esxi_credential_id);
-  free (data->esxi_lsc_credential_id);
-  free (data->snmp_credential_id);
-  free (data->krb5_credential_id);
-  free (data->target_id);
-
-  memset (data, 0, sizeof (modify_target_data_t));
-}
-
-/**
  * @brief Command data for the modify_task command.
  */
 typedef struct
@@ -1253,11 +1095,9 @@ stop_task_data_reset (stop_task_data_t *data)
 typedef union
 {
   create_credential_data_t create_credential;         ///< create_credential
-  create_target_data_t create_target;                 ///< create_target
   create_task_data_t create_task;                     ///< create_task
   delete_config_data_t delete_config;                 ///< delete_config
   delete_report_data_t delete_report;                 ///< delete_report
-  delete_target_data_t delete_target;                 ///< delete_target
   delete_task_data_t delete_task;                     ///< delete_task
   get_aggregates_data_t get_aggregates;               ///< get_aggregates
   get_configs_data_t get_configs;                     ///< get_configs
@@ -1272,7 +1112,6 @@ typedef union
   modify_config_data_t modify_config;                 ///< modify_config
   modify_credential_data_t modify_credential;         ///< modify_credential
   modify_setting_data_t modify_setting;               ///< modify_setting
-  modify_target_data_t modify_target;                 ///< modify_target
   modify_task_data_t modify_task;                     ///< modify_task
   start_task_data_t start_task;                       ///< start_task
   stop_task_data_t stop_task;                         ///< stop_task
@@ -1305,12 +1144,6 @@ static create_credential_data_t *create_credential_data
  = (create_credential_data_t*) &(command_data.create_credential);
 
 /**
- * @brief Parser callback data for CREATE_TARGET.
- */
-static create_target_data_t *create_target_data
- = (create_target_data_t*) &(command_data.create_target);
-
-/**
  * @brief Parser callback data for CREATE_TASK.
  */
 static create_task_data_t *create_task_data
@@ -1328,12 +1161,6 @@ static delete_config_data_t *delete_config_data
 static delete_report_data_t *delete_report_data
  = (delete_report_data_t*) &(command_data.delete_report);
 
-
-/**
- * @brief Parser callback data for DELETE_TARGET.
- */
-static delete_target_data_t *delete_target_data
- = (delete_target_data_t*) &(command_data.delete_target);
 
 /**
  * @brief Parser callback data for DELETE_TASK.
@@ -1412,12 +1239,6 @@ static modify_credential_data_t *modify_credential_data
  */
 static modify_setting_data_t *modify_setting_data
  = &(command_data.modify_setting);
-
-/**
- * @brief Parser callback data for MODIFY_TARGET.
- */
-static modify_target_data_t *modify_target_data
- = &(command_data.modify_target);
 
 /**
  * @brief Parser callback data for MODIFY_TASK.
@@ -1501,31 +1322,6 @@ typedef enum
   CLIENT_CREATE_CREDENTIAL_PRIVACY_PASSWORD,
   CLIENT_CREATE_CREDENTIAL_REALM,
   CLIENT_CREATE_CREDENTIAL_TYPE,
-  CLIENT_CREATE_TARGET,
-  CLIENT_CREATE_TARGET_ALIVE_TESTS,
-  CLIENT_CREATE_TARGET_ALIVE_TESTS_ALIVE_TEST,
-  CLIENT_CREATE_TARGET_ALLOW_SIMULTANEOUS_IPS,
-  CLIENT_CREATE_TARGET_ASSET_HOSTS,
-  CLIENT_CREATE_TARGET_EXCLUDE_HOSTS,
-  CLIENT_CREATE_TARGET_REVERSE_LOOKUP_ONLY,
-  CLIENT_CREATE_TARGET_REVERSE_LOOKUP_UNIFY,
-  CLIENT_CREATE_TARGET_COMMENT,
-  CLIENT_CREATE_TARGET_COPY,
-  CLIENT_CREATE_TARGET_ESXI_CREDENTIAL,
-  CLIENT_CREATE_TARGET_ESXI_LSC_CREDENTIAL,
-  CLIENT_CREATE_TARGET_HOSTS,
-  CLIENT_CREATE_TARGET_NAME,
-  CLIENT_CREATE_TARGET_PORT_LIST,
-  CLIENT_CREATE_TARGET_PORT_RANGE,
-  CLIENT_CREATE_TARGET_KRB5_CREDENTIAL,
-  CLIENT_CREATE_TARGET_SMB_CREDENTIAL,
-  CLIENT_CREATE_TARGET_SNMP_CREDENTIAL,
-  CLIENT_CREATE_TARGET_SSH_CREDENTIAL,
-  CLIENT_CREATE_TARGET_SSH_CREDENTIAL_PORT,
-  CLIENT_CREATE_TARGET_SMB_LSC_CREDENTIAL,
-  CLIENT_CREATE_TARGET_SSH_LSC_CREDENTIAL,
-  CLIENT_CREATE_TARGET_SSH_LSC_CREDENTIAL_PORT,
-  CLIENT_CREATE_TARGET_SSH_ELEVATE_CREDENTIAL,
   CLIENT_CREATE_TASK,
   CLIENT_CREATE_TASK_ALERT,
   CLIENT_CREATE_TASK_ALTERABLE,
@@ -1544,7 +1340,6 @@ typedef enum
   CLIENT_CREATE_TASK_USAGE_TYPE,
   CLIENT_DELETE_CONFIG,
   CLIENT_DELETE_REPORT,
-  CLIENT_DELETE_TARGET,
   CLIENT_DELETE_TASK,
   CLIENT_GET_AGGREGATES,
   CLIENT_GET_AGGREGATES_DATA_COLUMN,
@@ -1585,28 +1380,6 @@ typedef enum
   CLIENT_MODIFY_SETTING,
   CLIENT_MODIFY_SETTING_NAME,
   CLIENT_MODIFY_SETTING_VALUE,
-  CLIENT_MODIFY_TARGET,
-  CLIENT_MODIFY_TARGET_ALIVE_TESTS,
-  CLIENT_MODIFY_TARGET_ALIVE_TESTS_ALIVE_TEST,
-  CLIENT_MODIFY_TARGET_ALLOW_SIMULTANEOUS_IPS,
-  CLIENT_MODIFY_TARGET_COMMENT,
-  CLIENT_MODIFY_TARGET_ESXI_CREDENTIAL,
-  CLIENT_MODIFY_TARGET_ESXI_LSC_CREDENTIAL,
-  CLIENT_MODIFY_TARGET_HOSTS,
-  CLIENT_MODIFY_TARGET_EXCLUDE_HOSTS,
-  CLIENT_MODIFY_TARGET_REVERSE_LOOKUP_ONLY,
-  CLIENT_MODIFY_TARGET_REVERSE_LOOKUP_UNIFY,
-  CLIENT_MODIFY_TARGET_NAME,
-  CLIENT_MODIFY_TARGET_PORT_LIST,
-  CLIENT_MODIFY_TARGET_KRB5_CREDENTIAL,
-  CLIENT_MODIFY_TARGET_SMB_CREDENTIAL,
-  CLIENT_MODIFY_TARGET_SNMP_CREDENTIAL,
-  CLIENT_MODIFY_TARGET_SSH_CREDENTIAL,
-  CLIENT_MODIFY_TARGET_SSH_ELEVATE_CREDENTIAL,
-  CLIENT_MODIFY_TARGET_SSH_CREDENTIAL_PORT,
-  CLIENT_MODIFY_TARGET_SMB_LSC_CREDENTIAL,
-  CLIENT_MODIFY_TARGET_SSH_LSC_CREDENTIAL,
-  CLIENT_MODIFY_TARGET_SSH_LSC_CREDENTIAL_PORT,
   CLIENT_MODIFY_TASK,
   CLIENT_MODIFY_TASK_ALERT,
   CLIENT_MODIFY_TASK_ALTERABLE,
@@ -1807,13 +1580,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             gvm_append_string (&create_credential_data->name, "");
             set_client_state (CLIENT_CREATE_CREDENTIAL);
           }
-        else if (strcasecmp ("CREATE_TARGET", element_name) == 0)
-          {
-            create_target_data->alive_tests
-              = g_ptr_array_new_full (0, free);
-            gvm_append_string (&create_target_data->comment, "");
-            set_client_state (CLIENT_CREATE_TARGET);
-          }
         else if (strcasecmp ("CREATE_TASK", element_name) == 0)
           {
             create_task_data->task = make_task (NULL, NULL, 1, 1);
@@ -1837,18 +1603,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "report_id",
                               &delete_report_data->report_id);
             set_client_state (CLIENT_DELETE_REPORT);
-          }
-        else if (strcasecmp ("DELETE_TARGET", element_name) == 0)
-          {
-            const gchar* attribute;
-            append_attribute (attribute_names, attribute_values, "target_id",
-                              &delete_target_data->target_id);
-            if (find_attribute (attribute_names, attribute_values,
-                                "ultimate", &attribute))
-              delete_target_data->ultimate = strcmp (attribute, "0");
-            else
-              delete_target_data->ultimate = 0;
-            set_client_state (CLIENT_DELETE_TARGET);
           }
         else if (strcasecmp ("DELETE_TASK", element_name) == 0)
           {
@@ -2247,14 +2001,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &modify_setting_data->setting_id);
             set_client_state (CLIENT_MODIFY_SETTING);
           }
-        else if (strcasecmp ("MODIFY_TARGET", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "target_id",
-                              &modify_target_data->target_id);
-            modify_target_data->alive_tests
-              = g_ptr_array_new_full (0, free);
-            set_client_state (CLIENT_MODIFY_TARGET);
-          }
         else if (strcasecmp ("MODIFY_TASK", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values, "task_id",
@@ -2421,116 +2167,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             gvm_append_string (&create_credential_data->privacy_password, "");
             set_client_state (CLIENT_CREATE_CREDENTIAL_PRIVACY_PASSWORD);
           }
-        ELSE_READ_OVER;
-
-      case CLIENT_CREATE_TARGET:
-        if (strcasecmp ("ASSET_HOSTS", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "filter",
-                              &create_target_data->asset_hosts_filter);
-            set_client_state (CLIENT_CREATE_TARGET_ASSET_HOSTS);
-          }
-        else if (strcasecmp ("EXCLUDE_HOSTS", element_name) == 0)
-          set_client_state (CLIENT_CREATE_TARGET_EXCLUDE_HOSTS);
-        else if (strcasecmp ("REVERSE_LOOKUP_ONLY", element_name) == 0)
-          set_client_state (CLIENT_CREATE_TARGET_REVERSE_LOOKUP_ONLY);
-        else if (strcasecmp ("REVERSE_LOOKUP_UNIFY", element_name) == 0)
-          set_client_state (CLIENT_CREATE_TARGET_REVERSE_LOOKUP_UNIFY);
-        else if (strcasecmp ("ALIVE_TESTS", element_name) == 0)
-          set_client_state (CLIENT_CREATE_TARGET_ALIVE_TESTS);
-        else if (strcasecmp ("ALLOW_SIMULTANEOUS_IPS", element_name) == 0)
-          set_client_state (CLIENT_CREATE_TARGET_ALLOW_SIMULTANEOUS_IPS);
-        else if (strcasecmp ("COMMENT", element_name) == 0)
-          set_client_state (CLIENT_CREATE_TARGET_COMMENT);
-        else if (strcasecmp ("COPY", element_name) == 0)
-          set_client_state (CLIENT_CREATE_TARGET_COPY);
-        else if (strcasecmp ("ESXI_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &create_target_data->esxi_credential_id);
-            set_client_state (CLIENT_CREATE_TARGET_ESXI_CREDENTIAL);
-          }
-        else if (strcasecmp ("ESXI_LSC_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &create_target_data->esxi_lsc_credential_id);
-            set_client_state (CLIENT_CREATE_TARGET_ESXI_LSC_CREDENTIAL);
-          }
-        else if (strcasecmp ("HOSTS", element_name) == 0)
-          set_client_state (CLIENT_CREATE_TARGET_HOSTS);
-        else if (strcasecmp ("PORT_LIST", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &create_target_data->port_list_id);
-            set_client_state (CLIENT_CREATE_TARGET_PORT_LIST);
-          }
-        else if (strcasecmp ("PORT_RANGE", element_name) == 0)
-          {
-            gvm_append_string (&create_target_data->port_range, "");
-            set_client_state (CLIENT_CREATE_TARGET_PORT_RANGE);
-          }
-        else if (strcasecmp ("KRB5_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &create_target_data->krb5_credential_id);
-            set_client_state (CLIENT_CREATE_TARGET_KRB5_CREDENTIAL);
-          }
-        else if (strcasecmp ("SSH_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &create_target_data->ssh_credential_id);
-            set_client_state (CLIENT_CREATE_TARGET_SSH_CREDENTIAL);
-          }
-        else if (strcasecmp ("SSH_LSC_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &create_target_data->ssh_lsc_credential_id);
-            set_client_state (CLIENT_CREATE_TARGET_SSH_LSC_CREDENTIAL);
-          }
-        else if (strcasecmp ("SSH_ELEVATE_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &create_target_data->ssh_elevate_credential_id);
-            set_client_state (CLIENT_CREATE_TARGET_SSH_ELEVATE_CREDENTIAL);
-          }
-        else if (strcasecmp ("SMB_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &create_target_data->smb_credential_id);
-            set_client_state (CLIENT_CREATE_TARGET_SMB_CREDENTIAL);
-          }
-        else if (strcasecmp ("SMB_LSC_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &create_target_data->smb_lsc_credential_id);
-            set_client_state (CLIENT_CREATE_TARGET_SMB_LSC_CREDENTIAL);
-          }
-        else if (strcasecmp ("SNMP_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &create_target_data->snmp_credential_id);
-            set_client_state (CLIENT_CREATE_TARGET_SNMP_CREDENTIAL);
-          }
-        else if (strcasecmp ("NAME", element_name) == 0)
-          {
-            gvm_append_string (&create_target_data->name, "");
-            set_client_state (CLIENT_CREATE_TARGET_NAME);
-          }
-        ELSE_READ_OVER;
-
-      case CLIENT_CREATE_TARGET_ALIVE_TESTS:
-        if (strcasecmp ("ALIVE_TEST", element_name) == 0)
-          set_client_state (CLIENT_CREATE_TARGET_ALIVE_TESTS_ALIVE_TEST);
-        ELSE_READ_OVER;
-
-      case CLIENT_CREATE_TARGET_SSH_CREDENTIAL:
-        if (strcasecmp ("PORT", element_name) == 0)
-          set_client_state (CLIENT_CREATE_TARGET_SSH_CREDENTIAL_PORT);
-        ELSE_READ_OVER;
-
-      case CLIENT_CREATE_TARGET_SSH_LSC_CREDENTIAL:
-        if (strcasecmp ("PORT", element_name) == 0)
-          set_client_state (CLIENT_CREATE_TARGET_SSH_LSC_CREDENTIAL_PORT);
         ELSE_READ_OVER;
 
       case CLIENT_CREATE_TASK:
@@ -2778,112 +2414,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         ELSE_READ_OVER;
 
-
-      case CLIENT_MODIFY_TARGET:
-        if (strcasecmp ("EXCLUDE_HOSTS", element_name) == 0)
-          {
-            gvm_append_string (&modify_target_data->exclude_hosts, "");
-            set_client_state (CLIENT_MODIFY_TARGET_EXCLUDE_HOSTS);
-          }
-        else if (strcasecmp ("REVERSE_LOOKUP_ONLY", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_TARGET_REVERSE_LOOKUP_ONLY);
-        else if (strcasecmp ("REVERSE_LOOKUP_UNIFY", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_TARGET_REVERSE_LOOKUP_UNIFY);
-        else if (strcasecmp ("ALIVE_TESTS", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_TARGET_ALIVE_TESTS);
-        else if (strcasecmp ("ALLOW_SIMULTANEOUS_IPS", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_TARGET_ALLOW_SIMULTANEOUS_IPS);
-        else if (strcasecmp ("COMMENT", element_name) == 0)
-          {
-            gvm_append_string (&modify_target_data->comment, "");
-            set_client_state (CLIENT_MODIFY_TARGET_COMMENT);
-          }
-        else if (strcasecmp ("ESXI_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_target_data->esxi_credential_id);
-            set_client_state (CLIENT_MODIFY_TARGET_ESXI_CREDENTIAL);
-          }
-        else if (strcasecmp ("ESXI_LSC_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_target_data->esxi_lsc_credential_id);
-            set_client_state (CLIENT_MODIFY_TARGET_ESXI_LSC_CREDENTIAL);
-          }
-        else if (strcasecmp ("HOSTS", element_name) == 0)
-          {
-            gvm_append_string (&modify_target_data->hosts, "");
-            set_client_state (CLIENT_MODIFY_TARGET_HOSTS);
-          }
-        else if (strcasecmp ("PORT_LIST", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_target_data->port_list_id);
-            set_client_state (CLIENT_MODIFY_TARGET_PORT_LIST);
-          }
-        else if (strcasecmp ("KRB5_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_target_data->krb5_credential_id);
-            set_client_state (CLIENT_MODIFY_TARGET_KRB5_CREDENTIAL);
-          }
-        else if (strcasecmp ("SSH_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_target_data->ssh_credential_id);
-            set_client_state (CLIENT_MODIFY_TARGET_SSH_CREDENTIAL);
-          }
-        else if (strcasecmp ("SSH_LSC_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_target_data->ssh_lsc_credential_id);
-            set_client_state (CLIENT_MODIFY_TARGET_SSH_LSC_CREDENTIAL);
-          }
-        else if (strcasecmp ("SSH_ELEVATE_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_target_data->ssh_elevate_credential_id);
-            set_client_state (CLIENT_MODIFY_TARGET_SSH_ELEVATE_CREDENTIAL);
-          }
-        else if (strcasecmp ("SMB_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_target_data->smb_credential_id);
-            set_client_state (CLIENT_MODIFY_TARGET_SMB_CREDENTIAL);
-          }
-        else if (strcasecmp ("SMB_LSC_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_target_data->smb_lsc_credential_id);
-            set_client_state (CLIENT_MODIFY_TARGET_SMB_LSC_CREDENTIAL);
-          }
-        else if (strcasecmp ("SNMP_CREDENTIAL", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_target_data->snmp_credential_id);
-            set_client_state (CLIENT_MODIFY_TARGET_SNMP_CREDENTIAL);
-          }
-        else if (strcasecmp ("NAME", element_name) == 0)
-          {
-            gvm_append_string (&modify_target_data->name, "");
-            set_client_state (CLIENT_MODIFY_TARGET_NAME);
-          }
-        ELSE_READ_OVER;
-
-      case CLIENT_MODIFY_TARGET_ALIVE_TESTS:
-        if (strcasecmp ("ALIVE_TEST", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_TARGET_ALIVE_TESTS_ALIVE_TEST);
-        ELSE_READ_OVER;
-
-      case CLIENT_MODIFY_TARGET_SSH_CREDENTIAL:
-        if (strcasecmp ("PORT", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_TARGET_SSH_CREDENTIAL_PORT);
-        ELSE_READ_OVER;
-
-      case CLIENT_MODIFY_TARGET_SSH_LSC_CREDENTIAL:
-        if (strcasecmp ("PORT", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_TARGET_SSH_LSC_CREDENTIAL_PORT);
-        ELSE_READ_OVER;
 
       case CLIENT_MODIFY_TASK:
         if (strcasecmp ("ALTERABLE", element_name) == 0)
@@ -8350,7 +7880,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
 
 
-      CASE_DELETE (TARGET, target, "Target");
 
       case CLIENT_DELETE_TASK:
         if (delete_task_data->task_id)
@@ -8885,416 +8414,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_CREATE_CREDENTIAL, REALM);
       CLOSE (CLIENT_CREATE_CREDENTIAL, TYPE);
 
-
-      case CLIENT_CREATE_TARGET:
-        {
-          credential_t ssh_credential = 0, ssh_elevate_credential = 0;
-          credential_t smb_credential = 0;
-          credential_t esxi_credential = 0, snmp_credential = 0;
-          credential_t krb5_credential = 0;
-          target_t new_target;
-
-          if (create_target_data->copy)
-            switch (copy_target (create_target_data->name,
-                                 create_target_data->comment,
-                                 create_target_data->copy,
-                                 &new_target))
-              {
-                case 0:
-                  {
-                    char *uuid;
-                    uuid = target_uuid (new_target);
-                    SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_target"),
-                                             uuid);
-                    log_event ("target", "Target", uuid, "created");
-                    free (uuid);
-                    break;
-                  }
-                case 1:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_target",
-                                      "Target exists already"));
-                  log_event_fail ("target", "Target", NULL, "created");
-                  break;
-                case 2:
-                  if (send_find_error_to_client ("create_target", "target",
-                                                 create_target_data->copy,
-                                                 gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  log_event_fail ("target", "Target", NULL, "created");
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_target",
-                                      "Permission denied"));
-                  log_event_fail ("target", "Target", NULL, "created");
-                  break;
-                case -1:
-                default:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_INTERNAL_ERROR ("create_target"));
-                  log_event_fail ("target", "Target", NULL, "created");
-                  break;
-              }
-          else if (create_target_data->name == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_target",
-                                "A NAME is required"));
-          else if (strlen (create_target_data->name) == 0)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_target",
-                                "Name must be at"
-                                " least one character long"));
-          else if (create_target_data->asset_hosts_filter == NULL
-                   && create_target_data->hosts == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_target",
-                                "A host is required"));
-          else if (create_target_data->asset_hosts_filter == NULL
-                   && strlen (create_target_data->hosts) == 0)
-            /** @todo Legitimate to pass an empty hosts element? */
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_target",
-                                "Hosts must be at least one"
-                                " character long"));
-          else if (create_target_data->smb_credential_id
-                   && create_target_data->krb5_credential_id)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_target",
-                                "Targets cannot have both an SMB and"
-                                " Kerberos 5 credential"));
-          else if (create_target_data->ssh_credential_id
-                   && find_credential_with_permission
-                       (create_target_data->ssh_credential_id,
-                        &ssh_credential,
-                        "get_credentials"))
-            SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_target"));
-          else if (create_target_data->ssh_credential_id == NULL
-                   && create_target_data->ssh_lsc_credential_id
-                   && find_credential_with_permission
-                       (create_target_data->ssh_lsc_credential_id,
-                        &ssh_credential,
-                        "get_credentials"))
-            SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_target"));
-          else if ((create_target_data->ssh_credential_id
-                    || create_target_data->ssh_lsc_credential_id)
-                   && ssh_credential == 0)
-            {
-              if (send_find_error_to_client
-                   ("create_target", "Credential",
-                    create_target_data->ssh_credential_id
-                      ? create_target_data->ssh_credential_id
-                      : create_target_data->ssh_lsc_credential_id,
-                    gmp_parser))
-                {
-                  error_send_to_client (error);
-                  return;
-                }
-            }
-          else if (create_target_data->ssh_elevate_credential_id
-                   && find_credential_with_permission
-                       (create_target_data->ssh_elevate_credential_id,
-                        &ssh_elevate_credential,
-                        "get_credentials"))
-            SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_target"));
-          else if (create_target_data->smb_credential_id
-                   && find_credential_with_permission
-                       (create_target_data->smb_credential_id,
-                        &smb_credential,
-                        "get_credentials"))
-            SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_target"));
-          else if (create_target_data->smb_credential_id == NULL
-                   && create_target_data->smb_lsc_credential_id
-                   && find_credential_with_permission
-                       (create_target_data->smb_lsc_credential_id,
-                        &smb_credential,
-                        "get_credentials"))
-            SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_target"));
-          else if ((create_target_data->smb_credential_id
-                    || create_target_data->smb_lsc_credential_id)
-                   && smb_credential == 0)
-            {
-              if (send_find_error_to_client
-                   ("create_target", "Credential",
-                    create_target_data->smb_credential_id
-                      ? create_target_data->smb_credential_id
-                      : create_target_data->smb_lsc_credential_id,
-                    gmp_parser))
-                {
-                  error_send_to_client (error);
-                  return;
-                }
-            }
-          else if (create_target_data->esxi_credential_id
-                   && find_credential_with_permission
-                       (create_target_data->esxi_credential_id,
-                        &esxi_credential,
-                        "get_credentials"))
-            SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_target"));
-          else if (create_target_data->esxi_credential_id == NULL
-                   && create_target_data->esxi_lsc_credential_id
-                   && find_credential_with_permission
-                       (create_target_data->esxi_lsc_credential_id,
-                        &esxi_credential,
-                        "get_credentials"))
-            SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_target"));
-          else if ((create_target_data->esxi_credential_id
-                    || create_target_data->esxi_lsc_credential_id)
-                   && esxi_credential == 0)
-            {
-              if (send_find_error_to_client
-                   ("create_target", "Credential",
-                    create_target_data->esxi_credential_id
-                      ? create_target_data->esxi_credential_id
-                      : create_target_data->esxi_lsc_credential_id,
-                    gmp_parser))
-                {
-                  error_send_to_client (error);
-                  return;
-                }
-            }
-          else if (create_target_data->snmp_credential_id
-                   && find_credential_with_permission
-                       (create_target_data->snmp_credential_id,
-                        &snmp_credential,
-                        "get_credentials"))
-            SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_target"));
-          else if (create_target_data->snmp_credential_id
-                   && snmp_credential == 0)
-            {
-              if (send_find_error_to_client
-                   ("create_target", "Credential",
-                    create_target_data->snmp_credential_id,
-                    gmp_parser))
-                {
-                  error_send_to_client (error);
-                  return;
-                }
-            }
-          else if (create_target_data->krb5_credential_id
-                   && find_credential_with_permission
-                       (create_target_data->krb5_credential_id,
-                        &krb5_credential,
-                        "get_credentials"))
-            SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_target"));
-          else if (create_target_data->krb5_credential_id
-                   && krb5_credential == 0)
-            {
-              if (send_find_error_to_client
-                   ("create_target", "Credential",
-                    create_target_data->krb5_credential_id,
-                    gmp_parser))
-                {
-                  error_send_to_client (error);
-                  return;
-                }
-            }
-
-          /* Create target from host string. */
-          else switch (create_target
-                        (create_target_data->name,
-                         create_target_data->asset_hosts_filter,
-                         create_target_data->hosts,
-                         create_target_data->exclude_hosts,
-                         create_target_data->comment,
-                         create_target_data->port_list_id,
-                         create_target_data->port_range,
-                         ssh_credential,
-                         ssh_elevate_credential,
-                         create_target_data->ssh_credential_id
-                          ? create_target_data->ssh_port
-                          : create_target_data->ssh_lsc_port,
-                         smb_credential,
-                         esxi_credential,
-                         snmp_credential,
-                         krb5_credential,
-                         create_target_data->reverse_lookup_only,
-                         create_target_data->reverse_lookup_unify,
-                         create_target_data->alive_tests,
-                         create_target_data->alive_tests_str
-                          ? g_strstrip (create_target_data->alive_tests_str)
-                          : NULL,
-                         create_target_data->allow_simultaneous_ips,
-                         &new_target))
-            {
-              case 1:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "Target exists already"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 2:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "Error in host specification"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 3:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "Host specification exceeds maximum number"
-                                    " of hosts"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 4:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "Error in port range"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 5:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "Error in SSH port"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 6:
-                log_event_fail ("target", "Target", NULL, "created");
-                if (send_find_error_to_client
-                     ("create_target", "port_list",
-                      create_target_data->port_list_id, gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 7:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "Error in alive test"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 8:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "SSH credential must be of type"
-                                    " 'up' or 'usk'"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 9:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "ELEVATE credential must be of type"
-                                    " 'up'"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 10:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "SMB credential must be of type"
-                                    " 'up'"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 11:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "ESXi credential must be of type"
-                                    " 'up'"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 12:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "SNMP credential must be of type"
-                                    " 'snmp'"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 13:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "One of PORT_LIST and PORT_RANGE are"
-                                    " required"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 14:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "The elevate credential requires"
-                                    " an SSH credential"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 15:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "The elevate credential must be"
-                                    " different from the SSH credential"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 16:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "Kerberos 5 credential must be of type"
-                                    " 'krb5'"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 30:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "ALIVE_TESTS can contain either a string"
-                                    " or sub-elements, but not both."));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case 99:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_target",
-                                    "Permission denied"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              case -1:
-                SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_target"));
-                log_event_fail ("target", "Target", NULL, "created");
-                break;
-              default:
-                {
-                  char *uuid = target_uuid (new_target);
-                  SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_target"),
-                                           uuid);
-                  log_event ("target", "Target", uuid, "created");
-                  free (uuid);
-                  break;
-                }
-            }
-
-          create_target_data_reset (create_target_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-      CLOSE (CLIENT_CREATE_TARGET, ASSET_HOSTS);
-      CLOSE (CLIENT_CREATE_TARGET, COMMENT);
-      CLOSE (CLIENT_CREATE_TARGET, ESXI_CREDENTIAL);
-      CLOSE (CLIENT_CREATE_TARGET, ESXI_LSC_CREDENTIAL);
-      CLOSE (CLIENT_CREATE_TARGET, EXCLUDE_HOSTS);
-      CLOSE (CLIENT_CREATE_TARGET, REVERSE_LOOKUP_ONLY);
-      CLOSE (CLIENT_CREATE_TARGET, REVERSE_LOOKUP_UNIFY);
-      CLOSE (CLIENT_CREATE_TARGET, ALIVE_TESTS);
-      case CLIENT_CREATE_TARGET_ALIVE_TESTS_ALIVE_TEST:
-        g_ptr_array_add (create_target_data->alive_tests,
-                         create_target_data->alive_test
-                          ? g_strstrip (create_target_data->alive_test)
-                          : strdup (""));
-        create_target_data->alive_test = NULL;
-        set_client_state (CLIENT_CREATE_TARGET_ALIVE_TESTS);
-        break;
-      CLOSE (CLIENT_CREATE_TARGET, ALLOW_SIMULTANEOUS_IPS);
-      CLOSE (CLIENT_CREATE_TARGET, COPY);
-      CLOSE (CLIENT_CREATE_TARGET, HOSTS);
-      CLOSE (CLIENT_CREATE_TARGET, NAME);
-      CLOSE (CLIENT_CREATE_TARGET, PORT_LIST);
-      CLOSE (CLIENT_CREATE_TARGET, PORT_RANGE);
-      CLOSE (CLIENT_CREATE_TARGET, KRB5_CREDENTIAL);
-      CLOSE (CLIENT_CREATE_TARGET, SSH_CREDENTIAL);
-      CLOSE (CLIENT_CREATE_TARGET, SSH_LSC_CREDENTIAL);
-      CLOSE (CLIENT_CREATE_TARGET, SSH_ELEVATE_CREDENTIAL);
-      CLOSE (CLIENT_CREATE_TARGET, SMB_CREDENTIAL);
-      CLOSE (CLIENT_CREATE_TARGET, SMB_LSC_CREDENTIAL);
-      CLOSE (CLIENT_CREATE_TARGET, SNMP_CREDENTIAL);
-
-      CLOSE (CLIENT_CREATE_TARGET_SSH_CREDENTIAL, PORT);
-
-      CLOSE (CLIENT_CREATE_TARGET_SSH_LSC_CREDENTIAL, PORT);
 
       case CLIENT_CREATE_TASK:
         {
@@ -9950,384 +9069,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         break;
       CLOSE (CLIENT_MODIFY_SETTING, NAME);
       CLOSE (CLIENT_MODIFY_SETTING, VALUE);
-
-      case CLIENT_MODIFY_TARGET:
-        {
-          if (modify_target_data->target_id == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("modify_target",
-                                "A target_id"
-                                " attribute is required"));
-          else switch (modify_target
-                        (modify_target_data->target_id,
-                         modify_target_data->name,
-                         modify_target_data->hosts,
-                         modify_target_data->exclude_hosts,
-                         modify_target_data->comment,
-                         modify_target_data->port_list_id,
-                         modify_target_data->ssh_credential_id
-                          ? modify_target_data->ssh_credential_id
-                          : modify_target_data->ssh_lsc_credential_id,
-                         modify_target_data->ssh_elevate_credential_id,
-                         modify_target_data->ssh_credential_id
-                          ? modify_target_data->ssh_port
-                          : modify_target_data->ssh_lsc_port,
-                         modify_target_data->smb_credential_id
-                          ? modify_target_data->smb_credential_id
-                          : modify_target_data->smb_lsc_credential_id,
-                         modify_target_data->esxi_credential_id
-                          ? modify_target_data->esxi_credential_id
-                          : modify_target_data->esxi_lsc_credential_id,
-                         modify_target_data->snmp_credential_id,
-                         modify_target_data->krb5_credential_id,
-                         modify_target_data->reverse_lookup_only,
-                         modify_target_data->reverse_lookup_unify,
-                         modify_target_data->alive_tests,
-                         modify_target_data->alive_tests_str
-                          ? g_strstrip (modify_target_data->alive_tests_str)
-                          : NULL,
-                         modify_target_data->allow_simultaneous_ips))
-            {
-              case 1:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "Target exists already"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              case 2:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "Error in host specification"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              case 3:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "Host specification exceeds maximum number"
-                                    " of hosts"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              case 4:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "Error in port range"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              case 5:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "Error in SSH port"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              case 6:
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                if (send_find_error_to_client
-                     ("modify_target", "port_list",
-                      modify_target_data->port_list_id, gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 7:
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                if (send_find_error_to_client
-                     ("modify_target", "Credential",
-                      modify_target_data->ssh_credential_id
-                        ? modify_target_data->ssh_credential_id
-                        : modify_target_data->ssh_lsc_credential_id,
-                      gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 8:
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                if (send_find_error_to_client
-                     ("modify_target", "Credential",
-                      modify_target_data->smb_credential_id
-                        ? modify_target_data->smb_credential_id
-                        : modify_target_data->smb_lsc_credential_id,
-                      gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 9:
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                if (send_find_error_to_client
-                     ("modify_target", "target", modify_target_data->target_id,
-                      gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 10:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "Error in alive test"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              case 11:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "Name must be at"
-                                    " least one character long"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              case 12:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "EXCLUDE_HOSTS requires"
-                                    " a HOSTS"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              case 13:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "HOSTS requires an"
-                                    " EXCLUDE_HOSTS"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              case 14:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "HOSTS must be at least one"
-                                    "character long"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              case 15:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "Target is in use"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              case 16:
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                if (send_find_error_to_client
-                     ("modify_target", "Credential",
-                      modify_target_data->esxi_credential_id
-                        ? modify_target_data->esxi_credential_id
-                        : modify_target_data->esxi_lsc_credential_id,
-                      gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 17:
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                if (send_find_error_to_client
-                     ("modify_target", "Credential",
-                      modify_target_data->snmp_credential_id,
-                      gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 18:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "SSH credential must be of type"
-                                    " 'up' or 'usk'"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id, "modified");
-                break;
-              case 19:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "SMB credential must be of type"
-                                    " 'up'"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id, "modified");
-                break;
-              case 20:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "ESXi credential must be of type"
-                                    " 'up'"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id, "modified");
-                break;
-              case 21:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "SNMP credential must be of type"
-                                    " 'snmp'"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id, "modified");
-                break;
-              case 22:
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                if (send_find_error_to_client
-                     ("modify_target", "Credential",
-                      modify_target_data->ssh_elevate_credential_id,
-                      gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 23:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "ELEVATE credential must be of type"
-                                    " 'up'"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id, "modified");
-                break;
-              case 24:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "The elevate credential requires"
-                                    " an SSH credential"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id, "modified");
-                break;
-              case 25:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "The elevate credential must be different"
-                                    " from the SSH credential"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id, "modified");
-                break;
-              case 26:
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                if (send_find_error_to_client
-                     ("modify_target", "Credential",
-                      modify_target_data->krb5_credential_id,
-                      gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 27:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "Kerberos 5 credential must be of type"
-                                    " 'krb5'"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id, "modified");
-                break;
-              case 28:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "Targets cannot have both an SMB and"
-                                    " Kerberos 5 credential"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id, "modified");
-                break;
-              case 30:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "ALIVE_TESTS can contain either a string"
-                                    " or sub-elements, but not both."));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              case 99:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_target",
-                                    "Permission denied"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              case -1:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_INTERNAL_ERROR ("modify_target"));
-                log_event_fail ("target", "Target",
-                                modify_target_data->target_id,
-                                "modified");
-                break;
-              default:
-                {
-                  SENDF_TO_CLIENT_OR_FAIL (XML_OK ("modify_target"));
-                  log_event ("target", "Target", modify_target_data->target_id,
-                             "modified");
-                  break;
-                }
-            }
-
-          modify_target_data_reset (modify_target_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-      CLOSE (CLIENT_MODIFY_TARGET, ESXI_CREDENTIAL);
-      CLOSE (CLIENT_MODIFY_TARGET, ESXI_LSC_CREDENTIAL);
-      CLOSE (CLIENT_MODIFY_TARGET, EXCLUDE_HOSTS);
-      CLOSE (CLIENT_MODIFY_TARGET, REVERSE_LOOKUP_ONLY);
-      CLOSE (CLIENT_MODIFY_TARGET, REVERSE_LOOKUP_UNIFY);
-      CLOSE (CLIENT_MODIFY_TARGET, ALIVE_TESTS);
-      case CLIENT_MODIFY_TARGET_ALIVE_TESTS_ALIVE_TEST:
-        g_ptr_array_add (modify_target_data->alive_tests,
-                         modify_target_data->alive_test
-                          ? g_strstrip (modify_target_data->alive_test)
-                          : strdup (""));
-        modify_target_data->alive_test = NULL;
-        set_client_state (CLIENT_MODIFY_TARGET_ALIVE_TESTS);
-        break;
-      CLOSE (CLIENT_MODIFY_TARGET, ALLOW_SIMULTANEOUS_IPS);
-      CLOSE (CLIENT_MODIFY_TARGET, COMMENT);
-      CLOSE (CLIENT_MODIFY_TARGET, HOSTS);
-      CLOSE (CLIENT_MODIFY_TARGET, NAME);
-      CLOSE (CLIENT_MODIFY_TARGET, PORT_LIST);
-      CLOSE (CLIENT_MODIFY_TARGET, KRB5_CREDENTIAL);
-      CLOSE (CLIENT_MODIFY_TARGET, SSH_CREDENTIAL);
-      CLOSE (CLIENT_MODIFY_TARGET, SSH_LSC_CREDENTIAL);
-      CLOSE (CLIENT_MODIFY_TARGET, SSH_ELEVATE_CREDENTIAL);
-      CLOSE (CLIENT_MODIFY_TARGET, SMB_CREDENTIAL);
-      CLOSE (CLIENT_MODIFY_TARGET, SMB_LSC_CREDENTIAL);
-      CLOSE (CLIENT_MODIFY_TARGET, SNMP_CREDENTIAL);
-
-      CLOSE (CLIENT_MODIFY_TARGET_SSH_CREDENTIAL, PORT);
-
-      CLOSE (CLIENT_MODIFY_TARGET_SSH_LSC_CREDENTIAL, PORT);
 
       case CLIENT_MODIFY_TASK:
         if (acl_user_may ("modify_task") == 0)
@@ -11019,46 +9760,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
 
 
-      APPEND (CLIENT_CREATE_TARGET_EXCLUDE_HOSTS,
-              &create_target_data->exclude_hosts);
-
-      APPEND (CLIENT_CREATE_TARGET_REVERSE_LOOKUP_ONLY,
-              &create_target_data->reverse_lookup_only);
-
-      APPEND (CLIENT_CREATE_TARGET_REVERSE_LOOKUP_UNIFY,
-              &create_target_data->reverse_lookup_unify);
-
-      APPEND (CLIENT_CREATE_TARGET_ALIVE_TESTS,
-              &create_target_data->alive_tests_str);
-
-      APPEND (CLIENT_CREATE_TARGET_ALIVE_TESTS_ALIVE_TEST,
-              &create_target_data->alive_test);
-
-      APPEND (CLIENT_CREATE_TARGET_ALLOW_SIMULTANEOUS_IPS,
-              &create_target_data->allow_simultaneous_ips);
-
-      APPEND (CLIENT_CREATE_TARGET_COMMENT,
-              &create_target_data->comment);
-
-      APPEND (CLIENT_CREATE_TARGET_COPY,
-              &create_target_data->copy);
-
-      APPEND (CLIENT_CREATE_TARGET_HOSTS,
-              &create_target_data->hosts);
-
-      APPEND (CLIENT_CREATE_TARGET_NAME,
-              &create_target_data->name);
-
-      APPEND (CLIENT_CREATE_TARGET_PORT_RANGE,
-              &create_target_data->port_range);
-
-      APPEND (CLIENT_CREATE_TARGET_SSH_CREDENTIAL_PORT,
-              &create_target_data->ssh_port);
-
-      APPEND (CLIENT_CREATE_TARGET_SSH_LSC_CREDENTIAL_PORT,
-              &create_target_data->ssh_lsc_port);
-
-
       APPEND (CLIENT_CREATE_TASK_ALTERABLE,
               &create_task_data->alterable);
 
@@ -11124,40 +9825,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
 
 
-
-
-      APPEND (CLIENT_MODIFY_TARGET_EXCLUDE_HOSTS,
-              &modify_target_data->exclude_hosts);
-
-      APPEND (CLIENT_MODIFY_TARGET_REVERSE_LOOKUP_ONLY,
-              &modify_target_data->reverse_lookup_only);
-
-      APPEND (CLIENT_MODIFY_TARGET_REVERSE_LOOKUP_UNIFY,
-              &modify_target_data->reverse_lookup_unify);
-
-      APPEND (CLIENT_MODIFY_TARGET_ALIVE_TESTS,
-              &modify_target_data->alive_tests_str);
-
-      APPEND (CLIENT_MODIFY_TARGET_ALIVE_TESTS_ALIVE_TEST,
-              &modify_target_data->alive_test);
-
-      APPEND (CLIENT_MODIFY_TARGET_ALLOW_SIMULTANEOUS_IPS,
-              &modify_target_data->allow_simultaneous_ips);
-
-      APPEND (CLIENT_MODIFY_TARGET_COMMENT,
-              &modify_target_data->comment);
-
-      APPEND (CLIENT_MODIFY_TARGET_HOSTS,
-              &modify_target_data->hosts);
-
-      APPEND (CLIENT_MODIFY_TARGET_NAME,
-              &modify_target_data->name);
-
-      APPEND (CLIENT_MODIFY_TARGET_SSH_CREDENTIAL_PORT,
-              &modify_target_data->ssh_port);
-
-      APPEND (CLIENT_MODIFY_TARGET_SSH_LSC_CREDENTIAL_PORT,
-              &modify_target_data->ssh_lsc_port);
 
 
       default:

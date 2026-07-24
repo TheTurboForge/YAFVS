@@ -760,7 +760,6 @@ mod tests {
         let alerts = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
         let configs = include_str!("../../../components/gvmd/src/manage_sql_configs.c");
         let schedules = include_str!("../../../components/gvmd/src/manage_sql_schedules.c");
-        let targets = include_str!("../../../components/gvmd/src/manage_sql_targets.c");
         let users = include_str!("../../../components/gvmd/src/manage_sql_users.c");
 
         let writers = [
@@ -800,17 +799,11 @@ mod tests {
                 definition: "delete_schedule (const char *schedule_id, int ultimate)",
                 first_resource_access: "find_schedule_with_permission",
             },
-            LegacyTrashCountWriter {
-                file: "components/gvmd/src/manage_sql_targets.c",
-                source: targets,
-                definition: "delete_target (const char *target_id, int ultimate)",
-                first_resource_access: "find_target_with_permission",
-            },
         ];
 
         assert_eq!(
             writers.len(),
-            7,
+            6,
             "the remaining legacy trash writer inventory is explicit"
         );
         assert_eq!(

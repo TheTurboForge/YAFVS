@@ -34,11 +34,9 @@ command_t gmp_commands[]
  = {{"AUTHENTICATE", "Authenticate with the manager." },
     {"CREATE_CONFIG", "Import a scan config."},
     {"CREATE_CREDENTIAL", "Create a credential."},
-    {"CREATE_TARGET", "Create a target."},
     {"CREATE_TASK", "Create a task."},
     {"DELETE_CONFIG", "Delete a config."},
     {"DELETE_REPORT", "Delete a report."},
-    {"DELETE_TARGET", "Delete a target."},
     {"DELETE_TASK", "Delete a task."},
     {"GET_AGGREGATES", "Get aggregates of resources."},
     {"GET_CONFIGS", "Get all configs."},
@@ -53,7 +51,6 @@ command_t gmp_commands[]
     {"MODIFY_CONFIG", "Update an existing config."},
     {"MODIFY_CREDENTIAL", "Modify an existing credential."},
     {"MODIFY_SETTING", "Modify an existing setting."},
-    {"MODIFY_TARGET", "Modify an existing target."},
     {"MODIFY_TASK", "Update an existing task."},
     {"START_TASK", "Manually start an existing task."},
     {"STOP_TASK", "Stop a running task."},
@@ -73,7 +70,9 @@ static const char *native_acl_operations[] = {
   "DELETE_SCHEDULE",
   "GET_SCHEDULES",
   "CREATE_SCHEDULE",
+  "CREATE_TARGET",
   "CREATE_TAG",
+  "DELETE_TARGET",
   "DELETE_TAG",
   "DELETE_USER",
   "EMPTY_TRASHCAN",
@@ -86,6 +85,7 @@ static const char *native_acl_operations[] = {
   "GET_TARGETS",
   "GET_USERS",
   "MODIFY_SCHEDULE",
+  "MODIFY_TARGET",
   "MODIFY_USER",
   "MODIFY_TAG",
   NULL
@@ -147,7 +147,7 @@ gmp_command_type (const char* name)
 /**
  * @brief Check whether a GMP command takes a resource.
  *
- * MODIFY_TARGET, for example, takes a target.
+ * MODIFY_TASK, for example, takes a task.
  *
  * @param[in]  name  Command name.
  *

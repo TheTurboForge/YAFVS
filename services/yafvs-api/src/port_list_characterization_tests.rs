@@ -69,7 +69,7 @@ fn get_port_lists_transport_is_retired_while_native_port_list_ownership_remains(
             "retained shared/feed port-list helper missing: {retained}"
         );
     }
-    assert!(GVMD_GMP.contains("CLIENT_CREATE_TARGET_PORT_RANGE"));
+    assert!(!GVMD_GMP.contains("CLIENT_CREATE_TARGET_PORT_RANGE"));
     for retained in [
         "pub(crate) async fn create_port_list",
         "pub(crate) async fn import_port_list",

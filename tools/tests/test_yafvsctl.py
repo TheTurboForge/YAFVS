@@ -1132,27 +1132,14 @@ class YAFVSCtlTests(unittest.TestCase):
             non_repository_status=True,
         )
 
-    def test_gvmd_target_parser_consumes_target_elements(self):
-        gmp_source = (Path(__file__).resolve().parents[2] / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")
-        start_handler = gmp_source[
-            gmp_source.index("gmp_xml_handle_start_element"):
-            gmp_source.index("/**\n * @brief Send XML for an NVT.")
-        ]
-        required_transitions = [
-            "case CLIENT_CREATE_TARGET:",
-            "set_client_state (CLIENT_CREATE_TARGET_NAME);",
-            "set_client_state (CLIENT_CREATE_TARGET_HOSTS);",
-            "set_client_state (CLIENT_CREATE_TARGET_PORT_LIST);",
-            "set_client_state (CLIENT_CREATE_TARGET_ALIVE_TESTS);",
-            "case CLIENT_MODIFY_TARGET:",
-            "set_client_state (CLIENT_MODIFY_TARGET_NAME);",
-            "set_client_state (CLIENT_MODIFY_TARGET_HOSTS);",
-            "set_client_state (CLIENT_MODIFY_TARGET_PORT_LIST);",
-            "set_client_state (CLIENT_MODIFY_TARGET_ALIVE_TESTS);",
-        ]
-        for transition in required_transitions:
-            with self.subTest(transition=transition):
-                self.assertIn(transition, start_handler)
+    def test_gvmd_target_parser_is_completely_retired(self):
+        repo_root = Path(__file__).resolve().parents[2]
+        gmp_source = (repo_root / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")
+        for marker in ["CLIENT_CREATE_TARGET", "CLIENT_MODIFY_TARGET", "CLIENT_DELETE_TARGET", "create_target_data", "modify_target_data", "delete_target_data"]:
+            self.assertNotIn(marker, gmp_source)
+        for marker in ["gmp_create_target_ext", "gmp_delete_target_ext"]:
+            self.assertNotIn(marker, (repo_root / "components" / "gvm-libs" / "gmp" / "gmp.c").read_text(encoding="utf-8"))
+            self.assertNotIn(marker, (repo_root / "components" / "gvm-libs" / "gmp" / "gmp.h").read_text(encoding="utf-8"))
 
     def test_get_targets_is_native_only_acl_not_public_gmp(self):
         repo_root = Path(__file__).resolve().parents[2]
@@ -1764,7 +1751,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("CLIENT_GET_PORT_LISTS", gvmd_source)
         self.assertNotIn("GET_PORT_LISTS", retired_sources["GMP schema"].read_text(encoding="utf-8"))
         self.assertIn('"GET_PORT_LISTS",', (root / "components" / "gvmd" / "src" / "manage_commands.c").read_text(encoding="utf-8"))
-        self.assertIn("CLIENT_CREATE_TARGET_PORT_RANGE", gvmd_source)
+        self.assertNotIn("CLIENT_CREATE_TARGET_PORT_RANGE", gvmd_source)
         self.assertIn("create_port_list_no_acl", port_list_sql)
         self.assertIn("create_port_list_unique", port_list_sql)
         self.assertIn("insert_port_range", port_list_sql)

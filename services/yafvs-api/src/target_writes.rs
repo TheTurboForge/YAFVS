@@ -42,6 +42,7 @@ pub(crate) async fn create_target(
         .map_err(|error| map_target_write_db_error(error, "lock targets for create"))?;
     ensure_unique_target_name(&tx, &request.name, -1, owner_id).await?;
     let port_list = load_assignable_target_port_list(&tx, &request.port_list_id, owner_id).await?;
+    let hosts = resolve_target_create_hosts(&tx, &request.host_source).await?;
     let credential_links = if request.credentials.has_changes() {
         resolve_target_create_credential_links(&tx, owner_id, &request.credentials).await?
     } else {
@@ -52,6 +53,7 @@ pub(crate) async fn create_target(
         owner_id,
         port_list.internal_id,
         &request,
+        &hosts,
         &credential_links,
     )
     .await?;

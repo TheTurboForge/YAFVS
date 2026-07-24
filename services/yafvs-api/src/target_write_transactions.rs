@@ -6,15 +6,17 @@ use tokio_postgres::Transaction;
 
 use crate::{
     errors::ApiError,
+    target_host_validation::validate_target_host_lists,
     target_write_db::{
         TargetWriteRecord, TargetWriteRecordWithInternalId, execute_target_write_sql,
         load_assignable_target_credential, load_current_target_credential_internal_id,
-        query_target_write_record, query_target_write_record_with_internal_id,
+        load_target_asset_host_names, query_target_write_record,
+        query_target_write_record_with_internal_id,
     },
     target_write_sql::*,
     target_write_validation::{
         ValidatedCredentialPatchAction, ValidatedTargetClone, ValidatedTargetCreate,
-        ValidatedTargetCredentialsPatch, ValidatedTargetPatch,
+        ValidatedTargetCreateHostSource, ValidatedTargetCredentialsPatch, ValidatedTargetPatch,
     },
 };
 
@@ -45,11 +47,43 @@ pub(crate) struct ResolvedTargetCredentialsPatch {
     krb5: Option<ResolvedCredentialPatchAction>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResolvedTargetCreateHosts {
+    hosts: String,
+    exclude_hosts: String,
+}
+
+pub(crate) async fn resolve_target_create_hosts(
+    tx: &Transaction<'_>,
+    source: &ValidatedTargetCreateHostSource,
+) -> Result<ResolvedTargetCreateHosts, ApiError> {
+    match source {
+        ValidatedTargetCreateHostSource::Manual {
+            hosts,
+            exclude_hosts,
+        } => Ok(ResolvedTargetCreateHosts {
+            hosts: hosts.clone(),
+            exclude_hosts: exclude_hosts.clone(),
+        }),
+        ValidatedTargetCreateHostSource::HostAssets { ids, exclude_hosts } => {
+            let hosts = load_target_asset_host_names(tx, ids).await?;
+            let (hosts, exclude_hosts) =
+                validate_target_host_lists(Some(hosts), Some(exclude_hosts.clone()))?;
+            Ok(ResolvedTargetCreateHosts {
+                hosts: hosts
+                    .ok_or_else(|| ApiError::BadRequest("hosts is required".to_string()))?,
+                exclude_hosts: exclude_hosts.unwrap_or_default(),
+            })
+        }
+    }
+}
+
 pub(crate) async fn execute_target_create_transaction(
     tx: &Transaction<'_>,
     owner_id: i32,
     port_list_internal_id: i32,
     request: &ValidatedTargetCreate,
+    hosts: &ResolvedTargetCreateHosts,
     credential_links: &ResolvedTargetCredentialsPatch,
 ) -> Result<TargetWriteRecord, ApiError> {
     let record = query_target_write_record_with_internal_id(
@@ -58,8 +92,8 @@ pub(crate) async fn execute_target_create_transaction(
         &[
             &owner_id,
             &request.name,
-            &request.hosts,
-            &request.exclude_hosts,
+            &hosts.hosts,
+            &hosts.exclude_hosts,
             &request.reverse_lookup_only,
             &request.reverse_lookup_unify,
             &request.comment,

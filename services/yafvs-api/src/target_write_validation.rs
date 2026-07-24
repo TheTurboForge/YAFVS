@@ -2,12 +2,15 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::Deserialize;
+use std::collections::HashSet;
+
+use serde::{Deserialize, Deserializer};
 
 use crate::{
     errors::ApiError,
     ssh_host_key_pins::{SshHostKeyPin, validate_ssh_host_key_pins},
     target_alive_tests::validate_alive_tests,
+    target_host_syntax::MAX_TARGET_HOSTS,
     target_host_validation::validate_target_host_lists,
     target_id_validation::{validate_optional_uuid, validate_uuid},
     target_text_validation::{
@@ -36,11 +39,23 @@ pub(crate) struct TargetCreateRequest {
     pub(crate) reverse_lookup_only: bool,
     pub(crate) reverse_lookup_unify: bool,
     pub(crate) port_list_id: String,
-    pub(crate) hosts: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_non_null_host_source")]
+    pub(crate) hosts: Option<Vec<String>>,
+    #[serde(default, deserialize_with = "deserialize_non_null_host_source")]
+    pub(crate) host_asset_ids: Option<Vec<String>>,
     #[serde(default)]
     pub(crate) exclude_hosts: Option<Vec<String>>,
     #[serde(default)]
     pub(crate) credentials: Option<TargetCredentialsCreateRequest>,
+}
+
+fn deserialize_non_null_host_source<'de, D>(
+    deserializer: D,
+) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Vec::<String>::deserialize(deserializer).map(Some)
 }
 
 #[derive(Debug, Deserialize)]
@@ -119,6 +134,18 @@ pub(crate) struct TargetCredentialsCreateRequest {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ValidatedTargetCreateHostSource {
+    Manual {
+        hosts: String,
+        exclude_hosts: String,
+    },
+    HostAssets {
+        ids: Vec<String>,
+        exclude_hosts: Vec<String>,
+    },
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ValidatedTargetCreate {
     pub(crate) name: String,
     pub(crate) comment: Option<String>,
@@ -127,8 +154,7 @@ pub(crate) struct ValidatedTargetCreate {
     pub(crate) reverse_lookup_only: i32,
     pub(crate) reverse_lookup_unify: i32,
     pub(crate) port_list_id: String,
-    pub(crate) hosts: String,
-    pub(crate) exclude_hosts: String,
+    pub(crate) host_source: ValidatedTargetCreateHostSource,
     pub(crate) credentials: ValidatedTargetCredentialsPatch,
 }
 
@@ -187,8 +213,26 @@ pub(crate) fn validate_target_clone_request(
 pub(crate) fn validate_target_create_request(
     request: TargetCreateRequest,
 ) -> Result<ValidatedTargetCreate, ApiError> {
-    let (hosts, exclude_hosts) =
-        validate_target_host_lists(Some(request.hosts), request.exclude_hosts)?;
+    let host_source = match (request.hosts, request.host_asset_ids) {
+        (Some(hosts), None) => {
+            let (hosts, exclude_hosts) =
+                validate_target_host_lists(Some(hosts), request.exclude_hosts)?;
+            ValidatedTargetCreateHostSource::Manual {
+                hosts: hosts
+                    .ok_or_else(|| ApiError::BadRequest("hosts is required".to_string()))?,
+                exclude_hosts: exclude_hosts.unwrap_or_default(),
+            }
+        }
+        (None, Some(ids)) => ValidatedTargetCreateHostSource::HostAssets {
+            ids: validate_target_host_asset_ids(ids)?,
+            exclude_hosts: request.exclude_hosts.unwrap_or_default(),
+        },
+        _ => {
+            return Err(ApiError::BadRequest(
+                "exactly one of hosts or host_asset_ids is required".to_string(),
+            ));
+        }
+    };
     let alive_test = validate_alive_tests(Some(request.alive_tests))?
         .ok_or_else(|| ApiError::BadRequest("alive_tests is required".to_string()))?;
     Ok(ValidatedTargetCreate {
@@ -199,10 +243,34 @@ pub(crate) fn validate_target_create_request(
         reverse_lookup_only: i32::from(request.reverse_lookup_only),
         reverse_lookup_unify: i32::from(request.reverse_lookup_unify),
         port_list_id: validate_uuid(request.port_list_id, "port_list_id")?,
-        hosts: hosts.ok_or_else(|| ApiError::BadRequest("hosts is required".to_string()))?,
-        exclude_hosts: exclude_hosts.unwrap_or_default(),
+        host_source,
         credentials: validate_credentials_create(request.credentials)?,
     })
+}
+
+fn validate_target_host_asset_ids(ids: Vec<String>) -> Result<Vec<String>, ApiError> {
+    if ids.is_empty() {
+        return Err(ApiError::BadRequest(
+            "host_asset_ids must not be empty".to_string(),
+        ));
+    }
+    if ids.len() > MAX_TARGET_HOSTS {
+        return Err(ApiError::BadRequest(format!(
+            "host_asset_ids must contain at most {MAX_TARGET_HOSTS} entries"
+        )));
+    }
+    let mut seen = HashSet::with_capacity(ids.len());
+    ids.into_iter()
+        .map(|id| {
+            let id = validate_uuid(id, "host_asset_ids")?;
+            if !seen.insert(id.clone()) {
+                return Err(ApiError::BadRequest(
+                    "host_asset_ids must not contain duplicates".to_string(),
+                ));
+            }
+            Ok(id)
+        })
+        .collect()
 }
 
 impl ValidatedTargetPatch {

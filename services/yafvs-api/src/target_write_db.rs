@@ -12,6 +12,20 @@ pub(crate) struct TargetWriteRecord {
     pub(crate) uuid: String,
 }
 
+pub(crate) async fn load_target_asset_host_names(
+    tx: &Transaction<'_>,
+    host_asset_ids: &[String],
+) -> Result<Vec<String>, ApiError> {
+    let rows = tx
+        .query(target_asset_host_names_sql(), &[&host_asset_ids])
+        .await
+        .map_err(|error| map_target_write_db_error(error, "load target host assets"))?;
+    if rows.len() != host_asset_ids.len() {
+        return Err(ApiError::NotFound);
+    }
+    Ok(rows.into_iter().map(|row| row.get(0)).collect())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TargetWriteRecordWithInternalId {
     pub(crate) internal_id: i32,

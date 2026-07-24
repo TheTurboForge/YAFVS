@@ -27,9 +27,38 @@ fn create_request() -> TargetCreateRequest {
         reverse_lookup_only: false,
         reverse_lookup_unify: true,
         port_list_id: "12345678-1234-1234-1234-123456789abc".to_string(),
-        hosts: vec!["192.0.2.42".to_string(), "host-one".to_string()],
+        hosts: Some(vec!["192.0.2.42".to_string(), "host-one".to_string()]),
+        host_asset_ids: None,
         exclude_hosts: Some(vec!["192.0.2.43".to_string()]),
         credentials: None,
+    }
+}
+
+#[test]
+fn target_create_request_rejects_explicit_null_host_sources() {
+    for request in [
+        serde_json::json!({
+            "name": "asset target",
+            "hosts": null,
+            "host_asset_ids": ["12345678-1234-1234-1234-123456789abc"],
+            "alive_tests": ["ICMP Ping"],
+            "allow_simultaneous_ips": true,
+            "reverse_lookup_only": false,
+            "reverse_lookup_unify": false,
+            "port_list_id": "12345678-1234-1234-1234-123456789abd"
+        }),
+        serde_json::json!({
+            "name": "manual target",
+            "hosts": ["192.0.2.1"],
+            "host_asset_ids": null,
+            "alive_tests": ["ICMP Ping"],
+            "allow_simultaneous_ips": true,
+            "reverse_lookup_only": false,
+            "reverse_lookup_unify": false,
+            "port_list_id": "12345678-1234-1234-1234-123456789abd"
+        }),
+    ] {
+        assert!(serde_json::from_value::<TargetCreateRequest>(request).is_err());
     }
 }
 
@@ -196,8 +225,13 @@ fn target_create_request_requires_explicit_safe_scan_inputs() {
         validated.port_list_id,
         "12345678-1234-1234-1234-123456789abc"
     );
-    assert_eq!(validated.hosts, "192.0.2.42, host-one");
-    assert_eq!(validated.exclude_hosts, "192.0.2.43");
+    assert!(matches!(
+        validated.host_source,
+        crate::target_write_validation::ValidatedTargetCreateHostSource::Manual {
+            hosts,
+            exclude_hosts
+        } if hosts == "192.0.2.42, host-one" && exclude_hosts == "192.0.2.43"
+    ));
     assert!(!validated.credentials.has_changes());
 }
 
@@ -231,7 +265,21 @@ fn target_create_request_accepts_secret_free_credential_references() {
 #[test]
 fn target_create_request_rejects_unsafe_or_missing_inputs() {
     let mut request = create_request();
-    request.hosts = vec!["192.0.2.0/31".to_string()];
+    request.hosts = Some(vec!["192.0.2.0/31".to_string()]);
+    assert!(matches!(
+        validate_target_create_request(request),
+        Err(ApiError::BadRequest(_))
+    ));
+
+    let mut request = create_request();
+    request.hosts = None;
+    assert!(matches!(
+        validate_target_create_request(request),
+        Err(ApiError::BadRequest(_))
+    ));
+
+    let mut request = create_request();
+    request.host_asset_ids = Some(vec!["12345678-1234-1234-1234-123456789abd".to_string()]);
     assert!(matches!(
         validate_target_create_request(request),
         Err(ApiError::BadRequest(_))
@@ -258,6 +306,58 @@ fn target_create_request_rejects_unsafe_or_missing_inputs() {
         validate_target_create_request(request),
         Err(ApiError::BadRequest(_))
     ));
+}
+
+#[test]
+fn target_create_request_accepts_a_bounded_unique_host_asset_source() {
+    let mut request = create_request();
+    request.hosts = None;
+    request.host_asset_ids = Some(vec![
+        "12345678-1234-1234-1234-123456789abc".to_string(),
+        "12345678-1234-1234-1234-123456789abd".to_string(),
+    ]);
+    let validated = validate_target_create_request(request).expect("valid host asset source");
+    assert!(matches!(
+        validated.host_source,
+        crate::target_write_validation::ValidatedTargetCreateHostSource::HostAssets {
+            ids,
+            exclude_hosts
+        } if ids == [
+            "12345678-1234-1234-1234-123456789abc",
+            "12345678-1234-1234-1234-123456789abd"
+        ] && exclude_hosts == ["192.0.2.43"]
+    ));
+}
+
+#[test]
+fn target_create_request_rejects_invalid_duplicate_or_oversized_host_asset_sources() {
+    for ids in [
+        vec!["not-a-uuid".to_string()],
+        vec![
+            "12345678-1234-1234-1234-123456789abc".to_string(),
+            "12345678-1234-1234-1234-123456789abc".to_string(),
+        ],
+        (0..=MAX_TARGET_HOSTS)
+            .map(|index| format!("12345678-1234-1234-{:04x}-{index:012x}", index / 65536))
+            .collect(),
+    ] {
+        let mut request = create_request();
+        request.hosts = None;
+        request.host_asset_ids = Some(ids);
+        assert!(matches!(
+            validate_target_create_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+}
+
+#[test]
+fn target_asset_host_name_query_preserves_request_order_and_locks_rows() {
+    let sql = target_asset_host_names_sql();
+    assert!(sql.contains("unnest($1::text[]) WITH ORDINALITY"));
+    assert!(sql.contains("JOIN hosts h ON h.uuid = requested.uuid"));
+    assert!(sql.contains("ORDER BY requested.position"));
+    assert!(sql.contains("FOR KEY SHARE OF h"));
 }
 
 fn alive_patch_request(values: &[&str]) -> TargetPatchRequest {
@@ -370,6 +470,11 @@ fn target_create_handler_requires_operator_before_insert() {
         handler.find("resolve_target_write_operator_owner").unwrap()
             < handler.find("execute_target_create_transaction").unwrap(),
         "target create must resolve operator owner before inserting target"
+    );
+    assert!(
+        handler.find("resolve_target_create_hosts").unwrap()
+            < handler.find("execute_target_create_transaction").unwrap(),
+        "target create must resolve host assets before inserting target"
     );
 }
 

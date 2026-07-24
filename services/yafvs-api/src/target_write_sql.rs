@@ -6,6 +6,14 @@ pub(crate) fn target_write_operator_owner_sql() -> &'static str {
     "SELECT id::integer FROM users WHERE uuid = $1;"
 }
 
+pub(crate) fn target_asset_host_names_sql() -> &'static str {
+    "SELECT h.name
+       FROM unnest($1::text[]) WITH ORDINALITY AS requested(uuid, position)
+       JOIN hosts h ON h.uuid = requested.uuid
+      ORDER BY requested.position
+        FOR KEY SHARE OF h;"
+}
+
 pub(crate) fn target_write_state_sql() -> &'static str {
     "SELECT id::integer,
             owner::integer

@@ -731,13 +731,11 @@ fn osp_handlers_reject_stale_reports_and_serialize_finalization_with_stop() {
 
 #[test]
 fn native_browser_task_controls_retire_only_the_gsad_gmp_bridges() {
-    let gsad_delete = inherited_function(GSAD_GMP_C, "delete_task_gmp");
-    assert!(gsad_delete.contains("move_resource_to_trash"));
-    assert!(gsad_delete.contains("connection, \"task\", credentials, params"));
-
     for retired in [
+        "delete_task_gmp",
         "start_task_gmp",
         "stop_task_gmp",
+        "ELSE (delete_task)",
         "ELSE (start_task)",
         "ELSE (stop_task)",
     ] {
@@ -746,8 +744,17 @@ fn native_browser_task_controls_retire_only_the_gsad_gmp_bridges() {
             "retired gsad task-control bridge remains: {retired}"
         );
     }
-    assert!(!GSAD_GMP_H.contains("stop_task_gmp"));
+    for retired in ["delete_task_gmp", "start_task_gmp", "stop_task_gmp"] {
+        assert!(
+            !GSAD_GMP_H.contains(retired),
+            "retired gsad task-control declaration remains: {retired}"
+        );
+    }
     assert!(GSAD_GMP_C.contains("exec_gmp_post"));
+    assert!(
+        GSA_NATIVE_TASKS.contains("deleteNative(gmp, `api/v1/tasks/${encodeURIComponent(id)}`)"),
+        "GSA browser task delete must use the same-origin native route"
+    );
     assert!(
         GSA_NATIVE_TASKS.contains("`api/v1/tasks/${encodeURIComponent(id)}/start`"),
         "GSA browser task start must use the same-origin native route"
@@ -767,14 +774,22 @@ fn native_browser_task_controls_retire_only_the_gsad_gmp_bridges() {
 
     let gmp_start = inherited_function(GVM_LIBS_GMP_C, "gmp_start_task_report_c");
     let gmp_stop = inherited_function(GVM_LIBS_GMP_C, "gmp_stop_task_c");
+    let gmp_delete = inherited_function(GVM_LIBS_GMP_C, "gmp_delete_task");
+    let gmp_delete_ext = inherited_function(GVM_LIBS_GMP_C, "gmp_delete_task_ext");
     assert!(gmp_start.contains("<start_task task_id=\\\"%s\\\"/>"));
     assert!(gmp_start.contains("entity_child (entity, \"report_id\")"));
     assert!(gmp_stop.contains("<stop_task task_id=\\\"%s\\\"/>"));
     assert!(gmp_stop.contains("gmp_check_response_c (connection)"));
+    assert!(gmp_delete.contains("<delete_task task_id=\\\"%s\\\"/>"));
+    assert!(gmp_delete_ext.contains("<delete_task task_id=\\\"%s\\\" ultimate=\\\"%d\\\"/>"));
+    assert!(gmp_delete_ext.contains("opts.ultimate"));
 
-    assert!(GSAD_VALIDATOR_C.contains("\"|(delete_task)\""));
+    assert!(!GSAD_VALIDATOR_C.contains("\"|(delete_task)\""));
     assert!(!GSAD_VALIDATOR_C.contains("\"|(start_task)\""));
     assert!(!GSAD_VALIDATOR_C.contains("\"|(stop_task)\""));
+    assert!(GMP_C.contains("strcasecmp (\"DELETE_TASK\", element_name)"));
+    assert!(GMP_C.contains("set_client_state (CLIENT_DELETE_TASK)"));
+    assert!(GMP_C.contains("case CLIENT_DELETE_TASK:"));
     assert!(GMP_C.contains("strcasecmp (\"STOP_TASK\", element_name)"));
     assert!(GMP_C.contains("case CLIENT_STOP_TASK:"));
 }
@@ -814,6 +829,16 @@ fn native_direct_api_allows_guarded_task_controls_and_keeps_unmigrated_lifecycle
     assert!(direct_api_v1_method_is_allowed(
         &Method::DELETE,
         "/api/v1/tasks/12345678-1234-1234-1234-123456789abc",
+        true,
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/trash",
+        false,
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/tasks/12345678-1234-1234-1234-123456789abc/trash",
         true,
     ));
     assert!(!direct_api_v1_method_is_allowed(

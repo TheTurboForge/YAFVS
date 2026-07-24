@@ -97,11 +97,12 @@ evidence = [
   "services/yafvs-api/src/credential_contract_tests.rs::credential_metadata_reads_and_browser_downloads_are_native_only",
   "services/yafvs-api/src/credential_contract_tests.rs::credential_live_delete_is_native_only",
   "services/yafvs-api/src/credential_writes_tests.rs::credential_delete_moves_live_state_to_trash_atomically_and_opaquely",
+  "services/yafvs-api/src/task_control_characterization_tests.rs::native_browser_task_controls_retire_only_the_gsad_gmp_bridges",
   "services/yafvs-api/src/scope_report_mutation_characterization_tests.rs::native_scope_reads_replace_public_gmp_scope_metadata_transport",
 ]
 independent_authority = ["api/openapi/yafvs-v1.yaml::x-yafvs-inherited-still-owns"]
 dependencies = ["login-session-account-auth", "team-authority-permissions"]
-notes = "Native user, alert, schedule, and scope metadata reads, exports where retained, and retained lifecycle operations are authoritative; their dedicated public GMP/XML transports are retired. Native credential list, detail, metadata export, secret-opaque live-to-trash lifecycle, SSH public-key retrieval, and bounded stored client-certificate retrieval are authoritative; stale public gsad metadata/delete/download aliases, the raw DELETE_CREDENTIAL parser/schema, raw credential-format parser/output/schema, and duplicate C lifecycle writer are retired. Secret updates, non-UP/USK type creation, allow_insecure mutation, and target/scanner credential-link mutation remain explicitly inherited. Schedule execution and task coupling remain separately inherited until the manager-worker owns them. Finish the remaining retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
+notes = "Native user, alert, schedule, and scope metadata reads, exports where retained, and retained lifecycle operations are authoritative; their dedicated public GMP/XML transports are retired. Native credential list, detail, metadata export, secret-opaque live-to-trash lifecycle, SSH public-key retrieval, and bounded stored client-certificate retrieval are authoritative; stale public gsad metadata/delete/download aliases, the raw DELETE_CREDENTIAL parser/schema, raw credential-format parser/output/schema, and duplicate C lifecycle writer are retired. Native task live-to-trash and trash-only hard-delete contracts are authoritative; the obsolete browser-facing gsad delete_task adapter, declaration, dispatcher alias, and validator token are retired, while raw GMP DELETE_TASK handling and gvm-libs clients remain external compatibility surfaces. Secret updates, non-UP/USK type creation, allow_insecure mutation, and target/scanner credential-link mutation remain explicitly inherited. Schedule execution and task coupling remain separately inherited until the manager-worker owns them. Finish the remaining retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
 
 [[responsibilities]]
 id = "team-authority-permissions"
@@ -321,7 +322,7 @@ kind = "product"
 status = "inventoried"
 evidence = ["components/gsad/src/gsad_http_handler_functions.c::gsad_http_handle_gmp_get"]
 replacement = ["crud-query-api-surface"]
-notes = "The public user, alert, schedule, and browser task-start/task-stop bridges are retired. GSA keeps lowercase start_task and stop_task as capability vocabulary; alert execution and scheduled start/stop use the private authenticated gvmd Unix control command, while authenticated gvmd START_TASK and STOP_TASK handling plus gvm-libs clients remain live for external compatibility. Only the browser-facing gsad actions are retired; generic /gmp GET/POST routing and public GMP remain. Remove the remaining live /gmp GET/POST bridge after GSA has no legacy request path."
+notes = "The public user, alert, schedule, and browser task-delete/task-start/task-stop bridges are retired. GSA uses authenticated native DELETE /api/v1/tasks/{task_id} for live-to-trash and retains lowercase start_task and stop_task only as capability vocabulary; alert execution and scheduled start/stop use the private authenticated gvmd Unix control command. Authenticated gvmd DELETE_TASK, START_TASK, and STOP_TASK handling plus gvm-libs task-control clients remain live for external compatibility. Only the browser-facing gsad actions are retired; generic /gmp GET/POST routing and public GMP remain. Remove the remaining live /gmp GET/POST bridge after GSA has no legacy request path."
 
 [[callers]]
 id = "gsad-manager-socket-auth"

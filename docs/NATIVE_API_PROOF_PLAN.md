@@ -254,7 +254,9 @@ JSON for scriptable operator reads. Task clone uses gvmd's authoritative copy
 transaction through the private authenticated control socket and returns the
 committed native task detail without directly starting a scan. The source
 schedule and next-run state are retained, so a copied schedule can start the
-clone later when due. Task hard-delete, resume,
+clone later when due. Native task deletion moves eligible live tasks to trash;
+the separate native trash-only hard-delete route preserves owner, status/in-use,
+reference, transaction, tag, and result-evidence guards. Task resume,
 task file export, credential secret material, and remaining scanner-control
 semantics remain inherited. Scanner metadata list
 and safe socket/builtin detail page-load reads are browser-proxied, including
@@ -313,8 +315,10 @@ locations, rejects collisions and ownerless rows, and returns only redacted
 metadata. Credential hard-delete rejects trash target/scanner/alert-delivery
 references and destroys opaque secret rows without selecting or returning
 their values. The generic GSA/gsad GMP restore bridge and credential hard-delete
-compatibility branch are removed. Task permanent delete remains the bounded
-compatibility tail. Individual
+compatibility branch are removed. Task permanent delete is the bounded native
+trash-only contract; the browser-facing gsad `delete_task` adapter is
+retired while raw gvmd GMP `DELETE_TASK` and gvm-libs delete-task clients remain
+for external compatibility. Individual
 report-format restore and permanent delete are removed because gvmd has no
 retained command handler and restoration could resurrect a retired custom
 executable format; confirmed owner-scoped Trashcan emptying remains the

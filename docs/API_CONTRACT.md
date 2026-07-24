@@ -299,8 +299,8 @@ maximum severity, and timestamps. Task create, metadata patch, strict New-task
 target replacement, and safe live-to-trash moves are native. Task create validates and transactionally links
 an optional operator-owned schedule and up to five operator-owned alerts.
 Target replacement preserves retained target settings, credential links, and
-tags, refuses tasks with reports, and never starts a scan. Clone, hard-delete,
-resume, file export, config/scanner mutation, and other scanner-control actions
+tags, refuses tasks with reports, and never starts a scan. Resume, file
+export, config/scanner mutation, and other scanner-control actions
 remain inherited. The guarded
 `POST /api/v1/tasks/{task_id}/start` is available
 through direct native access and the authenticated browser proxy; it
@@ -313,6 +313,14 @@ start-task clients remain retained for external compatibility. Direct scriptable
 `GET /api/v1/tasks/{task_id}/export` returns
 the same read-only task detail JSON for metadata export; it does not replace
 legacy task file export or lifecycle control.
+
+GSA task deletion uses authenticated `DELETE /api/v1/tasks/{task_id}` to move
+an eligible live task to trash. `DELETE /api/v1/tasks/{task_id}/trash` is the
+separate trash-only permanent-delete contract. Both retain native owner,
+status/in-use, reference, transaction, tag, and result-evidence guards. The
+obsolete browser-facing gsad `delete_task` GMP adapter is absent; raw gvmd GMP
+`DELETE_TASK`, including `ultimate` semantics, and gvm-libs delete-task clients
+remain external compatibility surfaces.
 
 Native scanner metadata rows include scanner identity, host/socket, port,
 inherited scanner type, safe credential references, relay metadata, and

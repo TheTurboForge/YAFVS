@@ -30,7 +30,6 @@ gsad_init_validator ()
                      "|(delete_config)"
                      "|(delete_report)"
                      "|(delete_target)"
-                     "|(delete_task)"
                      "|(download_ssl_cert)"
                      "|(download_ca_pub)"
                      "|(download_key_pub)"

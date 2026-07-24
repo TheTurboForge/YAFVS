@@ -14,14 +14,39 @@ import {
 } from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
+import type Filter from 'gmp/models/filter';
 import Target from 'gmp/models/target';
 import {
+  deleteNativeTarget,
   exportNativeTargetsMetadata,
   fetchNativeTargets,
   nativeTargetQueryFromFilter,
 } from 'gmp/native-api/targets';
 
-const shouldExportAllByFilter = filter => {
+export class NativeTargetBulkDeleteError extends Error {
+  readonly deletedIds: readonly string[];
+  readonly failedId: string;
+  readonly pendingIds: readonly string[];
+
+  constructor(
+    deletedIds: string[],
+    failedId: string,
+    pendingIds: string[],
+    cause: unknown,
+  ) {
+    super(
+      `Native target bulk delete stopped at ${failedId} after deleting ${deletedIds.length} target(s).`,
+      {cause},
+    );
+    this.name = 'NativeTargetBulkDeleteError';
+    this.deletedIds = Object.freeze([...deletedIds]);
+    this.failedId = failedId;
+    this.pendingIds = Object.freeze([...pendingIds]);
+    Object.freeze(this);
+  }
+}
+
+const shouldApplyToAllFilteredTargets = (filter: Filter): boolean => {
   const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
   return Number.isFinite(rows) && rows < 0;
 };
@@ -31,6 +56,28 @@ const requireNativeTargetApi = (http: Http) => {
     throw new Error('Native target API is required for targets command');
   }
 };
+
+const requiredTargetId = (id: unknown, index: number): string => {
+  if (typeof id !== 'string' || id.trim().length === 0) {
+    throw new Error(`Native target deletion requires an ID at index ${index}`);
+  }
+  return id;
+};
+
+const requireUniqueTargetIds = (ids: readonly unknown[]): string[] => {
+  const validatedIds = ids.map(requiredTargetId);
+  const seenIds = new Set<string>();
+  for (const id of validatedIds) {
+    if (seenIds.has(id)) {
+      throw new Error(`Native target deletion received duplicate ID ${id}`);
+    }
+    seenIds.add(id);
+  }
+  return validatedIds;
+};
+
+const targetIds = (targets: Target[]): string[] =>
+  requireUniqueTargetIds(targets.map(target => target.id));
 
 class TargetsCommand extends EntitiesCommand<Target> {
   constructor(http: Http) {
@@ -93,7 +140,7 @@ class TargetsCommand extends EntitiesCommand<Target> {
   async exportByFilter(filter) {
     requireNativeTargetApi(this.http);
     const targets: Target[] = [];
-    if (shouldExportAllByFilter(filter)) {
+    if (shouldApplyToAllFilteredTargets(filter)) {
       let total = Number.POSITIVE_INFINITY;
       for (let page = 1; targets.length < total; page += 1) {
         const nativeResponse = await fetchNativeTargets(this.http, {
@@ -119,6 +166,96 @@ class TargetsCommand extends EntitiesCommand<Target> {
       this.http,
       targets.flatMap(target => (target.id === undefined ? [] : [target.id])),
     );
+  }
+
+  async delete(targets: Target[]) {
+    requireNativeTargetApi(this.http);
+    const ids = targetIds(targets);
+    await this.deleteIds(ids);
+    return new Response(targets);
+  }
+
+  async deleteByIds(ids: string[]) {
+    requireNativeTargetApi(this.http);
+    const validatedIds = requireUniqueTargetIds(ids);
+    return new Response(await this.deleteIds(validatedIds));
+  }
+
+  async deleteByFilter(filter: Filter) {
+    requireNativeTargetApi(this.http);
+    const targets: Target[] = [];
+    const query = nativeTargetQueryFromFilter(filter);
+
+    if (shouldApplyToAllFilteredTargets(filter)) {
+      let snapshotTotal: number | undefined;
+      const seenIds = new Set<string>();
+      for (let page = 1; ; page += 1) {
+        const nativeResponse = await fetchNativeTargets(this.http, {
+          ...query,
+          page,
+          pageSize: NATIVE_COMMAND_PAGE_SIZE,
+        });
+        if (snapshotTotal === undefined) {
+          snapshotTotal = nativeResponse.page.total;
+        } else if (nativeResponse.page.total !== snapshotTotal) {
+          throw new Error(
+            'Native target bulk delete preflight detected collection drift',
+          );
+        }
+        for (const target of nativeResponse.targets) {
+          const id = requiredTargetId(target.id, targets.length);
+          if (seenIds.has(id)) {
+            throw new Error(
+              'Native target bulk delete preflight detected duplicate-ID drift',
+            );
+          }
+          seenIds.add(id);
+          targets.push(target);
+        }
+        if (targets.length === snapshotTotal) {
+          break;
+        }
+        if (
+          nativeResponse.targets.length === 0 ||
+          targets.length > snapshotTotal ||
+          page >= snapshotTotal
+        ) {
+          throw new Error(
+            'Native target bulk delete preflight detected collection drift',
+          );
+        }
+      }
+      if (targets.length !== snapshotTotal) {
+        throw new Error(
+          'Native target bulk delete preflight detected collection drift',
+        );
+      }
+    } else {
+      const nativeResponse = await fetchNativeTargets(this.http, query);
+      targets.push(...nativeResponse.targets);
+    }
+
+    const ids = targetIds(targets);
+    await this.deleteIds(ids);
+    return new Response(targets);
+  }
+
+  private async deleteIds(ids: readonly string[]): Promise<string[]> {
+    const deletedIds: string[] = [];
+    for (const [index, id] of ids.entries()) {
+      try {
+        await deleteNativeTarget(this.http, id);
+        deletedIds.push(id);
+      } catch (cause) {
+        throw new NativeTargetBulkDeleteError(
+          deletedIds,
+          id,
+          ids.slice(index + 1),
+          cause,
+        );
+      }
+    }
+    return deletedIds;
   }
 }
 

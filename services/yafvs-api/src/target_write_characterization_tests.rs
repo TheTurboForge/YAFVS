@@ -10,10 +10,15 @@ const GSA_ENTITY_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/c
 const GSA_TARGET_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/target.ts");
 const GSA_TARGETS_COMMAND: &str =
     include_str!("../../../components/gsa/src/gmp/commands/targets.ts");
+const GSA_GMP: &str = include_str!("../../../components/gsa/src/gmp/gmp.ts");
 const GSA_NATIVE_TARGETS: &str =
     include_str!("../../../components/gsa/src/gmp/native-api/targets.ts");
+const GSA_ENTITIES_CONTAINER: &str =
+    include_str!("../../../components/gsa/src/web/entities/EntitiesContainer.tsx");
 const GSA_REPORT_DETAILS: &str =
     include_str!("../../../components/gsa/src/web/pages/reports/DetailsPage.tsx");
+const GSA_TARGET_LIST_PAGE: &str =
+    include_str!("../../../components/gsa/src/web/pages/targets/TargetListPage.tsx");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_GMP_H: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
@@ -54,17 +59,13 @@ fn target_reads_exports_and_acl_are_native_only_without_retiring_target_control(
     assert!(target_get.contains("fetchNativeTarget(this.http, id)"));
     assert!(!target_get.contains("super.get"));
     assert!(GSA_TARGET_COMMAND.contains("protected getElementFromRoot(): never"));
-    assert!(
-        GSA_TARGET_COMMAND
-            .contains("throw new Error('Target XML response parsing has been retired')")
-    );
+    assert!(GSA_TARGET_COMMAND
+        .contains("throw new Error('Target XML response parsing has been retired')"));
     assert!(!GSA_TARGET_COMMAND.contains("get_targets_response"));
     assert!(!GSA_TARGET_COMMAND.contains("cmd: 'get_target'"));
     assert!(GSA_TARGETS_COMMAND.contains("protected getEntitiesResponse(): never"));
-    assert!(
-        GSA_TARGETS_COMMAND
-            .contains("throw new Error('Target XML collection parsing has been retired')")
-    );
+    assert!(GSA_TARGETS_COMMAND
+        .contains("throw new Error('Target XML collection parsing has been retired')"));
     assert!(!GSA_TARGETS_COMMAND.contains("get_targets_response"));
     assert!(!GSA_REPORT_DETAILS.contains("gmp.target.get"));
 
@@ -478,6 +479,59 @@ fn target_delete_is_native_only_while_raw_gmp_and_create_save_bridges_remain() {
     assert!(GSA_TARGET_COMMAND.contains("requireNativeTargetApi(this.http)"));
     assert!(GSA_TARGET_COMMAND.contains("cloneNativeTarget(this.http, id)"));
     assert!(!GSA_TARGET_COMMAND.contains("super.clone({id})"));
+
+    assert!(GSA_TARGET_LIST_PAGE.contains("withEntitiesContainer<Target>('target'"));
+    assert!(GSA_ENTITIES_CONTAINER.contains("const entitiesCommandName = pluralizeType(gmpName)"));
+    assert!(GSA_ENTITIES_CONTAINER.contains("this.entitiesCommand = gmp[entitiesCommandName]"));
+    for live_collection_delete in [
+        "entitiesCommand.delete(Array.from(selected as Set<TModel>))",
+        "entitiesCommand.deleteByFilter(loadedFilter as Filter)",
+        "entitiesCommand.deleteByFilter((loadedFilter as Filter).all())",
+    ] {
+        assert!(
+            GSA_ENTITIES_CONTAINER.contains(live_collection_delete),
+            "live target collection path missing {live_collection_delete}"
+        );
+    }
+    assert!(GSA_GMP.contains("public readonly targets: TargetsCommand"));
+    assert!(GSA_GMP.contains("this.targets = new TargetsCommand(this.http)"));
+
+    let delete_targets = GSA_TARGETS_COMMAND
+        .split_once("  async delete(targets: Target[])")
+        .expect("TargetsCommand delete method must exist")
+        .1
+        .split_once("  async deleteByIds(ids: string[])")
+        .expect("TargetsCommand delete method must end before deleteByIds")
+        .0;
+    let delete_target_ids = GSA_TARGETS_COMMAND
+        .split_once("  async deleteByIds(ids: string[])")
+        .expect("TargetsCommand deleteByIds method must exist")
+        .1
+        .split_once("  async deleteByFilter(filter: Filter)")
+        .expect("TargetsCommand deleteByIds method must end before deleteByFilter")
+        .0;
+    let delete_targets_by_filter = GSA_TARGETS_COMMAND
+        .split_once("  async deleteByFilter(filter: Filter)")
+        .expect("TargetsCommand deleteByFilter method must exist")
+        .1
+        .split_once("  private async deleteIds")
+        .expect("TargetsCommand deleteByFilter method must end before deleteIds")
+        .0;
+    for (name, method) in [
+        ("delete", delete_targets),
+        ("deleteByIds", delete_target_ids),
+        ("deleteByFilter", delete_targets_by_filter),
+    ] {
+        assert!(method.contains("requireNativeTargetApi(this.http)"));
+        assert!(method.contains("this.deleteIds("));
+        assert!(
+            !method.contains("super."),
+            "TargetsCommand {name} calls super"
+        );
+    }
+    assert!(GSA_TARGETS_COMMAND.contains("deleteNativeTarget(this.http, id)"));
+    assert!(!GSA_TARGETS_COMMAND.contains("bulk_delete"));
+    assert!(!GSA_TARGETS_COMMAND.contains("super.delete"));
 
     let delete_gsa = GSA_TARGET_COMMAND
         .split_once("async delete({id}: EntityCommandParams)")

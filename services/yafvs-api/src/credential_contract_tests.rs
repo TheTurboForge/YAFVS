@@ -352,6 +352,64 @@ fn credential_clone_uses_native_secret_opaque_contract() {
 }
 
 #[test]
+fn browser_credential_handlers_omit_allow_insecure_while_raw_gmp_support_remains() {
+    let create = GSAD_GMP_C
+        .split_once("create_credential_gmp (")
+        .expect("browser credential-create handler")
+        .1
+        .split_once("save_credential_gmp (")
+        .expect("browser credential-create handler boundary")
+        .0;
+    let save = GSAD_GMP_C
+        .split_once("save_credential_gmp (")
+        .expect("browser credential-save handler")
+        .1
+        .split_once("\n/**")
+        .expect("browser credential-save handler boundary")
+        .0;
+    for (handler, source) in [("create", create), ("save", save)] {
+        assert!(
+            !source.contains("<allow_insecure>"),
+            "browser credential {handler} handler must not silently emit allow_insecure"
+        );
+    }
+
+    for command in ["create_credential", "modify_credential"] {
+        let schema = GMP_SCHEMA
+            .split_once(&format!("<name>{command}</name>"))
+            .expect("retained raw GMP credential command")
+            .1
+            .split_once("</command>")
+            .expect("raw GMP credential command boundary")
+            .0;
+        assert!(
+            schema.contains("<o><e>allow_insecure</e></o>"),
+            "raw GMP {command} compatibility schema must retain explicit allow_insecure"
+        );
+    }
+    for parser_marker in [
+        "APPEND (CLIENT_CREATE_CREDENTIAL_ALLOW_INSECURE,",
+        "APPEND (CLIENT_MODIFY_CREDENTIAL_ALLOW_INSECURE,",
+    ] {
+        assert!(
+            GVMD_GMP_C.contains(parser_marker),
+            "raw gvmd/GMP parser must retain explicit compatibility marker: {parser_marker}"
+        );
+    }
+    for sql_marker in [
+        "const char* given_type, const char* allow_insecure,",
+        "const char* allow_insecure)",
+        "UPDATE credentials SET allow_insecure = 1",
+        "UPDATE credentials SET allow_insecure = 0",
+    ] {
+        assert!(
+            GVMD_MANAGE_SQL.contains(sql_marker),
+            "manage_sql must retain explicit raw compatibility support: {sql_marker}"
+        );
+    }
+}
+
+#[test]
 fn credential_list_supports_exact_type_filter_and_redacted_smb_proof() {
     let sql = credential_assets_sql("name ASC");
     assert!(sql.contains("credential_type = $4"));

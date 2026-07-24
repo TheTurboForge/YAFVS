@@ -1591,7 +1591,6 @@ create_credential_gmp (gvm_connection_t *connection,
                       "<name>%s</name>"
                       "<comment>%s</comment>"
                       "<type>%s</type>"
-                      "<allow_insecure>1</allow_insecure>"
                       "</create_credential>",
                       name, comment ? comment : "", type);
         }
@@ -1606,7 +1605,6 @@ create_credential_gmp (gvm_connection_t *connection,
                       "<comment>%s</comment>"
                       "<type>%s</type>"
                       "<login>%s</login>"
-                      "<allow_insecure>1</allow_insecure>"
                       "</create_credential>",
                       name, comment ? comment : "", type, credential_login);
         }
@@ -1625,7 +1623,6 @@ create_credential_gmp (gvm_connection_t *connection,
                       "<type>%s</type>"
                       "<login>%s</login>"
                       "<password>%s</password>"
-                      "<allow_insecure>1</allow_insecure>"
                       "</create_credential>",
                       name, comment ? comment : "", type,
                       credential_login ? credential_login : "",
@@ -1694,7 +1691,6 @@ create_credential_gmp (gvm_connection_t *connection,
             "%s" // login and password block
             "%s" // kdcs or kdc block
             "<realm>%s</realm>"
-            "<allow_insecure>1</allow_insecure>"
             "</create_credential>",
             name_esc, comment_esc, type_esc,
             login_password_xml->str ? login_password_xml->str : "",
@@ -1730,7 +1726,6 @@ create_credential_gmp (gvm_connection_t *connection,
                       "<private>%s</private>"
                       "<phrase>%s</phrase>"
                       "</key>"
-                      "<allow_insecure>1</allow_insecure>"
                       "</create_credential>",
                       name, comment ? comment : "", type, credential_login,
                       private_key, passphrase ? passphrase : "");
@@ -1752,7 +1747,6 @@ create_credential_gmp (gvm_connection_t *connection,
             "<private>%s</private>"
             "<phrase>%s</phrase>"
             "</key>"
-            "<allow_insecure>1</allow_insecure>"
             "</create_credential>",
             name, comment ? comment : "", type, certificate ? certificate : "",
             private_key ? private_key : "", passphrase ? passphrase : "");
@@ -1780,7 +1774,6 @@ create_credential_gmp (gvm_connection_t *connection,
                         "<algorithm>%s</algorithm>"
                         "</privacy>"
                         "<auth_algorithm>%s</auth_algorithm>"
-                        "<allow_insecure>1</allow_insecure>"
                         "</create_credential>",
                         name, comment ? comment : "", type,
                         community ? community : "",
@@ -1800,7 +1793,6 @@ create_credential_gmp (gvm_connection_t *connection,
               "<login>%s</login>"
               "<password>%s</password>"
               "<auth_algorithm>%s</auth_algorithm>"
-              "<allow_insecure>1</allow_insecure>"
               "</create_credential>",
               name, comment ? comment : "", type, community ? community : "",
               credential_login ? credential_login : "",
@@ -1818,7 +1810,6 @@ create_credential_gmp (gvm_connection_t *connection,
                       "<key>"
                       "<public>%s</public>"
                       "</key>"
-                      "<allow_insecure>1</allow_insecure>"
                       "</create_credential>",
                       name, comment ? comment : "", type, public_key);
         }
@@ -1832,7 +1823,6 @@ create_credential_gmp (gvm_connection_t *connection,
                       "<comment>%s</comment>"
                       "<type>%s</type>"
                       "<certificate>%s</certificate>"
-                      "<allow_insecure>1</allow_insecure>"
                       "</create_credential>",
                       name, comment ? comment : "", type, certificate);
         }
@@ -1847,7 +1837,6 @@ create_credential_gmp (gvm_connection_t *connection,
                   "<comment>%s</comment>"
                   "<type>%s</type>"
                   "<password>%s</password>"
-                  "<allow_insecure>1</allow_insecure>"
                   "</create_credential>",
                   name, comment ? comment : "", type, password ? password : "");
         }
@@ -2022,8 +2011,7 @@ save_credential_gmp (gvm_connection_t *connection,
   xml_string_append (command,
                      "<modify_credential credential_id=\"%s\">"
                      "<name>%s</name>"
-                     "<comment>%s</comment>"
-                     "<allow_insecure>1</allow_insecure>",
+                     "<comment>%s</comment>",
                      credential_id, name, comment);
 
   if (str_equal (type, "snmp"))

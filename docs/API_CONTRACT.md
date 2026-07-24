@@ -124,6 +124,11 @@ reads plus explicitly gated write-control routes, and bound explicitly by the
 runtime helper. Production exposure still needs the separate TLS/bootstrap/
 host-binding posture tracked outside this development API.
 
+Browser credential creation omits `allow_insecure`, so manager default `false`
+applies. Browser metadata and secret saves also omit the field and therefore
+preserve the stored value; existing credential rows are not changed. Explicit
+raw gvmd/GMP `allow_insecure` mutation remains inherited compatibility behavior.
+
 ## Common Contract Rules
 
 - Base path: `/api/v1`.

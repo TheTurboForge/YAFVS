@@ -127,6 +127,13 @@ the authenticated same-origin `gsad` proxy defined in
 | Retired gvm-tools write/control scripts | Imported GMP scripts for generation or scanner/control workflows | Typed native write/control APIs plus bounded `yafvsctl` compositions | All tracked scripts are removed. Retained behavior is native; non-retained compatibility behavior stays deleted. |
 | Direct scriptable operator API | Authenticated native reads and guarded writes are exposed through the direct development listener and YAFVS-owned helpers. | Authenticated `/api/v1` access usable by `curl`, generated OpenAPI clients, and YAFVS-owned automation without GSA, `gsad`, GMP/XML, `python-gvm`, or `gvm-tools` as required interfaces. | Continue production TLS/host-binding/audit hardening and remaining workflow-owner replacement under their explicit contracts. |
 
+## Browser Credential Security Boundary
+
+Browser credential creation omits `allow_insecure`, so manager default `false`
+applies. Browser metadata and secret saves also omit the field and preserve the
+stored value; existing credential rows are unchanged. Explicit raw gvmd/GMP
+`allow_insecure` mutation remains inherited compatibility behavior.
+
 ## Expansion Rule
 
 Every native API expansion must state which inherited path it replaces, which

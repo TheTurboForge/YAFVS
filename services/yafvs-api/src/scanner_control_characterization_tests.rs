@@ -28,6 +28,7 @@ const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_forma
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 const SCANNER_WRITE_SQL: &str = include_str!("scanner_write_sql.rs");
 const SCANNER_WRITE_VALIDATION: &str = include_str!("scanner_write_validation.rs");
+const SCANNER_VERIFY: &str = include_str!("scanner_verify.rs");
 
 fn repository_path(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -120,8 +121,12 @@ fn automatic_scanner_relay_options_modules_and_subprocess_path_stay_deleted() {
         "OpenAPI still claims deleted relay-file synchronization is inherited"
     );
     assert!(
-        OPENAPI.contains("Remote TLS/relay verification remains inherited."),
-        "OpenAPI lost the retained remote verification boundary"
+        !OPENAPI.contains("Remote TLS/relay verification remains inherited."),
+        "OpenAPI still claims the deleted gvmd manual verifier is inherited"
+    );
+    assert!(
+        OPENAPI.contains("configured remote, TLS, and relay scan dispatch remains separate"),
+        "OpenAPI lost the separate configured remote scan-dispatch boundary"
     );
 }
 
@@ -188,7 +193,7 @@ fn explicit_native_relay_fields_and_direct_osp_connections_remain() {
 }
 
 #[test]
-fn retired_cli_and_protocol_scanner_commands_stay_absent_while_verify_remains() {
+fn retired_cli_and_protocol_scanner_commands_stay_absent_while_native_verify_remains() {
     for retired in [
         "--create-scanner",
         "--modify-scanner",
@@ -209,6 +214,8 @@ fn retired_cli_and_protocol_scanner_commands_stay_absent_while_verify_remains() 
         "manage_modify_scanner",
         "manage_delete_scanner",
         "manage_get_scanners",
+        "verify-scanner",
+        "manage_verify_scanner",
     ] {
         assert!(
             !GVMD_C.contains(retired),
@@ -224,6 +231,8 @@ fn retired_cli_and_protocol_scanner_commands_stay_absent_while_verify_remains() 
         "modify_scanner (",
         "delete_scanner (",
         "insert_scanner (",
+        "manage_verify_scanner (",
+        "verify_scanner (",
     ] {
         assert!(
             !MANAGE_H.contains(retired),
@@ -234,12 +243,11 @@ fn retired_cli_and_protocol_scanner_commands_stay_absent_while_verify_remains() 
             "manage_sql.c still defines or calls {retired}"
         );
     }
-    assert!(GVMD_C.contains("\"verify-scanner\""));
-    assert!(GVMD_C.contains("manage_verify_scanner ("));
-    assert!(MANAGE_H.contains("manage_verify_scanner ("));
-    assert!(MANAGE_H.contains("verify_scanner ("));
-    assert!(MANAGE_SQL_C.contains("manage_verify_scanner ("));
-    assert!(MANAGE_SQL_C.contains("verify_scanner ("));
+    for source in [GVMD_C, MANAGE_H, MANAGE_SQL_C, GVMD_MANPAGE_XML] {
+        assert!(!source.contains("verify-scanner"));
+        assert!(!source.contains("manage_verify_scanner"));
+        assert!(!source.contains("verify_scanner ("));
+    }
 }
 
 fn openapi_path_block(path: &str) -> String {
@@ -262,22 +270,20 @@ fn openapi_path_block(path: &str) -> String {
 }
 
 #[test]
-fn inherited_verify_scanner_can_contact_osp_scanners_and_maps_other_types() {
-    let verify = inherited_function(MANAGE_SQL_C, "verify_scanner");
+fn native_verify_scanner_retains_the_authoritative_bounded_type_mapping() {
     for required in [
-        "acl_user_may (\"verify_scanner\") == 0",
-        "init_scanner_iterator (&scanner, &get)",
-        "scanner_iterator_type (&scanner) == SCANNER_TYPE_OPENVAS",
-        "scanner_iterator_type (&scanner) == SCANNER_TYPE_OSP_SENSOR",
-        "osp_get_version_from_iterator",
-        "SCANNER_TYPE_OPENVASD",
-        "SCANNER_TYPE_OPENVASD_SENSOR",
-        "SCANNER_TYPE_CVE",
-        "g_strdup (\"GVM/\" GVMD_VERSION)",
+        "SCANNER_TYPE_OPENVAS | SCANNER_TYPE_OSP_SENSOR => verify_osp_scanner",
+        "SCANNER_TYPE_OPENVASD | SCANNER_TYPE_OPENVASD_SENSOR",
+        "\"openvasd-no-contact\"",
+        "SCANNER_TYPE_CVE => Ok(no_contact_verify_result",
+        "\"cve-builtin\"",
+        "canonical_osp_verify_socket_path",
+        "OSP_GET_VERSION_TIMEOUT: Duration = Duration::from_secs(10)",
+        "OSP_MAX_RESPONSE_BYTES: usize = 64 * 1024",
     ] {
         assert!(
-            verify.contains(required),
-            "verify_scanner missing {required}"
+            SCANNER_VERIFY.contains(required),
+            "native scanner verification missing {required}"
         );
     }
 }
@@ -572,7 +578,6 @@ fn openapi_documents_complete_native_scanner_lifecycle_and_verify_boundary() {
         "post:",
         "operationId: postScannersByScannerIdVerify",
         "x-yafvs-exposure: direct-write",
-        "x-yafvs-inherited-still-owns: remote-scanner-tls-relay-verification",
         "x-yafvs-maturity: live-control",
         "x-yafvs-replaces: scanner-verify",
         "x-yafvs-operator-identity: direct-token-operator",
@@ -580,14 +585,17 @@ fn openapi_documents_complete_native_scanner_lifecycle_and_verify_boundary() {
         "x-yafvs-safety-contract: write-control-v1",
         "x-yafvs-side-effect: scanner-control",
         "$ref: '#/components/schemas/ScannerVerifyResult'",
-        "local Unix-socket OSP scanners",
-        "Remote, TLS, TCP, relay",
+        "retained manual verification",
+        "local Unix-socket scanner",
+        "obsolete gvmd manual remote verifier is deleted",
+        "Configured remote, TLS, and relay scan dispatch remains separate and unchanged",
     ] {
         assert!(
             verify.contains(required),
             "scanner verify OpenAPI block missing {required}"
         );
     }
+    assert!(!verify.contains("x-yafvs-inherited-still-owns"));
     for forbidden in ["\n    get:", "\n    patch:", "\n    delete:"] {
         assert!(
             !verify.contains(forbidden),

@@ -1940,12 +1940,11 @@ class YAFVSCtlTests(unittest.TestCase):
             "--no-default-certs",
         ):
             self.assertNotIn(retired, gvmd_cli)
-        for retained in ("verify_scanner (", "manage_verify_scanner ("):
-            self.assertIn(retained, manage_sql)
-        self.assertIn("manage_verify_scanner (", manage_h)
-        self.assertIn("verify_scanner (", manage_h)
-        self.assertIn("\"verify-scanner\"", gvmd_cli)
-        self.assertIn("ret = manage_verify_scanner (", gvmd_cli)
+        for retired in ("verify_scanner (", "manage_verify_scanner ("):
+            self.assertNotIn(retired, manage_sql)
+            self.assertNotIn(retired, manage_h)
+        self.assertNotIn("\"verify-scanner\"", gvmd_cli)
+        self.assertNotIn("manage_verify_scanner", gvmd_cli)
         gsad_source = retired_sources["gsad dispatch"].read_text(encoding="utf-8")
         gvmd_source = retired_sources["gvmd parser"].read_text(encoding="utf-8")
         for retired in (
@@ -5012,7 +5011,6 @@ class YAFVSCtlTests(unittest.TestCase):
          'operating-system-writes-deletes-and-rich-history',
          'raw-gmp-alert-trash-control',
          'raw-report-generation-non-pdf-export-retention-and-mutations',
-         'remote-scanner-tls-relay-verification',
          'report-format-file-import-export-verify-param-writes-and-deletes',
          'retention-mutations',
          'schedule-calendar-edit-and-task-recalculation',

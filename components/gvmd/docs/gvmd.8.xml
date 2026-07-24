@@ -452,12 +452,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       </optdesc>
     </option>
     <option>
-      <p><opt>--verify-scanner=<arg>SCANNER-UUID</arg></opt></p>
-      <optdesc>
-        <p>Verify scanner SCANNER-UUID and exit.</p>
-      </optdesc>
-    </option>
-    <option>
       <p><opt>--version</opt></p>
       <optdesc>
         <p>Print version and exit.</p>

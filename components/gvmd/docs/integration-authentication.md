@@ -34,9 +34,10 @@ YAFVS native scanner configuration owns scanner endpoint, relay, and
 certificate references. Use the authenticated native full-configuration
 replacement contract documented in the
 [YAFVS API contract](../../../docs/API_CONTRACT.md); the removed `gvmd`
-scanner mutation options cannot configure these values. Remote TLS/relay
-verification and external relay-file synchronization remain inherited
-compatibility behavior.
+scanner mutation and manual verification options cannot configure or probe
+these values. Configured remote, TLS, and relay scan dispatch remains separate
+from bounded native local verification. The obsolete automatic relay-file
+synchronization path is deleted.
 
 ---
 

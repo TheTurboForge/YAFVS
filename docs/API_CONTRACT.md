@@ -318,13 +318,13 @@ omitting, nulling, or blanking relay_host clears an existing relay. Clone copies
 the retained scanner configuration and active tag links but intentionally
 initializes relay configuration empty; trash and restore preserve relay fields
 losslessly. Live non-hidden task references block trash, and trash-side task
-references block hard-delete. Inherited paths remain only for remote TLS/relay
-verification, external relay-file synchronization, credential/certificate
-download context, legacy file export/download formats, and deeper scanner-control
-behavior. The browser-side, GMP/XML, and gvmd CLI scanner read/export and
-create/copy/modify/delete commands are removed. Retained manager internals own only the explicitly
-listed verification and relay-file synchronization compatibility behavior until
-those responsibilities migrate. Direct scriptable
+references block hard-delete. Inherited paths remain only for
+credential/certificate download context, legacy file export/download formats,
+and deeper scanner-control behavior. The browser-side, GMP/XML, and gvmd CLI
+scanner read/export, create/copy/modify/delete, and duplicate manual verification
+commands are removed. Native bounded local verification owns the retained
+manual workflow; configured remote, TLS, and relay scan dispatch remains
+separate. Direct scriptable
 `GET /api/v1/scanners/{scanner_id}/export` returns the same redacted scanner
 detail JSON for metadata export; it does not replace legacy scanner file export
 or scanner-control behavior. Native scanner reads do not expose credential

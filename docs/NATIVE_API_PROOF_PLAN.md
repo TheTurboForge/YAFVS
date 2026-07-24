@@ -107,9 +107,11 @@ Scanner detail now reads native metadata, active User Tags, and non-hidden task
 backlinks through the authenticated `gsad` proxy for safe socket/builtin
 page-load reads. Native write-control now owns create, metadata/configuration
 edit, clone, trash, restore, hard-delete, and bounded local verification.
-Inherited compatibility remains for remote TLS/relay verification, legacy file
-export/download formats, credential/certificate download context, and deeper
-scanner-control behavior.
+The duplicate gvmd manual verifier is deleted. Native bounded local verification
+owns the retained manual workflow; configured remote, TLS, and relay scan
+dispatch remains separate and unchanged. Legacy file export/download formats,
+credential/certificate download context, and deeper scanner-control behavior
+remain inherited.
 Scan Config detail Information fields, active User Tags, and shallow non-hidden
 task backlinks now read native metadata through the authenticated `gsad` proxy
 while inherited GMP context still owns scanner/NVT preferences, selector/family
@@ -242,12 +244,13 @@ active User Tags and non-hidden task backlinks. Native create and full
 configuration replacement validate and store relay configuration; clone
 intentionally omits relay configuration. Direct scanner metadata export reuses
 the same redacted detail JSON for scriptable operator reads. Remote scanner
-certificate context, remote TLS/relay verification, external relay-file
-synchronization, legacy file export/download, credential/certificate download
-context, and deeper scanner control remain inherited. Browser, GMP/XML, and
-gvmd CLI scanner reads, metadata exports, and lifecycle mutations are removed;
-native Rust owns the retained scanner registry behavior. The retained gvmd verification path and external relay-file
-synchronization remain inherited compatibility behavior.
+certificate context, legacy file export/download, credential/certificate
+download context, and deeper scanner control remain inherited. Browser,
+GMP/XML, and gvmd CLI scanner reads, metadata exports, lifecycle mutations,
+and the duplicate manual verifier are removed;
+native Rust owns the retained scanner registry behavior and bounded local
+verification. Configured remote, TLS, and relay scan dispatch remains separate
+and unchanged.
 Port-list list/detail reads are browser-proxied, including port ranges and target
 backlinks. Port-list typed create, metadata/range update, clone, trash, restore,
 hard-delete, and exported-XML import with explicit TCP/UDP ranges are native

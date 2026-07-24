@@ -18108,58 +18108,6 @@ nvt_exists (const char* nvt)
 
 
 /**
- * @brief Verify the given scanner.
- *
- * @param[in]  log_config  Log configuration.
- * @param[in]  database    Location of manage database.
- * @param[in]  uuid        UUID of scanner.
- *
- * @return 0 success, -1 failure.
- */
-int
-manage_verify_scanner (GSList *log_config, const db_conn_info_t *database,
-                       const gchar *uuid)
-{
-  int ret;
-  char *version;
-
-  assert (uuid);
-
-  g_info ("   Verifying scanner.");
-
-  ret = manage_option_setup (log_config, database,
-                             0 /* avoid_db_check_inserts */);
-  if (ret)
-    return -1;
-
-  current_credentials.uuid = "";
-  switch ((ret = verify_scanner (uuid, &version)))
-    {
-      case 0:
-        printf ("Scanner version: %s.\n", version);
-        g_free (version);
-        break;
-      case 1:
-        fprintf (stderr, "Failed to find scanner.\n");
-        break;
-      case 2:
-        fprintf (stderr, "Failed to verify scanner.\n");
-        break;
-      case 3:
-        fprintf (stderr, "Failed to authenticate. Scanner version: %s\n",
-                 version);
-        break;
-      default:
-        fprintf (stderr, "Internal Error.\n");
-        break;
-    }
-  current_credentials.uuid = NULL;
-
-  manage_option_cleanup ();
-  return ret ? -1 : 0;
-}
-
-/**
  * @brief Find a scanner for a specific permission, given a UUID.
  *
  * @param[in]   uuid        UUID of scanner.
@@ -18960,58 +18908,6 @@ openvasd_get_details_from_iterator (iterator_t *iterator, char **desc,
   return 0;
 }
 #endif
-
-/**
- * @brief Verify a scanner.
- *
- * @param[in]   scanner_id  Scanner UUID.
- * @param[out]  version     Version returned by the scanner.
- *
- * @return 0 success, 1 failed to find scanner, 2 failed to get version,
- *         3 authentication failed, 99 if permission denied, -1 error.
- */
-int
-verify_scanner (const char *scanner_id, char **version)
-{
-  get_data_t get;
-  iterator_t scanner;
-
-  if (acl_user_may ("verify_scanner") == 0)
-    return 99;
-  memset (&get, '\0', sizeof (get));
-  get.id = g_strdup (scanner_id);
-  if (init_scanner_iterator (&scanner, &get) || !next (&scanner))
-    {
-      g_free (get.id);
-      return 1;
-    }
-  g_free (get.id);
-  if (scanner_iterator_type (&scanner) == SCANNER_TYPE_OPENVAS
-      || scanner_iterator_type (&scanner) == SCANNER_TYPE_OSP_SENSOR)
-    {
-      int ret = osp_get_version_from_iterator (&scanner, NULL, version, NULL,
-                                               NULL, NULL, NULL);
-      cleanup_iterator (&scanner);
-      if (ret)
-        return 2;
-      return 0;
-    }
-  else if (scanner_iterator_type (&scanner) == SCANNER_TYPE_OPENVASD
-      || scanner_iterator_type (&scanner) == SCANNER_TYPE_OPENVASD_SENSOR)
-    {
-      cleanup_iterator (&scanner);
-      return 0;
-    }
-  else if (scanner_iterator_type (&scanner) == SCANNER_TYPE_CVE)
-    {
-      if (version)
-        *version = g_strdup ("GVM/" GVMD_VERSION);
-      cleanup_iterator (&scanner);
-      return 0;
-    }
-  assert (0);
-  return -1;
-}
 
 /* Schema. */
 

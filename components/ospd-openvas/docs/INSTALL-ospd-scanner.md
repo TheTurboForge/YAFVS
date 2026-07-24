@@ -109,9 +109,10 @@ native write-control contract.
 
 Confirm registration through authenticated `GET /api/v1/scanners`. When direct
 write-control is enabled, `POST /api/v1/scanners/{scanner_id}/verify` provides
-the bounded native probe for local Unix-socket scanners. The retained
-`gvmd --verify-scanner` compatibility path is limited to remote TLS/relay
-verification until that responsibility migrates.
+the bounded native probe for local Unix-socket scanners. The duplicate gvmd
+manual verifier is deleted. Native bounded local verification owns the retained
+manual workflow; configured remote, TLS, and relay scan dispatch remains
+separate and unchanged.
 
 Use the native scanner configuration contract rather than GMP/XML or the removed gvmd mutation options when registering an OSP scanner.
 

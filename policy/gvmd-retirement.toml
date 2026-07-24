@@ -236,18 +236,19 @@ notes = "Move retained event evaluation and delivery methods behind an explicit 
 [[responsibilities]]
 id = "scanner-registry-capability"
 target_owner = "scanner"
-status = "migrating"
+status = "native-owned"
 weight = 3
 evidence = [
   "services/yafvs-api/src/scanner_writes.rs::create_scanner",
   "services/yafvs-api/src/scanner_writes.rs::clone_scanner",
-  "tools/tests/test_yafvsctl.py::def test_legacy_scanner_mutation_and_verify_commands_are_removed_full_stack",
-  "services/yafvs-api/src/scanner_control_characterization_tests.rs::retired_cli_and_protocol_scanner_commands_stay_absent_while_verify_remains",
-  "components/gvmd/src/manage_sql.c::verify_scanner",
+  "services/yafvs-api/src/scanner_verify_tests.rs::canonical_osp_verify_socket_accepts_a_contained_unix_socket",
+  "services/yafvs-api/src/scanner_verify_tests.rs::canonical_osp_verify_socket_rejects_an_in_directory_symlink_to_an_outside_socket",
+  "services/yafvs-api/src/scanner_control_characterization_tests.rs::retired_cli_and_protocol_scanner_commands_stay_absent_while_native_verify_remains",
+  "tools/tests/test_yafvsctl.py::test_legacy_scanner_mutation_and_verify_commands_are_removed_full_stack",
 ]
 independent_authority = ["components/gvmd/src/manage.h::SCANNER_TYPE_OPENVAS = 2"]
 dependencies = ["manager-coded-semantics"]
-notes = "Rust owns scanner registry reads, metadata export, lifecycle mutations, and bounded local verification. Browser and GMP/XML read/export/mutation/verification surfaces plus duplicate gvmd CLI scanner listing and mutation writers are retired. The lower-level manager CLI verifier remains for remote TLS/relay compatibility, while external relay-file synchronization and deeper capability discovery remain inherited, so this responsibility stays migrating."
+notes = "Rust owns scanner registry CRUD, metadata, and bounded local verification. The obsolete gvmd manual remote verifier is deleted. Configured remote, TLS, and relay scan dispatch plus deeper scan lifecycle behavior are separately tracked and are not claimed by this responsibility."
 
 [[responsibilities]]
 id = "feed-sync-generation"

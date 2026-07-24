@@ -1830,9 +1830,6 @@ credential_encrypted_value (credential_t, const char*);
  */
 #define SCANNER_CONNECTION_RETRY_DEFAULT 3
 
-int
-manage_verify_scanner (GSList *, const db_conn_info_t *, const gchar *);
-
 gboolean
 find_scanner_with_permission (const char *, scanner_t *, const char *);
 
@@ -1956,9 +1953,6 @@ get_scanner_connection_retry ();
 
 void
 set_scanner_connection_retry (int);
-
-int
-verify_scanner (const char *, char **);
 
 /* Scheduling. */
 /**

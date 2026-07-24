@@ -2224,7 +2224,6 @@ gvmd (int argc, char** argv, char *env[])
   static int secinfo_fast_init = SECINFO_FAST_INIT_DEFAULT;
   static int secinfo_commit_size = SECINFO_COMMIT_SIZE_DEFAULT;
   static int secinfo_update_strategy = 0;
-  static gchar *verify_scanner = NULL;
   static gchar *priorities = "NORMAL";
   static gchar *dh_params = NULL;
   static gboolean ldap_debug = FALSE;
@@ -2616,10 +2615,6 @@ gvmd (int argc, char** argv, char *env[])
           &verbose,
           "Has no effect.  See INSTALL.md for logging config.",
           NULL },
-        { "verify-scanner", '\0', 0, G_OPTION_ARG_STRING,
-          &verify_scanner,
-          "Verify scanner <scanner-uuid> and exit.",
-          "<scanner-uuid>" },
         { "version", '\0', 0, G_OPTION_ARG_NONE,
           &print_version,
           "Print version and exit.",
@@ -3292,22 +3287,6 @@ gvmd (int argc, char** argv, char *env[])
         return EXIT_FAILURE;
 
       ret = manage_delete_user (log_config, &database, delete_user, inheritor);
-      log_config_free ();
-      if (ret)
-        return EXIT_FAILURE;
-      return EXIT_SUCCESS;
-    }
-
-  if (verify_scanner)
-    {
-      int ret;
-
-      setproctitle ("Verifying scanner");
-
-      if (option_lock (&lockfile_checking))
-        return EXIT_FAILURE;
-
-      ret = manage_verify_scanner (log_config, &database, verify_scanner);
       log_config_free ();
       if (ret)
         return EXIT_FAILURE;

@@ -1372,7 +1372,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-configuration-write
       summary: Create an operator-owned scanner
-      description: Creates one scanner configuration owned by the authenticated operator without contacting or verifying the scanner. Supported scanner types are 2, 5, 6, and 8; type 3 CVE scanners cannot be created. Network scanners require a valid host and port plus optional CA certificate and a human-owned certificate credential visible to the trusted operator team. Unix socket scanners store port 0 and clear CA and credential fields. Relay configuration is validated and stored as part of this request; omitting it creates no relay. Remote TLS/relay verification remains inherited.
+      description: Creates one scanner configuration owned by the authenticated operator without contacting or verifying the scanner. Supported scanner types are 2, 5, 6, and 8; type 3 CVE scanners cannot be created. Network scanners require a valid host and port plus optional CA certificate and a human-owned certificate credential visible to the trusted operator team. Unix socket scanners store port 0 and clear CA and credential fields. Relay configuration is validated and stored as part of this request; omitting it creates no relay. Bounded manual verification is a separate native operation for local Unix-socket scanners; configured remote, TLS, and relay scan dispatch remains separate.
       requestBody:
         required: true
         content:
@@ -1555,7 +1555,9 @@ paths:
         configurations store port 0 and clear CA and credential fields. Relay
         configuration is fully replaced: omitting, setting null, or sending a
         blank relay_host clears an existing relay and requires relay_port 0.
-        Remote TLS/relay verification remains inherited.
+        Bounded manual verification is a separate native operation for local
+        Unix-socket scanners; configured remote, TLS, and relay scan dispatch
+        remains separate.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       requestBody:
@@ -1733,15 +1735,14 @@ paths:
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
       x-yafvs-profile: shared-write
-      x-yafvs-inherited-still-owns: remote-scanner-tls-relay-verification
       x-yafvs-maturity: live-control
       x-yafvs-replaces: scanner-verify
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: no-owner-state
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-control
-      summary: Verify a scanner through a bounded native control probe
-      description: Direct write-control endpoint for verifying local Unix-socket OSP scanners by sending an OSP get_version probe. CVE and openvasd scanner rows preserve inherited no-contact success semantics. Remote, TLS, TCP, relay, credential-secret, scan stop, and live status streaming remain inherited while their safety contracts are designed. Task start is provided separately through the gvmd scan queue.
+      summary: Verify a scanner through bounded native local verification
+      description: Direct write-control endpoint for retained manual verification. It sends a bounded OSP get_version probe only to a local Unix-socket scanner; CVE and openvasd scanner rows use their established no-contact success semantics. The obsolete gvmd manual remote verifier is deleted. Configured remote, TLS, and relay scan dispatch remains separate and unchanged; this operation does not perform an on-demand remote probe or alter scan lifecycle behavior.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:

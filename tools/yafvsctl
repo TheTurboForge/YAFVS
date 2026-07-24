@@ -561,7 +561,6 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "report-format-file-import-export-verify-param-writes-and-deletes",
         "retention-mutations",
         "schedule-calendar-edit-and-task-recalculation",
-        "remote-scanner-tls-relay-verification",
         "target-file-input-task-control-and-credential-secret-workflows",
         "target-credential-secrets-create-delete-restore-export",
         "target-credential-secrets-writes-and-deletes",
@@ -1333,7 +1332,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-yafvs-side-effect": "scanner-configuration-write",
     },
     ("post", "/scanners/{scanner_id}/verify"): {
-        "x-yafvs-inherited-still-owns": "remote-scanner-tls-relay-verification",
         "x-yafvs-maturity": "live-control",
         "x-yafvs-operator-identity": "direct-token-operator",
         "x-yafvs-owner-semantics": "no-owner-state",
@@ -3267,7 +3265,7 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
     if name == "alert.ts":
         return "alert-delivery-and-credentials", "Alert delivery payload mutation, credentials, and broad alert-definition editing remain inherited; native control covers retained creation, metadata, cloning, deletion, testing, and manual report delivery."
     if name == "scanner.ts":
-        return "scanner-control-or-credential", "Scanner lifecycle mutations are native; retained detail, remote TLS/relay verification, file compatibility, and credential context still use inherited plumbing."
+        return "scanner-control-or-credential", "Scanner lifecycle mutations and bounded local verification are native; retained detail, file compatibility, and credential context still use inherited plumbing."
     if name == "hosts.js":
         return "asset-action-or-rich-context", "Host actions and richer inherited context remain outside the current native read contract."
     if name == "port-lists.ts":
@@ -8006,7 +8004,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser scanner create", "direct native scanner configuration create"],
                 "residual_inherited": [
-                    "Inherited file export formats and remote TLS/relay verification remain inherited.",
+                    "Configured remote, TLS, and relay scan dispatch remains separate and unchanged.",
                     "Native create does not contact, verify, or start the configured scanner."
                 ],
             },
@@ -8022,7 +8020,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser complete retained scanner editor save", "direct native scanner configuration replacement"],
                 "residual_inherited": [
-                    "Inherited file export formats and remote TLS/relay verification remain inherited.",
+                    "Configured remote, TLS, and relay scan dispatch remains separate and unchanged.",
                     "Native replacement preserves relay settings, rejects built-in or in-use scanners, and does not contact or start the scanner."
                 ],
             },
@@ -8033,7 +8031,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser scanner metadata PATCH for command-level metadata-only saves", "direct native scanner name/comment metadata patch"],
                 "residual_inherited": [
-                    "Relay mutation, remote TLS/relay verification, credential-secret workflows, and inherited file export/download formats remain inherited.",
+                    "Relay mutation, credential-secret workflows, and inherited file export/download formats remain inherited.",
                     "Native PATCH is limited to operator-owned non-built-in scanner name/comment metadata."
                 ],
             },
@@ -8088,8 +8086,8 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser scanner verify", "direct native scanner verify"],
                 "residual_inherited": [
-                    "Remote scanner TLS/relay verification remains inherited until scanner connection contracts are native.",
-                    "Native verify is limited to local OSP/OpenVAS socket checks plus inherited no-contact success semantics for CVE/openvasd scanner rows."
+                    "The duplicate gvmd manual verifier is deleted; native verify is limited to bounded local OSP/OpenVAS socket checks plus no-contact success semantics for CVE/openvasd scanner rows.",
+                    "Configured remote, TLS, and relay scan dispatch remains separate and unchanged."
                 ],
             },
             {

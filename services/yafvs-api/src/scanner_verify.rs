@@ -5,7 +5,7 @@
 use std::{
     io::{Read, Write},
     os::unix::net::UnixStream,
-    path::{Component, Path as FsPath},
+    path::{Component, Path as FsPath, PathBuf},
     time::Duration,
 };
 
@@ -212,7 +212,7 @@ async fn verify_osp_scanner(scanner: ScannerVerifyState) -> Result<ScannerVerify
 fn ensure_native_osp_verify_scope(scanner: &ScannerVerifyState) -> Result<(), ApiError> {
     if scanner.relay_host.is_some() || scanner.relay_port != 0 || scanner.port != 0 {
         return Err(ApiError::Conflict(
-            "native scanner verification currently supports only local Unix-socket OSP scanners; remote, TLS, relay, and TCP verification remain on inherited compatibility paths".to_string(),
+            "native scanner verification supports only local Unix-socket OSP scanners; remote, TLS, relay, and TCP probes are not part of this workflow".to_string(),
         ));
     }
     if !scanner_verify_osp_socket_is_allowed(&scanner.host) {
@@ -258,7 +258,8 @@ pub(crate) fn scanner_verify_osp_socket_is_allowed(host: &str) -> bool {
 }
 
 fn probe_osp_unix_socket(socket_path: &str) -> Result<OspVersionInfo, String> {
-    let mut stream = UnixStream::connect(socket_path)
+    let socket_path = canonical_osp_verify_socket_path(socket_path)?;
+    let mut stream = UnixStream::connect(&socket_path)
         .map_err(|_| "scanner did not accept an OSP Unix-socket verification probe".to_string())?;
     stream
         .set_read_timeout(Some(OSP_GET_VERSION_TIMEOUT))
@@ -272,6 +273,24 @@ fn probe_osp_unix_socket(socket_path: &str) -> Result<OspVersionInfo, String> {
     let xml = read_osp_unix_xml_response(&mut stream)?;
     parse_osp_get_version_response(&xml)
         .map_err(|_| "scanner did not return a valid OSP get_version response".to_string())
+}
+
+fn canonical_osp_verify_socket_path(socket_path: &str) -> Result<PathBuf, String> {
+    canonical_osp_verify_socket_path_in_dir(socket_path, FsPath::new(ALLOWED_OSP_UNIX_SOCKET_DIR))
+}
+
+pub(crate) fn canonical_osp_verify_socket_path_in_dir(
+    socket_path: &str,
+    allowed_dir: &FsPath,
+) -> Result<PathBuf, String> {
+    let resolved_dir = std::fs::canonicalize(allowed_dir)
+        .map_err(|_| "scanner verification socket path is unavailable".to_string())?;
+    let resolved_socket = std::fs::canonicalize(socket_path)
+        .map_err(|_| "scanner verification socket path is unavailable".to_string())?;
+    if resolved_socket == resolved_dir || !resolved_socket.starts_with(&resolved_dir) {
+        return Err("scanner verification socket path is unavailable".to_string());
+    }
+    Ok(resolved_socket)
 }
 
 fn read_osp_unix_xml_response(stream: &mut UnixStream) -> Result<String, String> {

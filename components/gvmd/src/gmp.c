@@ -1048,48 +1048,6 @@ modify_task_data_reset (modify_task_data_t *data)
 }
 
 /**
- * @brief Command data for the start_task command.
- */
-typedef struct
-{
-  char *task_id;   ///< ID of task to start.
-} start_task_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-start_task_data_reset (start_task_data_t *data)
-{
-  free (data->task_id);
-
-  memset (data, 0, sizeof (start_task_data_t));
-}
-
-/**
- * @brief Command data for the stop_task command.
- */
-typedef struct
-{
-  char *task_id;   ///< ID of task to stop.
-} stop_task_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-stop_task_data_reset (stop_task_data_t *data)
-{
-  free (data->task_id);
-
-  memset (data, 0, sizeof (stop_task_data_t));
-}
-
-/**
  * @brief Command data, as passed between GMP parser callbacks.
  */
 typedef union
@@ -1113,8 +1071,6 @@ typedef union
   modify_credential_data_t modify_credential;         ///< modify_credential
   modify_setting_data_t modify_setting;               ///< modify_setting
   modify_task_data_t modify_task;                     ///< modify_task
-  start_task_data_t start_task;                       ///< start_task
-  stop_task_data_t stop_task;                         ///< stop_task
 } command_data_t;
 
 /**
@@ -1245,18 +1201,6 @@ static modify_setting_data_t *modify_setting_data
  */
 static modify_task_data_t *modify_task_data
  = &(command_data.modify_task);
-
-/**
- * @brief Parser callback data for START_TASK.
- */
-static start_task_data_t *start_task_data
- = (start_task_data_t*) &(command_data.start_task);
-
-/**
- * @brief Parser callback data for STOP_TASK.
- */
-static stop_task_data_t *stop_task_data
- = (stop_task_data_t*) &(command_data.stop_task);
 
 /**
  * @brief Buffer of output to the client.
@@ -1395,8 +1339,6 @@ typedef enum
   CLIENT_MODIFY_TASK_SCHEDULE_PERIODS,
   CLIENT_MODIFY_TASK_TARGET,
   CLIENT_MODIFY_TASK_SCANNER,
-  CLIENT_START_TASK,
-  CLIENT_STOP_TASK,
 } client_state_t;
 
 /**
@@ -2007,18 +1949,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &modify_task_data->task_id);
             modify_task_data->alerts = make_array ();
             set_client_state (CLIENT_MODIFY_TASK);
-          }
-        else if (strcasecmp ("START_TASK", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "task_id",
-                              &start_task_data->task_id);
-            set_client_state (CLIENT_START_TASK);
-          }
-        else if (strcasecmp ("STOP_TASK", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "task_id",
-                              &stop_task_data->task_id);
-            set_client_state (CLIENT_STOP_TASK);
           }
         else
           {
@@ -9371,176 +9301,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         break;
       CLOSE (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE, VALUE);
 
-
-      case CLIENT_START_TASK:
-        if (start_task_data->task_id)
-          {
-            char *report_id = NULL;
-
-            switch (start_task (start_task_data->task_id, &report_id))
-              {
-                case 0:
-                  {
-                    gchar *msg;
-                    msg = g_strdup_printf
-                           ("<start_task_response"
-                            " status=\"" STATUS_OK_REQUESTED "\""
-                            " status_text=\""
-                            STATUS_OK_REQUESTED_TEXT
-                            "\">"
-                            "<report_id>%s</report_id>"
-                            "</start_task_response>",
-                            report_id ?: "0");
-                    g_free (report_id);
-                    if (send_to_client (msg,
-                                        write_to_client,
-                                        write_to_client_data))
-                      {
-                        g_free (msg);
-                        error_send_to_client (error);
-                        return;
-                      }
-                    g_free (msg);
-                    log_event ("task", "Task", start_task_data->task_id,
-                               "requested to start");
-                  }
-                  break;
-                case 1:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("start_task",
-                                      "Task is active already"));
-                  log_event_fail ("task", "Task",
-                                  start_task_data->task_id,
-                                  "started");
-                  break;
-                case 3:   /* Find failed. */
-                  if (send_find_error_to_client ("start_task", "task",
-                                                 start_task_data->task_id,
-                                                 gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("start_task",
-                                      "Permission denied"));
-                  log_event_fail ("task", "Task",
-                                  start_task_data->task_id,
-                                  "started");
-                  break;
-                case -2:
-                  /* Task lacks target.  This is true for Import
-                   * tasks. */
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("start_task",
-                                      "Task must have a target"));
-                  log_event_fail ("task", "Task",
-                                  start_task_data->task_id,
-                                  "started");
-                  break;
-                case -4:
-                  /* Task target lacks hosts.  This is checked when the
-                   * target is created. */
-                  assert (0);
-                  /* fallthrough */
-                case -9:
-                  /* Fork failed. */
-                  /* fallthrough */
-                case -3: /* Failed to create report. */
-                case -1:
-                  SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("start_task"));
-                  log_event_fail ("task", "Task",
-                                  start_task_data->task_id,
-                                  "started");
-                  break;
-                case -5:
-                  SEND_XML_SERVICE_DOWN ("start_task");
-                  log_event_fail ("task", "Task",
-                                  start_task_data->task_id,
-                                  "started");
-                  break;
-                case -6:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("start_task",
-                                      "There is already a task running in"
-                                      " this process"));
-                  log_event_fail ("task", "Task",
-                                  start_task_data->task_id,
-                                  "started");
-                  break;
-                case -7:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("start_task", "No CA certificate"));
-                  log_event_fail ("task", "Task",
-                                  start_task_data->task_id,
-                                  "started");
-                  break;
-                default: /* Programming error. */
-                  assert (0);
-                  SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("start_task"));
-                  log_event_fail ("task", "Task",
-                                  start_task_data->task_id,
-                                  "started");
-                  break;
-              }
-          }
-        else
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("start_task",
-                              "A task_id attribute is required"));
-        start_task_data_reset (start_task_data);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
-
-      case CLIENT_STOP_TASK:
-        if (stop_task_data->task_id)
-          {
-            switch (stop_task (stop_task_data->task_id))
-              {
-                case 0:   /* Stopped. */
-                  SEND_TO_CLIENT_OR_FAIL (XML_OK ("stop_task"));
-                  log_event ("task", "Task", stop_task_data->task_id,
-                             "stopped");
-                  break;
-                case 1:   /* Stop requested. */
-                  SEND_TO_CLIENT_OR_FAIL (XML_OK_REQUESTED ("stop_task"));
-                  log_event ("task", "Task", stop_task_data->task_id,
-                             "requested to stop");
-                  break;
-                case 3:   /* Find failed. */
-                  if (send_find_error_to_client ("stop_task", "task",
-                                                 stop_task_data->task_id,
-                                                 gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("stop_task",
-                                      "Permission denied"));
-                  log_event_fail ("task", "Task",
-                                  stop_task_data->task_id,
-                                  "stopped");
-                  break;
-                default:  /* Programming error. */
-                  assert (0);
-                case -1:
-                  /* Some other error occurred. */
-                  /** @todo Should respond with internal error. */
-                  abort ();
-              }
-          }
-        else
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("stop_task",
-                              "A task_id attribute is required"));
-        stop_task_data_reset (stop_task_data);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
 
       default:
         assert (0);

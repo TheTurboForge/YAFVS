@@ -52,8 +52,6 @@ command_t gmp_commands[]
     {"MODIFY_CREDENTIAL", "Modify an existing credential."},
     {"MODIFY_SETTING", "Modify an existing setting."},
     {"MODIFY_TASK", "Update an existing task."},
-    {"START_TASK", "Manually start an existing task."},
-    {"STOP_TASK", "Stop a running task."},
     {NULL, NULL}};
 
 /* Native control paths can retain gvmd ACL operation keys after their public
@@ -88,6 +86,8 @@ static const char *native_acl_operations[] = {
   "MODIFY_TARGET",
   "MODIFY_USER",
   "MODIFY_TAG",
+  "START_TASK",
+  "STOP_TASK",
   NULL
 };
 

@@ -19,6 +19,9 @@ const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c")
 const GSAD_GMP_H: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GVM_LIBS_GMP_C: &str = include_str!("../../../components/gvm-libs/gmp/gmp.c");
+const GVM_LIBS_GMP_H: &str = include_str!("../../../components/gvm-libs/gmp/gmp.h");
+const MANAGE_COMMANDS_C: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
+const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 const MANAGE_ALERTS_C: &str = include_str!("../../../components/gvmd/src/manage_alerts.c");
 const YAFVS_CONTROL_C: &str = include_str!("../../../components/gvmd/src/yafvs_control.c");
 const GSA_NATIVE_TASKS: &str = include_str!("../../../components/gsa/src/gmp/native-api/tasks.ts");
@@ -37,7 +40,7 @@ fn inherited_function(source: &str, name: &str) -> String {
 }
 
 #[test]
-fn alert_and_scheduler_task_control_use_private_control_without_retiring_public_gmp() {
+fn alert_and_scheduler_task_control_use_private_control_after_public_gmp_retirement() {
     let alert_trigger = inherited_function(MANAGE_ALERTS_C, "trigger");
     assert!(!alert_trigger.contains("gmp_start_task_report_c"));
     for required in [
@@ -140,16 +143,30 @@ fn alert_and_scheduler_task_control_use_private_control_without_retiring_public_
         YAFVS_CONTROL_C.contains("YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND \"start-scheduled \"")
     );
 
-    let public_start = gmp_client_state_block("CLIENT_START_TASK");
-    assert!(public_start.contains("start_task (start_task_data->task_id, &report_id)"));
-    assert!(
-        inherited_function(GVM_LIBS_GMP_C, "gmp_start_task_report_c")
-            .contains("<start_task task_id=\\\"%s\\\"/>")
-    );
-    assert!(
-        inherited_function(GVM_LIBS_GMP_C, "gmp_start_task_ext_c")
-            .contains("<start_task task_id=\\\"%s\\\"/>")
-    );
+    for retired in [
+        "CLIENT_START_TASK",
+        "CLIENT_STOP_TASK",
+        "strcasecmp (\"START_TASK\", element_name)",
+        "strcasecmp (\"STOP_TASK\", element_name)",
+    ] {
+        assert!(
+            !GMP_C.contains(retired),
+            "public GMP transport remains: {retired}"
+        );
+    }
+    for retired in [
+        "gmp_start_task_report",
+        "gmp_start_task_report_c",
+        "gmp_start_task_ext_c",
+        "gmp_stop_task",
+        "gmp_stop_task_c",
+        "gmp_start_task_opts_t",
+    ] {
+        assert!(
+            !GVM_LIBS_GMP_C.contains(retired),
+            "public GMP client remains: {retired}"
+        );
+    }
     assert!(GVMD_C.contains("init_gmpd ("));
     assert!(GVMD_C.contains("accept_and_maybe_fork"));
     assert!(GMPD_C.contains("serve_gmp ("));
@@ -469,50 +486,60 @@ fn scheduled_report_marker_is_explicit_and_reaches_every_report_creation_branch(
 }
 
 #[test]
-fn inherited_start_response_maps_report_id_and_legacy_error_cases() {
-    let start_block = gmp_client_state_block("CLIENT_START_TASK");
-    for required in [
-        "start_task (start_task_data->task_id, &report_id)",
+fn public_start_stop_gmp_parser_and_clients_are_absent() {
+    for retired in [
+        "start_task_data_t",
+        "stop_task_data_t",
+        "start_task_data_reset",
+        "stop_task_data_reset",
+        "CLIENT_START_TASK",
+        "CLIENT_STOP_TASK",
         "<start_task_response",
-        "STATUS_OK_REQUESTED",
-        "<report_id>%s</report_id>",
-        "report_id ?: \"0\"",
-        "Task is active already",
-        "send_find_error_to_client (\"start_task\", \"task\"",
-        "Permission denied",
-        "Task must have a target",
-        "XML_INTERNAL_ERROR (\"start_task\")",
-        "SEND_XML_SERVICE_DOWN (\"start_task\")",
-        "There is already a task running in",
-        "No CA certificate",
-        "A task_id attribute is required",
+        "<stop_task_response",
+        "strcasecmp (\"START_TASK\", element_name)",
+        "strcasecmp (\"STOP_TASK\", element_name)",
     ] {
         assert!(
-            start_block.contains(required),
-            "CLIENT_START_TASK missing {required}"
+            !GMP_C.contains(retired),
+            "public GMP parser residue remains: {retired}"
         );
     }
-}
-
-#[test]
-fn inherited_stop_response_maps_legacy_statuses_and_aborts_on_unexpected_error() {
-    let stop_block = gmp_client_state_block("CLIENT_STOP_TASK");
-    for required in [
-        "stop_task (stop_task_data->task_id)",
-        "XML_OK (\"stop_task\")",
-        "\"stopped\"",
-        "XML_OK_REQUESTED (\"stop_task\")",
-        "\"requested to stop\"",
-        "send_find_error_to_client (\"stop_task\", \"task\"",
-        "Permission denied",
-        "A task_id attribute is required",
-        "abort ();",
+    for retired in [
+        "gmp_start_task_report",
+        "gmp_start_task_report_c",
+        "gmp_start_task_ext_c",
+        "gmp_stop_task",
+        "gmp_stop_task_c",
+        "gmp_start_task_opts_t",
+        "<start_task task_id=\\\"%s\\\"/>",
+        "<stop_task task_id=\\\"%s\\\"/>",
     ] {
         assert!(
-            stop_block.contains(required),
-            "CLIENT_STOP_TASK missing {required}"
+            !GVM_LIBS_GMP_C.contains(retired),
+            "public GMP client residue remains: {retired}"
+        );
+        assert!(
+            !GVM_LIBS_GMP_H.contains(retired),
+            "public GMP client declaration remains: {retired}"
         );
     }
+    for retired in ["start_task", "stop_task"] {
+        assert!(
+            !GMP_SCHEMA.contains(&format!("<name>{retired}</name>")),
+            "live GMP schema command remains: {retired}"
+        );
+    }
+    for retired in ["START_TASK", "STOP_TASK"] {
+        assert!(
+            !MANAGE_COMMANDS_C.contains(&format!("{{\"{retired}\",")),
+            "public GMP HELP row remains: {retired}"
+        );
+        assert!(
+            MANAGE_COMMANDS_C.contains(&format!("\"{retired}\",")),
+            "retained native ACL operation lost: {retired}"
+        );
+    }
+    assert!(GMP_SCHEMA.contains("<command>RESUME_OR_START_TASK</command>"));
 }
 
 #[test]
@@ -784,14 +811,8 @@ fn native_browser_task_transports_retire_only_the_gsad_gmp_bridges() {
         "GSA task-stop availability capability must remain lowercase"
     );
 
-    let gmp_start = inherited_function(GVM_LIBS_GMP_C, "gmp_start_task_report_c");
-    let gmp_stop = inherited_function(GVM_LIBS_GMP_C, "gmp_stop_task_c");
     let gmp_delete = inherited_function(GVM_LIBS_GMP_C, "gmp_delete_task");
     let gmp_delete_ext = inherited_function(GVM_LIBS_GMP_C, "gmp_delete_task_ext");
-    assert!(gmp_start.contains("<start_task task_id=\\\"%s\\\"/>"));
-    assert!(gmp_start.contains("entity_child (entity, \"report_id\")"));
-    assert!(gmp_stop.contains("<stop_task task_id=\\\"%s\\\"/>"));
-    assert!(gmp_stop.contains("gmp_check_response_c (connection)"));
     assert!(gmp_delete.contains("<delete_task task_id=\\\"%s\\\"/>"));
     assert!(gmp_delete_ext.contains("<delete_task task_id=\\\"%s\\\" ultimate=\\\"%d\\\"/>"));
     assert!(gmp_delete_ext.contains("opts.ultimate"));
@@ -815,8 +836,10 @@ fn native_browser_task_transports_retire_only_the_gsad_gmp_bridges() {
     assert!(GMP_C.contains("strcasecmp (\"DELETE_TASK\", element_name)"));
     assert!(GMP_C.contains("set_client_state (CLIENT_DELETE_TASK)"));
     assert!(GMP_C.contains("case CLIENT_DELETE_TASK:"));
-    assert!(GMP_C.contains("strcasecmp (\"STOP_TASK\", element_name)"));
-    assert!(GMP_C.contains("case CLIENT_STOP_TASK:"));
+    assert!(!GMP_C.contains("strcasecmp (\"START_TASK\", element_name)"));
+    assert!(!GMP_C.contains("strcasecmp (\"STOP_TASK\", element_name)"));
+    assert!(!GMP_C.contains("CLIENT_START_TASK"));
+    assert!(!GMP_C.contains("CLIENT_STOP_TASK"));
 }
 
 #[test]

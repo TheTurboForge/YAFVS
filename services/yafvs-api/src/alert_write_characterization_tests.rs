@@ -56,7 +56,7 @@ fn inherited_function(source: &str, name: &str) -> String {
 }
 
 #[test]
-fn alert_start_execution_uses_private_control_and_does_not_remove_gmp_owners() {
+fn alert_start_execution_uses_private_control_after_public_start_transport_retirement() {
     let trigger = inherited_function(MANAGE_ALERTS_C, "trigger");
     assert!(!trigger.contains("gmp_start_task_report_c"));
     assert!(trigger.contains("yafvs_control_start_task_client (owner_id, task_id)"));
@@ -79,7 +79,7 @@ fn alert_start_execution_uses_private_control_and_does_not_remove_gmp_owners() {
             "private alert start missing {required}"
         );
     }
-    assert!(GVMD_GMP_C.contains("case CLIENT_START_TASK:"));
+    assert!(!GVMD_GMP_C.contains("CLIENT_START_TASK"));
 }
 
 fn contains_c_identifier(source: &str, identifier: &str) -> bool {

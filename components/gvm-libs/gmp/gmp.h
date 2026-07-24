@@ -265,10 +265,6 @@ int
 gmp_get_report_ext (gnutls_session_t *, gmp_get_report_opts_t, entity_t *);
 
 int
-gmp_modify_task_file (gnutls_session_t *, const char *, const char *,
-                      const void *, gsize);
-
-int
 gmp_delete_report (gnutls_session_t *, const char *);
 
 

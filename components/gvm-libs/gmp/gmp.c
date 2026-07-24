@@ -751,66 +751,6 @@ gmp_get_tasks_ext (gnutls_session_t *session, gmp_get_tasks_opts_t opts,
 }
 
 /**
- * @brief Modify a file on a task.
- *
- * @param[in]  session      Pointer to GNUTLS session.
- * @param[in]  id           ID of task.
- * @param[in]  name         Name of file.
- * @param[in]  content      New content.  NULL to remove file.
- * @param[in]  content_len  Length of content.
- *
- * @return 0 on success, -1 or GMP response code on error.
- */
-int
-gmp_modify_task_file (gnutls_session_t *session, const char *id,
-                      const char *name, const void *content, gsize content_len)
-{
-  entity_t entity;
-  int ret;
-
-  if (name == NULL)
-    return -1;
-
-  if (gvm_server_sendf (session, "<modify_task task_id=\"%s\">", id))
-    return -1;
-
-  if (content)
-    {
-      if (gvm_server_sendf (session, "<file name=\"%s\" action=\"update\">",
-                            name))
-        return -1;
-
-      if (content_len)
-        {
-          gchar *base64_content =
-            g_base64_encode ((guchar *) content, content_len);
-          ret = gvm_server_sendf (session, "%s", base64_content);
-          g_free (base64_content);
-          if (ret)
-            return -1;
-        }
-
-      if (gvm_server_sendf (session, "</file>"))
-        return -1;
-    }
-  else
-    {
-      if (gvm_server_sendf (session, "<file name=\"%s\" action=\"remove\" />",
-                            name))
-        return -1;
-    }
-
-  if (gvm_server_sendf (session, "</modify_task>"))
-    return -1;
-
-  entity = NULL;
-  ret = gmp_check_response (session, &entity);
-  if (ret == 0)
-    free_entity (entity);
-  return ret;
-}
-
-/**
  * @brief Get a report (generic version).
  *
  * FIXME: Using the according opts it should be possible to generate

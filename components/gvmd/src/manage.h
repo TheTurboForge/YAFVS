@@ -764,12 +764,6 @@ manage_task_update_file (const gchar *, const char *, const void *);
 int
 manage_task_remove_file (const gchar *, const char *);
 
-int
-modify_task (const gchar *, const gchar *, const gchar *, const gchar *,
-             const gchar *, const gchar *, const gchar *, array_t *,
-             const gchar *, const gchar *, const gchar *, array_t *,
-             gchar **);
-
 void
 init_config_file_iterator (iterator_t*, const char*, const char*);
 

@@ -465,6 +465,39 @@ fn scheduled_report_marker_is_explicit_and_reaches_every_report_creation_branch(
 }
 
 #[test]
+fn raw_modify_task_transport_and_duplicate_writer_are_retired() {
+    for retired in [
+        "CLIENT_MODIFY_TASK",
+        "strcasecmp (\"MODIFY_TASK\", element_name)",
+        "modify_task_data_t",
+    ] {
+        assert!(
+            !GMP_C.contains(retired),
+            "raw task mutation remains: {retired}"
+        );
+    }
+    for retired in ["\nmodify_task (", "gmp_modify_task_file"] {
+        assert!(
+            !MANAGE_SQL_C.contains(retired) && !GVM_LIBS_GMP_C.contains(retired),
+            "duplicate public task writer remains: {retired}"
+        );
+    }
+    assert!(GMP_C.contains("strcasecmp (\"CREATE_TASK\", element_name)"));
+    assert!(GMP_C.contains("strcasecmp (\"GET_TASKS\", element_name)"));
+    assert!(MANAGE_SQL_C.contains("find_task_with_permission (task_id, &task, \"modify_task\")"));
+    let native_acl = MANAGE_COMMANDS_C
+        .split("native_acl_operations[] = {")
+        .nth(1)
+        .unwrap();
+    assert!(native_acl.contains("\"MODIFY_TASK\""));
+    let public_help = MANAGE_COMMANDS_C
+        .split("native_acl_operations[] = {")
+        .next()
+        .unwrap();
+    assert!(!public_help.contains("{\"MODIFY_TASK\""));
+}
+
+#[test]
 fn public_start_stop_gmp_parser_and_clients_are_absent() {
     for retired in [
         "start_task_data_t",

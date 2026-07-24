@@ -963,69 +963,6 @@ modify_setting_data_reset (modify_setting_data_t *data)
 }
 
 /**
- * @brief Command data for the modify_task command.
- */
-typedef struct
-{
-  char *action;        ///< What to do to file: "update" or "remove".
-  char *alterable;     ///< Boolean. Whether the task is alterable.
-  char *comment;       ///< Comment.
-  char *scanner_id;    ///< ID of new scanner for task.
-  char *config_id;     ///< ID of new config for task.
-  array_t *alerts;     ///< IDs of new alerts for task.
-  char *file;          ///< File to attach to task.
-  char *file_name;     ///< Name of file to attach to task.
-  char *name;          ///< New name for task.
-  char *observers;     ///< Space separated list of observer user names.
-  name_value_t *preference;  ///< Current preference.
-  array_t *preferences;   ///< Preferences.
-  char *schedule_id;   ///< ID of new schedule for task.
-  char *schedule_periods; ///< Number of periods the schedule must run for.
-  char *target_id;     ///< ID of new target for task.
-  char *task_id;       ///< ID of task to modify.
-} modify_task_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-modify_task_data_reset (modify_task_data_t *data)
-{
-  free (data->action);
-  free (data->alterable);
-  array_free (data->alerts);
-  free (data->comment);
-  free (data->scanner_id);
-  free (data->config_id);
-  free (data->file);
-  free (data->file_name);
-  free (data->name);
-  free (data->observers);
-  if (data->preferences)
-    {
-      guint index = data->preferences->len;
-      while (index--)
-        {
-          name_value_t *pair;
-          pair = (name_value_t*) g_ptr_array_index (data->preferences, index);
-          if (pair)
-            {
-              g_free (pair->name);
-              g_free (pair->value);
-            }
-        }
-    }
-  array_free (data->preferences);
-  free (data->schedule_id);
-  free (data->schedule_periods);
-  free (data->target_id);
-  free (data->task_id);
-  memset (data, 0, sizeof (modify_task_data_t));
-}
-
-/**
  * @brief Command data, as passed between GMP parser callbacks.
  */
 typedef union
@@ -1047,7 +984,6 @@ typedef union
   modify_config_data_t modify_config;                 ///< modify_config
   modify_credential_data_t modify_credential;         ///< modify_credential
   modify_setting_data_t modify_setting;               ///< modify_setting
-  modify_task_data_t modify_task;                     ///< modify_task
 } command_data_t;
 
 /**
@@ -1166,12 +1102,6 @@ static modify_credential_data_t *modify_credential_data
  */
 static modify_setting_data_t *modify_setting_data
  = &(command_data.modify_setting);
-
-/**
- * @brief Parser callback data for MODIFY_TASK.
- */
-static modify_task_data_t *modify_task_data
- = &(command_data.modify_task);
 
 /**
  * @brief Buffer of output to the client.
@@ -1294,21 +1224,6 @@ typedef enum
   CLIENT_MODIFY_SETTING,
   CLIENT_MODIFY_SETTING_NAME,
   CLIENT_MODIFY_SETTING_VALUE,
-  CLIENT_MODIFY_TASK,
-  CLIENT_MODIFY_TASK_ALERT,
-  CLIENT_MODIFY_TASK_ALTERABLE,
-  CLIENT_MODIFY_TASK_COMMENT,
-  CLIENT_MODIFY_TASK_CONFIG,
-  CLIENT_MODIFY_TASK_FILE,
-  CLIENT_MODIFY_TASK_NAME,
-  CLIENT_MODIFY_TASK_PREFERENCES,
-  CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE,
-  CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_NAME,
-  CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_VALUE,
-  CLIENT_MODIFY_TASK_SCHEDULE,
-  CLIENT_MODIFY_TASK_SCHEDULE_PERIODS,
-  CLIENT_MODIFY_TASK_TARGET,
-  CLIENT_MODIFY_TASK_SCANNER,
 } client_state_t;
 
 /**
@@ -1901,13 +1816,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &modify_setting_data->setting_id);
             set_client_state (CLIENT_MODIFY_SETTING);
           }
-        else if (strcasecmp ("MODIFY_TASK", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "task_id",
-                              &modify_task_data->task_id);
-            modify_task_data->alerts = make_array ();
-            set_client_state (CLIENT_MODIFY_TASK);
-          }
         else
           {
             if (send_to_client (XML_ERROR_SYNTAX ("gmp", "Bogus command name"),
@@ -2302,87 +2210,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         ELSE_READ_OVER;
 
-
-      case CLIENT_MODIFY_TASK:
-        if (strcasecmp ("ALTERABLE", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_TASK_ALTERABLE);
-        else if (strcasecmp ("COMMENT", element_name) == 0)
-          {
-            gvm_append_string (&modify_task_data->comment, "");
-            set_client_state (CLIENT_MODIFY_TASK_COMMENT);
-          }
-        else if (strcasecmp ("SCANNER", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_task_data->scanner_id);
-            set_client_state (CLIENT_MODIFY_TASK_SCANNER);
-          }
-        else if (strcasecmp ("ALERT", element_name) == 0)
-          {
-            const gchar *attribute;
-            if (find_attribute (attribute_names, attribute_values, "id",
-                                &attribute))
-              array_add (modify_task_data->alerts, g_strdup (attribute));
-            set_client_state (CLIENT_MODIFY_TASK_ALERT);
-          }
-        else if (strcasecmp ("CONFIG", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_task_data->config_id);
-            set_client_state (CLIENT_MODIFY_TASK_CONFIG);
-          }
-        else if (strcasecmp ("NAME", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_TASK_NAME);
-        else if (strcasecmp ("PREFERENCES", element_name) == 0)
-          {
-            modify_task_data->preferences = make_array ();
-            set_client_state (CLIENT_MODIFY_TASK_PREFERENCES);
-          }
-        else if (strcasecmp ("SCHEDULE", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_task_data->schedule_id);
-            set_client_state (CLIENT_MODIFY_TASK_SCHEDULE);
-          }
-        else if (strcasecmp ("SCHEDULE_PERIODS", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_TASK_SCHEDULE_PERIODS);
-        else if (strcasecmp ("TARGET", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "id",
-                              &modify_task_data->target_id);
-            set_client_state (CLIENT_MODIFY_TASK_TARGET);
-          }
-        else if (strcasecmp ("FILE", element_name) == 0)
-          {
-            const gchar *attribute;
-            append_attribute (attribute_names, attribute_values, "name",
-                              &modify_task_data->file_name);
-            if (find_attribute (attribute_names, attribute_values,
-                                "action", &attribute))
-              gvm_append_string (&modify_task_data->action, attribute);
-            else
-              gvm_append_string (&modify_task_data->action, "update");
-            set_client_state (CLIENT_MODIFY_TASK_FILE);
-          }
-        ELSE_READ_OVER;
-
-      case CLIENT_MODIFY_TASK_PREFERENCES:
-        if (strcasecmp ("PREFERENCE", element_name) == 0)
-          {
-            assert (modify_task_data->preference == NULL);
-            modify_task_data->preference = g_malloc (sizeof (name_value_t));
-            modify_task_data->preference->name = NULL;
-            modify_task_data->preference->value = NULL;
-            set_client_state (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE);
-          }
-        ELSE_READ_OVER;
-
-      case CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE:
-        if (strcasecmp ("SCANNER_NAME", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_NAME);
-        else if (strcasecmp ("VALUE", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_VALUE);
-        ELSE_READ_OVER;
 
       default:
         /* Read over this element. */
@@ -8875,306 +8702,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_MODIFY_SETTING, NAME);
       CLOSE (CLIENT_MODIFY_SETTING, VALUE);
 
-      case CLIENT_MODIFY_TASK:
-        if (acl_user_may ("modify_task") == 0)
-          {
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("modify_task",
-                                "Permission denied"));
-            modify_task_data_reset (modify_task_data);
-            set_client_state (CLIENT_AUTHENTIC);
-            break;
-          }
-
-        if (modify_task_data->task_id)
-          {
-            gchar *fail_alert_id;
-
-            if (modify_task_data->action && (modify_task_data->comment
-                                             || modify_task_data->alerts->len
-                                             || modify_task_data->name))
-              SEND_TO_CLIENT_OR_FAIL
-               (XML_ERROR_SYNTAX ("modify_task",
-                                  "Too many parameters at once"));
-            else if (modify_task_data->action)
-              {
-                if (modify_task_data->file_name == NULL)
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("modify_task",
-                                      "FILE requires a name"
-                                      " attribute"));
-                else if (strcmp (modify_task_data->action, "update") == 0)
-                  {
-                    switch (manage_task_update_file (modify_task_data->task_id,
-                                                     modify_task_data->file_name,
-                                                     modify_task_data->file
-                                                      ? modify_task_data->file
-                                                      : ""))
-                      {
-                        case 0:
-                          log_event ("task", "Task", modify_task_data->task_id,
-                                     "modified");
-                          SEND_TO_CLIENT_OR_FAIL (XML_OK ("modify_task"));
-                          break;
-                        case 1:
-                          if (send_find_error_to_client ("modify_task", "Task",
-                                                         modify_task_data->task_id,
-                                                         gmp_parser))
-                            {
-                              error_send_to_client (error);
-                              return;
-                            }
-                          break;
-                        default:
-                        case -1:
-                          SEND_TO_CLIENT_OR_FAIL
-                            (XML_INTERNAL_ERROR ("modify_task"));
-                          log_event_fail ("task", "Task",
-                                          modify_task_data->task_id,
-                                          "modified");
-                      }
-                  }
-                else if (strcmp (modify_task_data->action, "remove") == 0)
-                  {
-                    switch (manage_task_remove_file (modify_task_data->task_id,
-                                                     modify_task_data->file_name))
-                      {
-                        case 0:
-                          log_event ("task", "Task", modify_task_data->task_id,
-                                     "modified");
-                          SEND_TO_CLIENT_OR_FAIL (XML_OK ("modify_task"));
-                          break;
-                        case 1:
-                          if (send_find_error_to_client ("modify_task", "Task",
-                                                         modify_task_data->task_id,
-                                                         gmp_parser))
-                            {
-                              error_send_to_client (error);
-                              return;
-                            }
-                          break;
-                        default:
-                        case -1:
-                          SEND_TO_CLIENT_OR_FAIL
-                            (XML_INTERNAL_ERROR ("modify_task"));
-                          log_event_fail ("task", "Task",
-                                          modify_task_data->task_id,
-                                          "modified");
-                      }
-                  }
-                else
-                  {
-                    SEND_TO_CLIENT_OR_FAIL
-                      (XML_ERROR_SYNTAX ("modify_task",
-                                         "Action must be"
-                                         " \"update\" or \"remove\""));
-                    log_event_fail ("task", "Task",
-                                    modify_task_data->task_id,
-                                    "modified");
-                  }
-              }
-            else switch (modify_task (modify_task_data->task_id,
-                                      modify_task_data->name,
-                                      modify_task_data->comment,
-                                      modify_task_data->scanner_id,
-                                      modify_task_data->target_id,
-                                      modify_task_data->config_id,
-                                      NULL,
-                                      modify_task_data->alerts,
-                                      modify_task_data->alterable,
-                                      modify_task_data->schedule_id,
-                                      modify_task_data->schedule_periods,
-                                      modify_task_data->preferences,
-                                      &fail_alert_id))
-              {
-                case 0:
-                  log_event ("task", "Task", modify_task_data->task_id,
-                             "modified");
-                  SEND_TO_CLIENT_OR_FAIL (XML_OK ("modify_task"));
-                  break;
-                case 1:
-                  if (send_find_error_to_client ("modify_task", "Task",
-                                                 modify_task_data->task_id,
-                                                 gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  break;
-                case 2:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX
-                     ("modify_task",
-                      "Status must be New to edit scanner"));
-                  break;
-                case 3:
-                  if (send_find_error_to_client
-                       ("modify_task", "scanner",
-                        modify_task_data->scanner_id, gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  break;
-                case 4:
-                  if (send_find_error_to_client
-                       ("modify_task", "config",
-                        modify_task_data->config_id, gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  break;
-                case 5:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX
-                     ("modify_task",
-                      "Status must be New to edit config"));
-                  break;
-                case 6:
-                case 7:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("modify_task",
-                                      "User name error"));
-                  log_event_fail ("task", "Task",
-                                  modify_task_data->task_id,
-                                  "modified");
-                  break;
-                case 8:
-                  if (send_find_error_to_client ("modify_task", "alert",
-                                                 fail_alert_id, gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  log_event_fail ("task", "Task",
-                                  modify_task_data->task_id,
-                                  "modified");
-                  break;
-                case 9:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("modify_task",
-                                      "Task must be New to modify"
-                                      " Alterable state"));
-                  log_event_fail ("task", "Task",
-                                  modify_task_data->task_id,
-                                  "modified");
-                  break;
-                case 11:
-                  if (send_find_error_to_client
-                       ("modify_task", "schedule",
-                        modify_task_data->schedule_id, gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  log_event_fail ("task", "Task",
-                                  modify_task_data->task_id,
-                                  "modified");
-                  break;
-                case 12:
-                  if (send_find_error_to_client
-                       ("modify_task", "target",
-                        modify_task_data->target_id, gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  log_event_fail ("task", "Task",
-                                  modify_task_data->task_id,
-                                  "modified");
-                  break;
-                case 13:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("modify_task",
-                                      "Invalid auto_delete value"));
-                  log_event_fail ("task", "Task",
-                                  modify_task_data->task_id,
-                                  "modified");
-                  break;
-                case 14:
-                  SENDF_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("modify_task",
-                                      "Auto Delete count out of range"
-                                      " (must be from %d to %d)"),
-                    AUTO_DELETE_KEEP_MIN, AUTO_DELETE_KEEP_MAX);
-                  log_event_fail ("task", "Task",
-                                  modify_task_data->task_id,
-                                  "modified");
-                  break;
-                case 15:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("modify_task",
-                                      "Config and Scanner types mismatch"));
-                  log_event_fail ("task", "Task",
-                                  modify_task_data->task_id,
-                                  "modified");
-                  break;
-                case 16:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("modify_task",
-                                      "Status must be New to edit Target"));
-                  log_event_fail ("task", "Task",
-                                  modify_task_data->task_id,
-                                  "modified");
-                  break;
-                case 17:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("modify_task",
-                                      "For import tasks only name, comment"
-                                      " and observers can be modified"));
-                  log_event_fail ("task", "Task",
-                                  modify_task_data->task_id,
-                                  "modified");
-                  break;
-                case 21:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("modify_task",
-                                      "Target and scanner types mismatch"));
-                  log_event_fail ("task", "Task",
-                                  modify_task_data->task_id,
-                                  "modified");
-                  break;
-                default:
-                case -1:
-                  SEND_TO_CLIENT_OR_FAIL
-                    (XML_INTERNAL_ERROR ("modify_task"));
-                  log_event_fail ("task", "Task",
-                                  modify_task_data->task_id,
-                                  "modified");
-                  break;
-              }
-          }
-        else
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("modify_task",
-                              "A task_id attribute is required"));
-        modify_task_data_reset (modify_task_data);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
-      CLOSE (CLIENT_MODIFY_TASK, ALTERABLE);
-      CLOSE (CLIENT_MODIFY_TASK, COMMENT);
-      CLOSE (CLIENT_MODIFY_TASK, SCANNER);
-      CLOSE (CLIENT_MODIFY_TASK, CONFIG);
-      CLOSE (CLIENT_MODIFY_TASK, ALERT);
-      CLOSE (CLIENT_MODIFY_TASK, NAME);
-      CLOSE (CLIENT_MODIFY_TASK, PREFERENCES);
-      CLOSE (CLIENT_MODIFY_TASK, SCHEDULE);
-      CLOSE (CLIENT_MODIFY_TASK, SCHEDULE_PERIODS);
-      CLOSE (CLIENT_MODIFY_TASK, TARGET);
-      CLOSE (CLIENT_MODIFY_TASK, FILE);
-
-
-      case CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE:
-        array_add (modify_task_data->preferences,
-                   modify_task_data->preference);
-        modify_task_data->preference = NULL;
-        set_client_state (CLIENT_MODIFY_TASK_PREFERENCES);
-        break;
-      case CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_NAME:
-        set_client_state (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE);
-        break;
-      CLOSE (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE, VALUE);
 
 
       default:
@@ -9295,27 +8822,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
               &modify_setting_data->value);
 
 
-      APPEND (CLIENT_MODIFY_TASK_ALTERABLE,
-              &modify_task_data->alterable);
-
-      APPEND (CLIENT_MODIFY_TASK_COMMENT,
-              &modify_task_data->comment);
-
-      APPEND (CLIENT_MODIFY_TASK_NAME,
-              &modify_task_data->name);
-
-      APPEND (CLIENT_MODIFY_TASK_FILE,
-              &modify_task_data->file);
-
-      APPEND (CLIENT_MODIFY_TASK_SCHEDULE_PERIODS,
-              &modify_task_data->schedule_periods);
-
-
-      APPEND (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_NAME,
-              &modify_task_data->preference->name);
-
-      APPEND (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_VALUE,
-              &modify_task_data->preference->value);
 
 
 

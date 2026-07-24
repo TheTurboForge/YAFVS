@@ -1152,7 +1152,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("<name>get_targets</name>", schema)
         self.assertIn("<command>GET_TARGETS</command>", schema)
 
-    def test_gvmd_task_parser_consumes_task_elements(self):
+    def test_gvmd_task_parser_consumes_retained_create_elements_only(self):
         gmp_source = (Path(__file__).resolve().parents[2] / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")
         start_handler = gmp_source[
             gmp_source.index("gmp_xml_handle_start_element"):
@@ -1171,22 +1171,17 @@ class YAFVSCtlTests(unittest.TestCase):
             "case CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE:",
             "set_client_state (CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE_NAME);",
             "set_client_state (CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE_VALUE);",
-            "case CLIENT_MODIFY_TASK:",
-            "set_client_state (CLIENT_MODIFY_TASK_NAME);",
-            "set_client_state (CLIENT_MODIFY_TASK_COMMENT);",
-            "set_client_state (CLIENT_MODIFY_TASK_SCANNER);",
-            "set_client_state (CLIENT_MODIFY_TASK_CONFIG);",
-            "set_client_state (CLIENT_MODIFY_TASK_TARGET);",
-            "set_client_state (CLIENT_MODIFY_TASK_PREFERENCES);",
-            "case CLIENT_MODIFY_TASK_PREFERENCES:",
-            "set_client_state (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE);",
-            "case CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE:",
-            "set_client_state (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_NAME);",
-            "set_client_state (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE_VALUE);",
         ]
         for transition in required_transitions:
             with self.subTest(transition=transition):
                 self.assertIn(transition, start_handler)
+        for retired in [
+            "CLIENT_MODIFY_TASK",
+            'strcasecmp ("MODIFY_TASK", element_name)',
+            "modify_task_data_t",
+        ]:
+            with self.subTest(retired=retired):
+                self.assertNotIn(retired, gmp_source)
 
     def test_gvmd_credential_parser_consumes_create_credential_elements(self):
         gmp_source = (Path(__file__).resolve().parents[2] / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")

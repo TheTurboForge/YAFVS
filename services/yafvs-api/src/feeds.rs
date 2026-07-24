@@ -503,4 +503,28 @@ FEED_COMMIT = "not part of the public contract";
             );
         }
     }
+
+    #[test]
+    fn retired_gsad_feed_sync_aliases_are_absent_from_transport() {
+        const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+        const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
+        const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
+
+        for (source, retired) in [
+            (GSAD_GMP, "sync_feed"),
+            (GSAD_GMP, "sync_scap"),
+            (GSAD_GMP, "sync_cert"),
+            (GSAD_GMP_HEADER, "sync_feed_gmp"),
+            (GSAD_GMP_HEADER, "sync_scap_gmp"),
+            (GSAD_GMP_HEADER, "sync_cert_gmp"),
+            (GSAD_VALIDATOR, "|(sync_feed)"),
+            (GSAD_VALIDATOR, "|(sync_scap)"),
+            (GSAD_VALIDATOR, "|(sync_cert)"),
+        ] {
+            assert!(
+                !source.contains(retired),
+                "retired gsad feed-sync transport symbol remains: {retired}"
+            );
+        }
+    }
 }

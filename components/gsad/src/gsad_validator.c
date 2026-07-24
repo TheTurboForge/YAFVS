@@ -54,9 +54,6 @@ gsad_init_validator ()
                      "|(save_credential)"
                      "|(save_my_settings)"
                      "|(save_target)"
-                     "|(sync_feed)"
-                     "|(sync_scap)"
-                     "|(sync_cert)"
                      "|(sync_config)"
                      "|(wizard_get))$");
 

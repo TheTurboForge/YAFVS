@@ -258,7 +258,7 @@ target_owner = "feed-intelligence"
 status = "characterized"
 weight = 5
 evidence = ["tools/yafvsctl-rs/src/commands/feed_generation.rs::command_feed_generation_state"]
-independent_authority = ["components/gvmd/src/gvmd.c::run_feed_sync"]
+independent_authority = ["components/gvmd/src/manage.c::manage_sync"]
 dependencies = ["feed-security-intelligence-database"]
 notes = "Move synchronization, import, generation, activation, rollback, and ownership out of gvmd while preserving provenance and reproducibility."
 
@@ -267,8 +267,14 @@ id = "feed-security-intelligence-database"
 target_owner = "feed-intelligence"
 status = "inventoried"
 weight = 5
-evidence = ["components/gvmd/src/manage_sql_secinfo.c::manage_sync_scap"]
-independent_authority = ["components/gvmd/src/manage.c::manage_sync_scap"]
+evidence = [
+  "components/gvmd/src/manage_sql_secinfo.c::manage_sync_scap",
+  "components/gvmd/src/manage_sql_secinfo.c::manage_sync_cert",
+]
+independent_authority = [
+  "components/gvmd/src/manage_sql_secinfo.c::manage_sync_scap",
+  "components/gvmd/src/manage_sql_secinfo.c::manage_sync_cert",
+]
 dependencies = ["schema-migrations"]
 notes = "Give the feed/intelligence service native schema and write ownership, with supported read-only consumption by scan stacks."
 

@@ -203,6 +203,17 @@ Ensure (gsad_validator, reject_removed_scan_config_commands)
                is_equal_to (2));
 }
 
+Ensure (gsad_validator, reject_removed_feed_sync_commands)
+{
+  validator_t validator = gsad_get_validator ();
+  assert_that (gvm_validate (validator, "cmd", "sync_feed"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "sync_scap"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "sync_cert"),
+               is_equal_to (2));
+}
+
 Ensure (gsad_validator, reject_removed_report_alert_command)
 {
   validator_t validator = gsad_get_validator ();
@@ -400,6 +411,8 @@ main (int argc, char **argv)
                          reject_removed_native_only_commands);
   add_test_with_context (suite, gsad_validator,
                          reject_removed_scan_config_commands);
+  add_test_with_context (suite, gsad_validator,
+                         reject_removed_feed_sync_commands);
   add_test_with_context (suite, gsad_validator,
                          reject_removed_credential_download_transport);
   add_test_with_context (suite, gsad_validator,

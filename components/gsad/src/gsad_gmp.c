@@ -4237,117 +4237,6 @@ get_result_id_from_params (params_t *params)
  */
 /* Feeds. */
 
-/**
- * @brief Synchronize with a feed and envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication
- * @param[in]  params         Request parameters.
- * @param[in]  sync_cmd       Name of the GMP command used to sync the feed.
- * @param[in]  action         Action shown in gsad status messages.
- * @param[in]  feed_name      Name of the feed shown in error messages.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-static char *
-sync_feed (gvm_connection_t *connection, gsad_credentials_t *credentials,
-           params_t *params, const char *sync_cmd, const char *action,
-           const char *feed_name, gsad_command_response_data_t *response_data)
-{
-  entity_t entity;
-  gchar *html, *msg;
-
-  if (gvm_connection_sendf (connection, "<%s/>", sync_cmd) == -1)
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-
-      msg = g_strdup_printf (
-        "An internal error occurred while synchronizing with %s. "
-        "Feed synchronization is currently not available. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        feed_name);
-      html = gsad_http_create_gsad_message (credentials, msg, response_data);
-      g_free (msg);
-      return html;
-    }
-
-  if (read_entity_c (connection, &entity))
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-
-      msg = g_strdup_printf (
-        "An internal error occurred while synchronizing with %s. "
-        "Feed synchronization is currently not available. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        feed_name);
-      html = gsad_http_create_gsad_message (credentials, msg, response_data);
-      g_free (msg);
-      return html;
-    }
-
-  html = response_from_entity (connection, credentials, params, entity, action,
-                               response_data);
-
-  return html;
-}
-
-/**
- * @brief Synchronize with an NVT feed and envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-sync_feed_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-               params_t *params, gsad_command_response_data_t *response_data)
-{
-  return sync_feed (connection, credentials, params, "sync_feed",
-                    "Synchronize Feed", "the NVT feed", response_data);
-}
-
-/**
- * @brief Synchronize with a SCAP feed and envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-sync_scap_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-               params_t *params, gsad_command_response_data_t *response_data)
-{
-  return sync_feed (connection, credentials, params, "sync_scap",
-                    "Synchronize Feed", "the SCAP feed", response_data);
-}
-
-/**
- * @brief Synchronize with a CERT feed and envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-sync_cert_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-               params_t *params, gsad_command_response_data_t *response_data)
-{
-  return sync_feed (connection, credentials, params, "sync_cert",
-                    "Synchronize CERT Feed", "the CERT feed", response_data);
-}
-
 /* Users. */
 
 /**
@@ -5718,9 +5607,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (save_config_family)
   ELSE (save_credential)
   ELSE (save_target)
-  ELSE (sync_feed)
-  ELSE (sync_scap)
-  ELSE (sync_cert)
   else
   {
     gsad_command_response_data_set_status_code (response_data,

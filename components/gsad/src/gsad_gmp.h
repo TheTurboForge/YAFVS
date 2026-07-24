@@ -134,17 +134,6 @@ export_slaves_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 
 char *
-sync_feed_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-               gsad_command_response_data_t *);
-char *
-sync_scap_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-               gsad_command_response_data_t *);
-char *
-sync_cert_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-               gsad_command_response_data_t *);
-
-
-char *
 bulk_delete_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                  gsad_command_response_data_t *);
 char *

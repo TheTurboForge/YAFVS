@@ -578,6 +578,9 @@ class TargetCommand extends EntityCommand<Target> {
 
   async delete({id}: EntityCommandParams) {
     requireNativeTargetApi(this.http);
+    if (typeof id !== 'string' || id.trim().length === 0) {
+      throw new Error('Target ID must be a non-empty string');
+    }
     await deleteNativeTarget(this.http, id);
   }
 

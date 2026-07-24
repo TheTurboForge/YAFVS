@@ -560,6 +560,13 @@ fn target_delete_is_native_only_while_raw_gmp_and_create_save_bridges_remain() {
         .0;
     assert!(delete_gsa.contains("requireNativeTargetApi(this.http)"));
     assert!(delete_gsa.contains("deleteNativeTarget(this.http, id)"));
+    let id_guard = delete_gsa
+        .find("typeof id !== 'string' || id.trim().length === 0")
+        .expect("single target delete must guard the runtime ID");
+    assert!(
+        id_guard < delete_gsa.find("deleteNativeTarget(this.http, id)").unwrap(),
+        "single target delete must guard the ID before native deletion"
+    );
     assert!(!delete_gsa.contains("super.delete"));
 
     assert!(!GSAD_GMP_C.contains("delete_target_gmp"));

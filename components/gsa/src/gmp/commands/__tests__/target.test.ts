@@ -29,6 +29,35 @@ describe('TargetCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
+  test.each([undefined, '', '   '])(
+    'should reject invalid target deletion ID %p before native request',
+    async id => {
+      const fetchMock = testing.fn();
+      testing.stubGlobal('fetch', fetchMock);
+      const fakeHttp = createHttp(undefined) as ReturnType<
+        typeof createHttp
+      > & {
+        buildUrl: ReturnType<typeof testing.fn>;
+        session: ReturnType<typeof createSession>;
+      };
+      fakeHttp.buildUrl = testing.fn(
+        (path: string) => `https://yafvs.example/${path}`,
+      );
+      fakeHttp.session = createSession();
+      fakeHttp.session.token = 'test-token';
+      fakeHttp.session.jwt = 'jwt-token';
+      const cmd = new TargetCommand(fakeHttp);
+
+      await expect(cmd.delete({id: id as string})).rejects.toThrow(
+        'Target ID must be a non-empty string',
+      );
+
+      expect(fakeHttp.buildUrl).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(fakeHttp.request).not.toHaveBeenCalled();
+    },
+  );
+
   test('should fetch single target through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

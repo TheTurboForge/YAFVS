@@ -6,6 +6,7 @@ use std::net::IpAddr;
 
 use serde::{Deserialize, Deserializer};
 use uuid::Uuid;
+use zeroize::Zeroize;
 
 use crate::errors::ApiError;
 
@@ -122,7 +123,7 @@ impl<'de> Deserialize<'de> for SensitiveAlertField {
 
 impl Drop for SensitiveAlertField {
     fn drop(&mut self) {
-        self.0.fill(0);
+        self.0.zeroize();
     }
 }
 

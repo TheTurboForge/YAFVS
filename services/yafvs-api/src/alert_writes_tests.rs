@@ -1331,7 +1331,7 @@ fn alert_smb_sensitive_fields_are_byte_backed_and_drop_scrubbed() {
         );
     }
     assert!(validation.contains("impl Drop for SensitiveAlertField"));
-    assert!(validation.contains("self.0.fill(0)"));
+    assert!(validation.contains("self.0.zeroize()"));
 }
 
 #[test]
@@ -1348,7 +1348,7 @@ fn alert_snmp_secrets_are_byte_backed_parameterized_unlogged_and_scrubbed() {
         );
     }
     assert!(validation.contains("impl Drop for SensitiveAlertField"));
-    assert!(validation.contains("self.0.fill(0)"));
+    assert!(validation.contains("self.0.zeroize()"));
 
     let manager = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
     assert!(manager.contains("|| method == ALERT_METHOD_SNMP"));

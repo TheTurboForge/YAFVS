@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use serde::{Deserialize, Deserializer};
+use zeroize::Zeroize;
 
 use crate::errors::ApiError;
 
@@ -95,7 +96,7 @@ impl<'de> Deserialize<'de> for SensitiveBytes {
 
 impl Drop for SensitiveBytes {
     fn drop(&mut self) {
-        self.0.fill(0);
+        self.0.zeroize();
     }
 }
 

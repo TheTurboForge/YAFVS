@@ -9,6 +9,7 @@ use tokio::{
     net::UnixStream,
     time::timeout,
 };
+use zeroize::Zeroize;
 
 use crate::errors::ApiError;
 
@@ -46,7 +47,7 @@ impl ScrubbedControlFrame {
     }
 
     pub(crate) fn scrub(&mut self) {
-        self.0.fill(0);
+        self.0.as_mut_slice().zeroize();
     }
 }
 

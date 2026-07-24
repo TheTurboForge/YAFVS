@@ -467,6 +467,7 @@ fn target_delete_is_native_only_while_raw_gmp_and_create_save_bridges_remain() {
     for required in [
         "cmd: 'create_target'",
         "cmd: 'save_target'",
+        "hostAssetIds",
         "ssh_credential_id: sshCredentialId",
         "ssh_elevate_credential_id:",
         "smb_credential_id: smbCredentialId",
@@ -478,6 +479,7 @@ fn target_delete_is_native_only_while_raw_gmp_and_create_save_bridges_remain() {
             "GSA target command missing {required}"
         );
     }
+    assert!(!GSA_TARGET_COMMAND.contains("hosts_filter"));
     assert!(!GSA_ENTITY_COMMAND.contains("async clone("));
     assert!(GSA_TARGET_COMMAND.contains("const requireNativeTargetApi"));
     assert!(GSA_TARGET_COMMAND.contains("requireNativeTargetApi(this.http)"));

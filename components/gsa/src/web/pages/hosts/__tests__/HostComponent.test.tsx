@@ -5,7 +5,7 @@
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
-import {rendererWith, screen} from 'web/testing';
+import {fireEvent, rendererWith, screen} from 'web/testing';
 
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Filter from 'gmp/models/filter';
@@ -17,16 +17,12 @@ import {SEVERITY_RATING_CVSS_3} from 'gmp/utils/severity';
 import {currentSettingsDefaultResponse} from 'web/pages/__fixtures__/current-settings';
 import HostsDialog from 'web/pages/hosts/Dialog';
 import HostWithTargetComponent from 'web/pages/hosts/HostComponent';
-import type SelectionType from 'web/utils/SelectionType';
 
 interface SelectionDialogData {
-  entities: unknown[];
+  entities: Array<{id: string}>;
   entitiesSelected: Set<{id: string}>;
-  selectionType: keyof typeof SelectionType | string;
-  filter: {
-    toFilterString: () => string;
-    all?: () => {toFilterString: () => string};
-  };
+  selectionType: string;
+  filter: Filter;
 }
 
 const host = Host.fromElement({
@@ -160,6 +156,10 @@ const createGmp = ({
     .mockResolvedValue(currentSettingsDefaultResponse),
   getCredentials = testing.fn().mockResolvedValue({data: []}),
   getPortLists = testing.fn().mockResolvedValue({data: []}),
+  getStableTargetSourceIds = testing.fn().mockResolvedValue([]),
+  createTarget = testing
+    .fn()
+    .mockResolvedValue({data: {id: 'created-target-id'}}),
 }: {
   buildUrl?: (path: string, params?: unknown) => string;
   exportHost?: ReturnType<typeof testing.fn>;
@@ -168,9 +168,13 @@ const createGmp = ({
   currentSettings?: ReturnType<typeof testing.fn>;
   getCredentials?: ReturnType<typeof testing.fn>;
   getPortLists?: ReturnType<typeof testing.fn>;
+  getStableTargetSourceIds?: ReturnType<typeof testing.fn>;
+  createTarget?: ReturnType<typeof testing.fn>;
 } = {}) => ({
   buildUrl,
   host: {export: exportHost, get: getHost},
+  hosts: {getStableTargetSourceIds},
+  target: {create: createTarget},
   permissions: {get: getPermissions},
   credentials: {
     getAll: getCredentials,
@@ -267,9 +271,11 @@ describe('HostWithTargetComponent tests', () => {
     expect(screen.getDialog()).toBeInTheDocument();
   });
 
-  test('should call createtarget with correct values when createtargetfromhost is triggered', async () => {
-    const createtarget = testing.fn();
-    const gmp = createGmp();
+  test('should create a native target from the selected host ID', async () => {
+    const createTarget = testing
+      .fn()
+      .mockResolvedValue({data: {id: 'created-target-id'}});
+    const gmp = createGmp({createTarget});
 
     let triggerFn: (host: Host) => void = () => {};
 
@@ -279,13 +285,7 @@ describe('HostWithTargetComponent tests', () => {
         onTargetCreated={testing.fn()}
       >
         {({createtargetfromhost}) => {
-          triggerFn = host => {
-            createtarget({
-              targetSource: 'asset_hosts',
-              hostsCount: 1,
-              hostsFilter: 'uuid=' + host.id,
-            });
-          };
+          triggerFn = createtargetfromhost;
           return <div data-testid="child">Ready</div>;
         }}
       </HostWithTargetComponent>,
@@ -294,17 +294,35 @@ describe('HostWithTargetComponent tests', () => {
     await screen.findByTestId('child');
 
     triggerFn(host);
-
-    expect(createtarget).toHaveBeenCalledWith({
-      targetSource: 'asset_hosts',
-      hostsCount: 1,
-      hostsFilter: 'uuid=12345',
-    });
+    await expect.poll(() => screen.getDialog()).toBeInTheDocument();
+    fireEvent.click(screen.getDialogSaveButton());
+    await expect
+      .poll(() => createTarget)
+      .toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetSource: 'asset_hosts',
+          hostsCount: 1,
+          hostAssetIds: ['12345'],
+        }),
+      );
   });
 
-  test('openCreateTargetSelectionDialog handles SELECTION_PAGE_CONTENTS correctly', () => {
-    let triggerSelectionDialog: (data: SelectionDialogData) => void = () => {};
-    const gmp = createGmp();
+  test('should hold the target-source lock through dialog preparation', async () => {
+    let triggerSelectionDialog: (
+      data: SelectionDialogData,
+    ) => Promise<void> = async () => {};
+    let resolveCredentials: (value: {data: []}) => void = () => {};
+    const getCredentials = testing.fn(
+      () =>
+        new Promise<{data: []}>(resolve => {
+          resolveCredentials = resolve;
+        }),
+    );
+    const getStableTargetSourceIds = testing
+      .fn()
+      .mockResolvedValue(['h1', 'h2']);
+    const gmp = createGmp({getCredentials, getStableTargetSourceIds});
+    const filter = Filter.fromString('rows=-1 search=web');
 
     rendererWith({gmp, capabilities: true}).render(
       <HostWithTargetComponent
@@ -317,84 +335,185 @@ describe('HostWithTargetComponent tests', () => {
         }}
       </HostWithTargetComponent>,
     );
-
-    triggerSelectionDialog({
-      entities: [{}, {}, {}],
-      entitiesSelected: new Set<{id: string}>(),
-      filter: {toFilterString: () => 'severity>7'},
-      selectionType: '0',
-    });
-
-    expect(screen.getByTestId('child')).toBeInTheDocument();
-  });
-
-  test('openCreateTargetSelectionDialog handles SELECTION_USER correctly', () => {
-    let triggerSelectionDialog: (data: SelectionDialogData) => void = () => {};
-    const gmp = createGmp();
-
-    rendererWith({gmp, capabilities: true}).render(
-      <HostWithTargetComponent
-        onTargetCreateError={testing.fn()}
-        onTargetCreated={testing.fn()}
-      >
-        {({createtargetfromselection}) => {
-          triggerSelectionDialog = createtargetfromselection;
-          return <div data-testid="child">Test</div>;
-        }}
-      </HostWithTargetComponent>,
-    );
-
-    const selectedHosts = new Set([{id: 'h1'}, {id: 'h2'}]);
-
-    triggerSelectionDialog({
-      entities: [],
-      entitiesSelected: selectedHosts,
-      filter: {toFilterString: () => 'ignored'},
-      selectionType: '1',
-    });
-
-    expect(screen.getByTestId('child')).toBeInTheDocument();
-  });
-
-  test('openCreateTargetSelectionDialog should work for default case', () => {
-    const createtarget = testing.fn();
-    const _openTargetDialog = (count, filterString) => {
-      createtarget({
-        hostsCount: count,
-        hostsFilter: filterString,
-        targetSource: 'asset_hosts',
-      });
-    };
 
     const data = {
       entities: [],
-      selectionType: 'OTHER',
-      filter: {
-        all: () => ({toFilterString: () => 'filtered=true'}),
-      },
+      entitiesSelected: new Set<{id: string}>(),
+      filter,
+      selectionType: '2',
     };
+    const first = triggerSelectionDialog(data);
+    const competing = triggerSelectionDialog(data);
+    await competing;
 
-    const openCreateTargetSelectionDialog = data => {
-      const {selectionType, filter} = data;
-      let size, filterString;
-      const counts = {filtered: 7};
+    expect(getStableTargetSourceIds).toHaveBeenCalledTimes(1);
+    expect(getCredentials).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-      if (
-        selectionType !== 'SELECTION_USER' &&
-        selectionType !== 'SELECTION_PAGE_CONTENTS'
-      ) {
-        size = counts.filtered;
-        filterString = filter.all().toFilterString();
-      }
-      _openTargetDialog(size, filterString);
-    };
+    resolveCredentials({data: []});
+    await first;
+    await expect.poll(() => screen.getDialog()).toBeInTheDocument();
+  });
 
-    openCreateTargetSelectionDialog(data);
+  test('should snapshot the current page host IDs', async () => {
+    let triggerSelectionDialog: (
+      data: SelectionDialogData,
+    ) => Promise<void> = async () => {};
+    const createTarget = testing
+      .fn()
+      .mockResolvedValue({data: {id: 'created-target-id'}});
+    const gmp = createGmp({createTarget});
 
-    expect(createtarget).toHaveBeenCalledWith({
-      targetSource: 'asset_hosts',
-      hostsCount: 7,
-      hostsFilter: 'filtered=true',
+    rendererWith({gmp, capabilities: true}).render(
+      <HostWithTargetComponent
+        onTargetCreateError={testing.fn()}
+        onTargetCreated={testing.fn()}
+      >
+        {({createtargetfromselection}) => {
+          triggerSelectionDialog = createtargetfromselection;
+          return <div data-testid="child">Test</div>;
+        }}
+      </HostWithTargetComponent>,
+    );
+
+    await triggerSelectionDialog({
+      entities: [{id: 'h1'}, {id: 'h2'}],
+      entitiesSelected: new Set<{id: string}>(),
+      filter: Filter.fromString('severity>7'),
+      selectionType: '0',
     });
+
+    await expect.poll(() => screen.getDialog()).toBeInTheDocument();
+    fireEvent.click(screen.getDialogSaveButton());
+    await expect
+      .poll(() => createTarget)
+      .toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetSource: 'asset_hosts',
+          hostsCount: 2,
+          hostAssetIds: ['h1', 'h2'],
+        }),
+      );
+  });
+
+  test('should preserve and deduplicate explicitly selected host IDs', async () => {
+    let triggerSelectionDialog: (
+      data: SelectionDialogData,
+    ) => Promise<void> = async () => {};
+    const createTarget = testing
+      .fn()
+      .mockResolvedValue({data: {id: 'created-target-id'}});
+    const gmp = createGmp({createTarget});
+
+    rendererWith({gmp, capabilities: true}).render(
+      <HostWithTargetComponent
+        onTargetCreateError={testing.fn()}
+        onTargetCreated={testing.fn()}
+      >
+        {({createtargetfromselection}) => {
+          triggerSelectionDialog = createtargetfromselection;
+          return <div data-testid="child">Test</div>;
+        }}
+      </HostWithTargetComponent>,
+    );
+
+    const selectedHosts = new Set([{id: 'h1'}, {id: 'h2'}, {id: 'h1'}]);
+
+    await triggerSelectionDialog({
+      entities: [],
+      entitiesSelected: selectedHosts,
+      filter: Filter.fromString('search=ignored'),
+      selectionType: '1',
+    });
+
+    await expect.poll(() => screen.getDialog()).toBeInTheDocument();
+    fireEvent.click(screen.getDialogSaveButton());
+    await expect
+      .poll(() => createTarget)
+      .toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetSource: 'asset_hosts',
+          hostsCount: 2,
+          hostAssetIds: ['h1', 'h2'],
+        }),
+      );
+  });
+
+  test('should stabilize all filtered host IDs before opening the dialog', async () => {
+    let triggerSelectionDialog: (
+      data: SelectionDialogData,
+    ) => Promise<void> = async () => {};
+    const filter = Filter.fromString('rows=-1 search=web');
+    const getStableTargetSourceIds = testing
+      .fn()
+      .mockResolvedValue(['h1', 'h2']);
+    const createTarget = testing
+      .fn()
+      .mockResolvedValue({data: {id: 'created-target-id'}});
+    const gmp = createGmp({createTarget, getStableTargetSourceIds});
+
+    rendererWith({gmp, capabilities: true}).render(
+      <HostWithTargetComponent
+        onTargetCreateError={testing.fn()}
+        onTargetCreated={testing.fn()}
+      >
+        {({createtargetfromselection}) => {
+          triggerSelectionDialog = createtargetfromselection;
+          return <div data-testid="child">Test</div>;
+        }}
+      </HostWithTargetComponent>,
+    );
+
+    await triggerSelectionDialog({
+      entities: [],
+      entitiesSelected: new Set(),
+      filter,
+      selectionType: '2',
+    });
+
+    expect(getStableTargetSourceIds).toHaveBeenCalledWith(filter);
+    await expect.poll(() => screen.getDialog()).toBeInTheDocument();
+    fireEvent.click(screen.getDialogSaveButton());
+    await expect
+      .poll(() => createTarget)
+      .toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetSource: 'asset_hosts',
+          hostsCount: 2,
+          hostAssetIds: ['h1', 'h2'],
+        }),
+      );
+  });
+
+  test('should report all-filtered preflight failure without opening a dialog', async () => {
+    let triggerSelectionDialog: (
+      data: SelectionDialogData,
+    ) => Promise<void> = async () => {};
+    const failure = new Error('candidate-set drift');
+    const getStableTargetSourceIds = testing.fn().mockRejectedValue(failure);
+    const onTargetCreateError = testing.fn();
+    const gmp = createGmp({getStableTargetSourceIds});
+
+    rendererWith({gmp, capabilities: true}).render(
+      <HostWithTargetComponent
+        onTargetCreateError={onTargetCreateError}
+        onTargetCreated={testing.fn()}
+      >
+        {({createtargetfromselection}) => {
+          triggerSelectionDialog = createtargetfromselection;
+          return <div data-testid="child">Test</div>;
+        }}
+      </HostWithTargetComponent>,
+    );
+
+    await triggerSelectionDialog({
+      entities: [],
+      entitiesSelected: new Set(),
+      filter: Filter.fromString('rows=-1'),
+      selectionType: '2',
+    });
+
+    expect(onTargetCreateError).toHaveBeenCalledWith(failure);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

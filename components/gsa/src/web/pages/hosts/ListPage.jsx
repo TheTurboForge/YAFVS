@@ -61,7 +61,6 @@ const Page = ({
 
   return (
     <HostComponent
-      entitiesCounts={entitiesCounts}
       onCreated={onChanged}
       onDeleted={onChanged}
       onDownloadError={onError}
@@ -77,6 +76,7 @@ const Page = ({
         delete: delete_func,
         download,
         edit,
+        targetSourceLoading,
       }) => (
         <React.Fragment>
           <PageTitle title={_('Hosts')} />
@@ -98,6 +98,7 @@ const Page = ({
             onHostEditClick={edit}
             onTargetCreateFromHostClick={createtargetfromhost}
             onTargetCreateFromSelection={createtargetfromselection}
+            targetSourceLoading={targetSourceLoading}
           />
         </React.Fragment>
       )}

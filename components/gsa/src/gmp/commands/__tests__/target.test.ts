@@ -9,7 +9,6 @@ import TargetCommand from 'gmp/commands/target';
 import {createActionResultResponse, createHttp} from 'gmp/commands/testing';
 import type Http from 'gmp/http/http';
 import {ResponseRejection} from 'gmp/http/rejection';
-import Filter from 'gmp/models/filter';
 import {SCAN_CONFIG_DEFAULT} from 'gmp/models/target';
 import {NO_VALUE, YES_VALUE} from 'gmp/parser';
 import {createSession} from 'gmp/testing';
@@ -58,6 +57,116 @@ describe('TargetCommand tests', () => {
       expect(fakeHttp.request).not.toHaveBeenCalled();
     },
   );
+
+  test('should reject host asset IDs under a manual source without GMP fallback', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(createActionResultResponse()) as ReturnType<
+      typeof createHttp
+    > & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new TargetCommand(fakeHttp);
+
+    await expect(
+      cmd.create({
+        allowSimultaneousIPs: true,
+        name: 'Malformed Asset Target',
+        targetSource: 'manual',
+        targetExcludeSource: 'manual',
+        hosts: '192.0.2.10',
+        hostAssetIds: ['11111111-1111-4111-8111-111111111111'],
+        excludeHosts: '',
+        reverseLookupOnly: false,
+        reverseLookupUnify: false,
+        portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+        aliveTests: [SCAN_CONFIG_DEFAULT],
+        port: 22,
+      }),
+    ).rejects.toThrow('requires the native asset_hosts source');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should reject host asset IDs when native API is unavailable', async () => {
+    const fakeHttp = createHttp(createActionResultResponse());
+    const cmd = new TargetCommand(fakeHttp);
+
+    await expect(
+      cmd.create({
+        allowSimultaneousIPs: true,
+        name: 'Asset Target',
+        targetSource: 'asset_hosts',
+        targetExcludeSource: 'manual',
+        hostAssetIds: ['11111111-1111-4111-8111-111111111111'],
+        excludeHosts: '',
+        reverseLookupOnly: false,
+        reverseLookupUnify: false,
+        portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+        aliveTests: [SCAN_CONFIG_DEFAULT],
+        port: 22,
+      }),
+    ).rejects.toThrow('Native target API is required');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should reject an oversized host asset request without GMP fallback', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(createActionResultResponse()) as ReturnType<
+      typeof createHttp
+    > & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new TargetCommand(fakeHttp);
+    const hostAssetIds = Array.from(
+      {length: 100},
+      (_, index) => `${index}-${'x'.repeat(4096)}`,
+    );
+
+    await expect(
+      cmd.create({
+        allowSimultaneousIPs: true,
+        name: 'Oversized Asset Target',
+        targetSource: 'asset_hosts',
+        targetExcludeSource: 'manual',
+        hostAssetIds,
+        excludeHosts: '',
+        reverseLookupOnly: false,
+        reverseLookupUnify: false,
+        portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+        aliveTests: [SCAN_CONFIG_DEFAULT],
+        port: 22,
+      }),
+    ).rejects.toThrow('exceeds the native request-size limit');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should reject host asset IDs on save without inherited fallback', async () => {
+    const fakeHttp = createHttp(createActionResultResponse());
+    const cmd = new TargetCommand(fakeHttp);
+
+    await expect(
+      cmd.save({
+        id: 'target-id',
+        name: 'Asset Target',
+        targetSource: 'manual',
+        hostAssetIds: ['11111111-1111-4111-8111-111111111111'],
+      }),
+    ).rejects.toThrow('cannot be forwarded through the inherited target save');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
 
   test('should fetch single target through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
@@ -598,23 +707,7 @@ describe('TargetCommand tests', () => {
     });
   });
 
-  test.each([
-    {
-      name: 'asset-host source',
-      params: {
-        targetSource: 'asset_hosts' as const,
-        targetExcludeSource: 'manual' as const,
-        hostsFilter: Filter.fromString('name=server'),
-      },
-    },
-    {
-      name: 'inconsistent file shape',
-      params: {
-        targetSource: 'file' as const,
-        targetExcludeSource: 'manual' as const,
-      },
-    },
-  ])('should keep $name on the inherited target path', async ({params}) => {
+  test('should keep an inconsistent file shape on the inherited target path', async () => {
     const response = createActionResultResponse();
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
@@ -624,7 +717,8 @@ describe('TargetCommand tests', () => {
     await cmd.create({
       allowSimultaneousIPs: true,
       name: 'Inherited Target',
-      ...params,
+      targetSource: 'file',
+      targetExcludeSource: 'manual',
       hosts: '',
       excludeHosts: '',
       reverseLookupOnly: false,
@@ -638,7 +732,7 @@ describe('TargetCommand tests', () => {
     expect(fakeHttp.request).toHaveBeenCalledWith('post', {
       data: expect.objectContaining({
         cmd: 'create_target',
-        target_source: params.targetSource,
+        target_source: 'file',
       }),
     });
   });
@@ -690,7 +784,6 @@ describe('TargetCommand tests', () => {
       comment: 'comment',
       targetSource: 'manual',
       targetExcludeSource: 'manual',
-      hostsFilter: undefined,
       hosts: '123.456, 678.9',
       excludeHosts: '',
       reverseLookupOnly: false,
@@ -716,7 +809,6 @@ describe('TargetCommand tests', () => {
         exclude_hosts: '',
         file: undefined,
         hosts: '123.456, 678.9',
-        hosts_filter: undefined,
         name: 'name',
         port: 22,
         port_list_id: 'pl_id1',
@@ -802,6 +894,110 @@ describe('TargetCommand tests', () => {
     );
     expect(result.data.id).toEqual('native-target-id');
   });
+
+  test('should create a target from host asset IDs only through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-target-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new TargetCommand(fakeHttp);
+    const hostAssetIds = [
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+    ];
+
+    await cmd.create({
+      allowSimultaneousIPs: true,
+      name: 'Asset Target',
+      targetSource: 'asset_hosts',
+      targetExcludeSource: 'manual',
+      hostAssetIds,
+      excludeHosts: '',
+      reverseLookupOnly: false,
+      reverseLookupUnify: false,
+      portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+      aliveTests: [SCAN_CONFIG_DEFAULT],
+      port: 22,
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/targets',
+      expect.objectContaining({
+        body: JSON.stringify({
+          name: 'Asset Target',
+          comment: '',
+          port_list_id: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+          host_asset_ids: hostAssetIds,
+          exclude_hosts: [],
+          alive_tests: [SCAN_CONFIG_DEFAULT],
+          allow_simultaneous_ips: true,
+          reverse_lookup_only: false,
+          reverse_lookup_unify: false,
+        }),
+      }),
+    );
+  });
+
+  test.each([
+    {name: 'empty', hostAssetIds: []},
+    {
+      name: 'duplicate',
+      hostAssetIds: [
+        '11111111-1111-4111-8111-111111111111',
+        '11111111-1111-4111-8111-111111111111',
+      ],
+    },
+  ])(
+    'should reject $name host asset IDs without GMP fallback',
+    async ({hostAssetIds}) => {
+      const fetchMock = testing.fn();
+      testing.stubGlobal('fetch', fetchMock);
+      const fakeHttp = createHttp(undefined) as ReturnType<
+        typeof createHttp
+      > & {
+        buildUrl: ReturnType<typeof testing.fn>;
+        session: ReturnType<typeof createSession>;
+      };
+      fakeHttp.buildUrl = testing.fn(
+        (path: string) => `https://yafvs.example/${path}`,
+      );
+      fakeHttp.session = createSession();
+      const cmd = new TargetCommand(fakeHttp);
+
+      await expect(
+        cmd.create({
+          allowSimultaneousIPs: true,
+          name: 'Asset Target',
+          targetSource: 'asset_hosts',
+          targetExcludeSource: 'manual',
+          hostAssetIds,
+          excludeHosts: '',
+          reverseLookupOnly: false,
+          reverseLookupUnify: false,
+          portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+          aliveTests: [SCAN_CONFIG_DEFAULT],
+          port: 22,
+        }),
+      ).rejects.toThrow(
+        'Host-asset target creation requires the native asset_hosts source and 1 to 4095 unique host asset IDs',
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(fakeHttp.request).not.toHaveBeenCalled();
+    },
+  );
 
   test('should create target with credential references through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
@@ -1129,7 +1325,6 @@ describe('TargetCommand tests', () => {
           comment: 'comment',
           targetSource: 'manual',
           targetExcludeSource: 'manual',
-          hostsFilter: undefined,
           hosts: '123.456, 678.9',
           excludeHosts: '',
           reverseLookupOnly: false,
@@ -1159,7 +1354,6 @@ describe('TargetCommand tests', () => {
       comment: 'comment',
       targetSource: 'manual',
       targetExcludeSource: 'manual',
-      hostsFilter: undefined,
       hosts: '123.456, 678.9',
       excludeHosts: '',
       reverseLookupOnly: false,
@@ -1185,7 +1379,6 @@ describe('TargetCommand tests', () => {
         exclude_hosts: '',
         file: undefined,
         hosts: '123.456, 678.9',
-        hosts_filter: undefined,
         name: 'name',
         port: 22,
         port_list_id: 'pl_id1',
@@ -1215,7 +1408,6 @@ describe('TargetCommand tests', () => {
       comment: 'comment',
       targetSource: 'manual',
       targetExcludeSource: 'manual',
-      hostsFilter: undefined,
       excludeFile: undefined,
       hosts: '123.456, 678.9',
       excludeHosts: '',
@@ -1242,7 +1434,6 @@ describe('TargetCommand tests', () => {
         exclude_hosts: '',
         file: undefined,
         hosts: '123.456, 678.9',
-        hosts_filter: undefined,
         name: 'name',
         port: 22,
         port_list_id: 'pl_id1',
@@ -1505,7 +1696,6 @@ describe('TargetCommand tests', () => {
           comment: 'comment',
           targetSource: 'manual',
           targetExcludeSource: 'manual',
-          hostsFilter: undefined,
           excludeFile: undefined,
           hosts: '123.456, 678.9',
           excludeHosts: '',

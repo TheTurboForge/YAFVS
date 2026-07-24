@@ -139,9 +139,34 @@ try {
   await writeFile(
     disposableClient,
     `import createClient from 'openapi-fetch';\n` +
-      `import type {paths} from './schema.js';\n\n` +
+      `import type {components, paths} from './schema.js';\n\n` +
       `const client = createClient<paths>({baseUrl: 'http://127.0.0.1'});\n` +
-      `void client.GET('/results');\n`,
+      `void client.GET('/results');\n` +
+      `const commonTarget = {\n` +
+      `  name: 'target',\n` +
+      `  alive_tests: ['Scan Config Default' as const],\n` +
+      `  allow_simultaneous_ips: true,\n` +
+      `  reverse_lookup_only: false,\n` +
+      `  reverse_lookup_unify: false,\n` +
+      `  port_list_id: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',\n` +
+      `};\n` +
+      `const explicitHosts: components['schemas']['TargetCreateRequest'] = {\n` +
+      `  ...commonTarget,\n` +
+      `  hosts: ['192.0.2.10'],\n` +
+      `};\n` +
+      `const hostAssets: components['schemas']['TargetCreateRequest'] = {\n` +
+      `  ...commonTarget,\n` +
+      `  host_asset_ids: ['11111111-1111-4111-8111-111111111111'],\n` +
+      `};\n` +
+      `// @ts-expect-error exactly one target host source is required\n` +
+      `const missingSource: components['schemas']['TargetCreateRequest'] = commonTarget;\n` +
+      `// @ts-expect-error target host sources are mutually exclusive\n` +
+      `const conflictingSources: components['schemas']['TargetCreateRequest'] = {\n` +
+      `  ...commonTarget,\n` +
+      `  hosts: ['192.0.2.10'],\n` +
+      `  host_asset_ids: ['11111111-1111-4111-8111-111111111111'],\n` +
+      `};\n` +
+      `void [explicitHosts, hostAssets, missingSource, conflictingSources];\n`,
   );
   await run('tsc', [
     '--noEmit',

@@ -9242,6 +9242,10 @@ components:
           items:
             $ref: '#/components/schemas/Target'
     TargetCreateRequest:
+      oneOf:
+        - $ref: '#/components/schemas/TargetCreateExplicitHostsRequest'
+        - $ref: '#/components/schemas/TargetCreateHostAssetsRequest'
+    TargetCreateExplicitHostsRequest:
       type: object
       additionalProperties: false
       required:
@@ -9251,13 +9255,7 @@ components:
         - reverse_lookup_only
         - reverse_lookup_unify
         - port_list_id
-      oneOf:
-        - required: [hosts]
-          not:
-            required: [host_asset_ids]
-        - required: [host_asset_ids]
-          not:
-            required: [hosts]
+        - hosts
       properties:
         name:
           type: string
@@ -9301,6 +9299,62 @@ components:
           items:
             type: string
             maxLength: 4096
+        host_asset_ids: false
+        exclude_hosts:
+          type: array
+          description: Simple explicit host entries to exclude from hosts in the same request. Cannot fully exclude the target.
+          items:
+            type: string
+            maxLength: 4096
+        credentials:
+          $ref: '#/components/schemas/TargetCredentialsCreateRequest'
+    TargetCreateHostAssetsRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - alive_tests
+        - allow_simultaneous_ips
+        - reverse_lookup_only
+        - reverse_lookup_unify
+        - port_list_id
+        - host_asset_ids
+      properties:
+        name:
+          type: string
+          maxLength: 4096
+          description: Target name. Blank names are rejected after trimming.
+        comment:
+          type: string
+          maxLength: 4096
+          description: Optional target comment. Blank comments are stored as empty after trimming.
+        alive_tests:
+          type: array
+          minItems: 1
+          description: Alive-test labels to store as the inherited target alive-test bitfield. Use exactly Scan Config Default, exactly Consider Alive, or one or more probe labels.
+          items:
+            type: string
+            enum:
+              - Scan Config Default
+              - Consider Alive
+              - TCP-ACK Service Ping
+              - ICMP Ping
+              - ARP Ping
+              - TCP-SYN Service Ping
+        allow_simultaneous_ips:
+          type: boolean
+          description: Whether multiple IPs for the same DNS name may be scanned.
+        reverse_lookup_only:
+          type: boolean
+          description: Whether to scan only hosts with reverse DNS names.
+        reverse_lookup_unify:
+          type: boolean
+          description: Whether to scan only one IP when multiple IPs resolve to the same name.
+        port_list_id:
+          type: string
+          format: uuid
+          description: Existing port list to assign to the target. The reference must be predefined or human-owned.
+        hosts: false
         host_asset_ids:
           type: array
           minItems: 1

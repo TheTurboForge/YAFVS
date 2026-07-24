@@ -10,8 +10,6 @@ import {feedStatusRejection} from 'gmp/native-api/feeds';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import type Filter from 'gmp/models/filter';
-import {filterString} from 'gmp/models/filter/utils';
 import Target, {
   ARP_PING,
   CONSIDER_ALIVE,
@@ -59,7 +57,7 @@ interface TargetCommandCreateParams {
   excludeHosts?: string;
   file?: File;
   hosts?: string;
-  hostsFilter?: Filter;
+  hostAssetIds?: string[];
   krb5CredentialId?: string;
   name: string;
   port?: number;
@@ -157,11 +155,7 @@ const prepareNativeTargetHostSources = async <
 >(
   params: T,
 ): Promise<T | undefined> => {
-  const {excludeFile, file, hostsFilter, targetExcludeSource, targetSource} =
-    params;
-  if (hostsFilter !== undefined || targetSource === 'asset_hosts') {
-    return undefined;
-  }
+  const {excludeFile, file, targetExcludeSource, targetSource} = params;
   if (
     (targetSource === 'file') !== (file !== undefined) ||
     (targetExcludeSource === 'file') !== (excludeFile !== undefined)
@@ -227,7 +221,7 @@ const nativeTargetCreateArgsFromParams = ({
   excludeHosts,
   file,
   hosts,
-  hostsFilter,
+  hostAssetIds,
   krb5CredentialId,
   name,
   port,
@@ -242,17 +236,17 @@ const nativeTargetCreateArgsFromParams = ({
   targetExcludeSource,
   targetSource,
 }: TargetCommandCreateParams): NativeTargetCreateArgs | undefined => {
-  if (targetSource !== undefined && targetSource !== 'manual') {
+  if (
+    targetSource !== undefined &&
+    targetSource !== 'manual' &&
+    targetSource !== 'asset_hosts'
+  ) {
     return undefined;
   }
   if (targetExcludeSource !== undefined && targetExcludeSource !== 'manual') {
     return undefined;
   }
-  if (
-    file !== undefined ||
-    excludeFile !== undefined ||
-    hostsFilter !== undefined
-  ) {
+  if (file !== undefined || excludeFile !== undefined) {
     return undefined;
   }
   const hasCredentialInput = [
@@ -289,9 +283,29 @@ const nativeTargetCreateArgsFromParams = ({
   ) {
     return undefined;
   }
-  const nativeHosts = parseNativeTargetHostList(hosts);
-  if (nativeHosts === undefined) {
-    return undefined;
+  let hostSource:
+    | {hosts: string[]; hostAssetIds?: never}
+    | {hosts?: never; hostAssetIds: string[]};
+  if (targetSource === 'asset_hosts') {
+    if (
+      hostAssetIds === undefined ||
+      hostAssetIds.length === 0 ||
+      hostAssetIds.length > 4095 ||
+      new Set(hostAssetIds).size !== hostAssetIds.length ||
+      hostAssetIds.some(id => typeof id !== 'string' || id.trim().length === 0)
+    ) {
+      return undefined;
+    }
+    hostSource = {hostAssetIds};
+  } else {
+    if (hostAssetIds !== undefined) {
+      return undefined;
+    }
+    const nativeHosts = parseNativeTargetHostList(hosts);
+    if (nativeHosts === undefined) {
+      return undefined;
+    }
+    hostSource = {hosts: nativeHosts};
   }
   const nativeExcludeHosts = parseNativeTargetHostList(excludeHosts, {
     allowEmpty: true,
@@ -303,7 +317,7 @@ const nativeTargetCreateArgsFromParams = ({
     name,
     comment,
     portListId,
-    hosts: nativeHosts,
+    ...hostSource,
     ...(nativeExcludeHosts !== undefined
       ? {excludeHosts: nativeExcludeHosts}
       : {}),
@@ -484,7 +498,7 @@ const nativeTargetPatchArgsFromParams = ({
   excludeHosts,
   file,
   hosts,
-  hostsFilter,
+  hostAssetIds,
   id,
   krb5CredentialId,
   name,
@@ -509,7 +523,7 @@ const nativeTargetPatchArgsFromParams = ({
   if (
     file !== undefined ||
     excludeFile !== undefined ||
-    hostsFilter !== undefined
+    hostAssetIds !== undefined
   ) {
     return undefined;
   }
@@ -631,9 +645,14 @@ class TargetCommand extends EntityCommand<Target> {
     krb5CredentialId = UNSET_VALUE,
     file,
     excludeFile,
-    hostsFilter,
+    hostAssetIds,
   }: TargetCommandCreateParams) {
     const nativeApiAvailable = canUseNativeApi(this.http);
+    const isHostAssetRequest =
+      targetSource === 'asset_hosts' || hostAssetIds !== undefined;
+    if (isHostAssetRequest && !nativeApiAvailable) {
+      requireNativeTargetApi(this.http);
+    }
     const nativeParams = nativeApiAvailable
       ? await prepareNativeTargetHostSources({
           aliveTests,
@@ -644,7 +663,7 @@ class TargetCommand extends EntityCommand<Target> {
           excludeHosts,
           file,
           hosts,
-          hostsFilter,
+          hostAssetIds,
           krb5CredentialId,
           name,
           port,
@@ -669,6 +688,13 @@ class TargetCommand extends EntityCommand<Target> {
       nativeTargetWriteBodyFits(nativeTargetCreateBody(nativeCreateArgs))
     ) {
       return createNativeTarget(this.http, nativeCreateArgs);
+    }
+    if (isHostAssetRequest) {
+      throw new Error(
+        nativeCreateArgs === undefined || targetSource !== 'asset_hosts'
+          ? 'Host-asset target creation requires the native asset_hosts source and 1 to 4095 unique host asset IDs'
+          : 'Host-asset target request exceeds the native request-size limit',
+      );
     }
     if (nativeApiAvailable && !isUnsetCredential(sshCredentialId)) {
       throw new Error(
@@ -708,7 +734,6 @@ class TargetCommand extends EntityCommand<Target> {
         krb5_credential_id: krb5CredentialId,
         file,
         exclude_file: excludeFile,
-        hosts_filter: filterString(hostsFilter),
       });
     } catch (rejection) {
       await feedStatusRejection(rejection as Error);
@@ -719,6 +744,14 @@ class TargetCommand extends EntityCommand<Target> {
 
   async save(args: TargetCommandSaveArgs) {
     const nativeApiAvailable = canUseNativeApi(this.http);
+    if (
+      args.targetSource === 'asset_hosts' ||
+      args.hostAssetIds !== undefined
+    ) {
+      throw new Error(
+        'Host-asset target IDs cannot be forwarded through the inherited target save path',
+      );
+    }
     const nativeParams = nativeApiAvailable
       ? await prepareNativeTargetHostSources(args)
       : undefined;

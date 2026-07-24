@@ -5848,6 +5848,76 @@ def openapi_schema_top_level_keys(block: list[str]) -> set[str]:
     return keys
 
 
+def openapi_schema_required_fields(block: list[str]) -> set[str]:
+    required: set[str] = set()
+    in_required = False
+    for line in block:
+        if line == "      required:":
+            in_required = True
+            continue
+        if in_required:
+            match = re.match(r"^        -\s+([A-Za-z][A-Za-z0-9_-]*)\s*$", line)
+            if match:
+                required.add(match.group(1))
+                continue
+            if line.startswith("      ") and not line.startswith("        "):
+                break
+    return required
+
+
+def openapi_schema_properties(block: list[str]) -> dict[str, str | None]:
+    properties: dict[str, str | None] = {}
+    in_properties = False
+    for line in block:
+        if line == "      properties:":
+            in_properties = True
+            continue
+        if in_properties:
+            match = re.match(
+                r"^        ([A-Za-z][A-Za-z0-9_-]*):(?:\s+([^\s#]+))?\s*$",
+                line,
+            )
+            if match:
+                properties[match.group(1)] = match.group(2)
+                continue
+            if line.startswith("      ") and not line.startswith("        "):
+                break
+    return properties
+
+
+def openapi_is_closed_exclusive_union(
+    repo_root: Path | None, refs: list[str]
+) -> bool:
+    if len(refs) < 2:
+        return False
+    branches: list[tuple[set[str], dict[str, str | None]]] = []
+    for ref in refs:
+        block = openapi_component_schema_block(repo_root, ref.rsplit("/", 1)[-1])
+        if not block:
+            return False
+        values = openapi_indented_scalar_fields(block)
+        if (
+            values.get("type") != "object"
+            or values.get("additionalProperties") != "false"
+            or "properties" not in openapi_schema_top_level_keys(block)
+        ):
+            return False
+        branches.append(
+            (openapi_schema_required_fields(block), openapi_schema_properties(block))
+        )
+
+    for index, (required, _properties) in enumerate(branches):
+        for other_index, (other_required, other_properties) in enumerate(branches):
+            if index == other_index:
+                continue
+            if not any(
+                field in required and other_properties.get(field) == "false"
+                for field in required - other_required
+            ):
+                return False
+    return True
+
+
 def openapi_request_body_schema_contract_drift(repo_root: Path | None, operations: list[dict[str, Any]]) -> dict[str, Any]:
     request_body_schema_refs = sorted(
         {
@@ -5901,10 +5971,14 @@ def openapi_request_body_schema_contract_drift(repo_root: Path | None, operation
             and len(one_of_refs) >= 2
             and all(openapi_component_schema_block(repo_root, item.rsplit("/", 1)[-1]) for item in one_of_refs)
         )
-        if is_valid_discriminated_union:
+        is_valid_closed_exclusive_union = (
+            "oneOf" in top_level_keys
+            and openapi_is_closed_exclusive_union(repo_root, one_of_refs)
+        )
+        if is_valid_discriminated_union or is_valid_closed_exclusive_union:
             continue
         if "oneOf" in top_level_keys:
-            invalid.append({"operation": label, "field": f"components.schemas.{schema_name}.oneOf", "actual": one_of_refs, "expected": "two or more component schema references with a discriminator propertyName"})
+            invalid.append({"operation": label, "field": f"components.schemas.{schema_name}.oneOf", "actual": one_of_refs, "expected": "two or more component schema references with either a discriminator propertyName or pairwise-exclusive required properties blocked by false schemas"})
             continue
         if values.get("type") != "object":
             invalid.append({"operation": label, "field": f"components.schemas.{schema_name}.type", "actual": values.get("type"), "expected": "object"})

@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {useState} from 'react';
+import {useRef, useState} from 'react';
 import {exportNativeHostMetadata} from 'gmp/native-api/hosts';
-import {map} from 'gmp/utils/array';
 import {isDefined} from 'gmp/utils/identity';
 import {shorten} from 'gmp/utils/string';
 import EntityComponent from 'web/entity/EntityComponent';
@@ -29,7 +28,6 @@ const exportHost = (gmp, host) => {
 const HostComponent = ({
   children,
   createtarget,
-  entitiesCounts,
   onIdentifierDeleted,
   onIdentifierDeleteError,
   onCreateError,
@@ -38,6 +36,7 @@ const HostComponent = ({
   onDeleted,
   onDownloadError,
   onDownloaded,
+  onTargetCreateError,
 
   onSaveError,
   onSaved,
@@ -49,6 +48,8 @@ const HostComponent = ({
   const [dialogVisible, setDialogVisible] = useState(false);
   const [host, setHost] = useState();
   const [title, setTitle] = useState();
+  const [targetSourceLoading, setTargetSourceLoading] = useState(false);
+  const targetSourceLoadingRef = useRef(false);
 
   const handleIdentifierDelete = identifier => {
     return gmp.host
@@ -76,35 +77,69 @@ const HostComponent = ({
     closeHostDialog();
   };
 
-  const openCreateTargetDialog = host => {
-    _openTargetDialog(1, 'uuid=' + host.id, `Target for host ${host.name}`);
-  };
-
-  const openCreateTargetSelectionDialog = data => {
-    const {entities, entitiesSelected, selectionType, filter} = data;
-    let size;
-    let filterString;
-
-    if (selectionType === SelectionType.SELECTION_USER) {
-      const hosts = [...entitiesSelected]; // convert set to array
-      size = entitiesSelected.size;
-      filterString = map(hosts, host => 'uuid=' + host.id).join(' ');
-    } else if (selectionType === SelectionType.SELECTION_PAGE_CONTENTS) {
-      size = entities.length;
-      filterString = filter.toFilterString();
-    } else {
-      const counts = entitiesCounts;
-      size = counts.filtered;
-      filterString = filter.all().toFilterString();
+  const openCreateTargetDialog = async host => {
+    if (targetSourceLoadingRef.current) {
+      return;
     }
-    _openTargetDialog(size, filterString);
+    targetSourceLoadingRef.current = true;
+    setTargetSourceLoading(true);
+    try {
+      await _openTargetDialog([host.id], `Target for host ${host.name}`);
+    } catch (error) {
+      onTargetCreateError(
+        error instanceof Error
+          ? error
+          : new Error('Could not prepare the host asset for target creation'),
+      );
+    } finally {
+      targetSourceLoadingRef.current = false;
+      setTargetSourceLoading(false);
+    }
   };
 
-  const _openTargetDialog = (count, filterString, name) => {
-    createtarget({
+  const openCreateTargetSelectionDialog = async data => {
+    const {entities, entitiesSelected, selectionType, filter} = data;
+    if (targetSourceLoadingRef.current) {
+      return;
+    }
+    targetSourceLoadingRef.current = true;
+    setTargetSourceLoading(true);
+    try {
+      if (selectionType === SelectionType.SELECTION_USER) {
+        await _openTargetDialog([...entitiesSelected].map(host => host.id));
+      } else if (selectionType === SelectionType.SELECTION_PAGE_CONTENTS) {
+        await _openTargetDialog(entities.map(host => host.id));
+      } else {
+        const hostAssetIds = await gmp.hosts.getStableTargetSourceIds(filter);
+        await _openTargetDialog(hostAssetIds);
+      }
+    } catch (error) {
+      onTargetCreateError(
+        error instanceof Error
+          ? error
+          : new Error('Could not prepare host assets for target creation'),
+      );
+    } finally {
+      targetSourceLoadingRef.current = false;
+      setTargetSourceLoading(false);
+    }
+  };
+
+  const _openTargetDialog = (hostAssetIds, name) => {
+    const uniqueIds = [...new Set(hostAssetIds)];
+    if (
+      uniqueIds.length === 0 ||
+      uniqueIds.length > 4095 ||
+      uniqueIds.some(id => typeof id !== 'string' || id.trim().length === 0)
+    ) {
+      throw new Error(
+        'Host-asset target creation requires 1 to 4095 unique host asset IDs',
+      );
+    }
+    return createtarget({
       targetSource: 'asset_hosts',
-      hostsCount: count,
-      hostsFilter: filterString,
+      hostsCount: uniqueIds.length,
+      hostAssetIds: uniqueIds,
       name,
     });
   };
@@ -132,6 +167,7 @@ const HostComponent = ({
             deleteidentifier: handleIdentifierDelete,
             createtargetfromselection: openCreateTargetSelectionDialog,
             createtargetfromhost: openCreateTargetDialog,
+            targetSourceLoading,
           })}
           {dialogVisible && (
             <HostDialog
@@ -153,7 +189,6 @@ const HostComponent = ({
 HostComponent.propTypes = {
   children: PropTypes.func.isRequired,
   createtarget: PropTypes.func.isRequired,
-  entitiesCounts: PropTypes.counts,
   onCreateError: PropTypes.func,
   onCreated: PropTypes.func,
   onDeleteError: PropTypes.func,
@@ -162,6 +197,7 @@ HostComponent.propTypes = {
   onDownloaded: PropTypes.func,
   onIdentifierDeleteError: PropTypes.func,
   onIdentifierDeleted: PropTypes.func,
+  onTargetCreateError: PropTypes.func.isRequired,
   onSaveError: PropTypes.func,
   onSaved: PropTypes.func,
 };
@@ -178,7 +214,13 @@ const HostWithTargetComponent = ({
       onCreateError={onTargetCreateError}
       onCreated={onTargetCreated}
     >
-      {({create}) => <HostComponentWrapper {...props} createtarget={create} />}
+      {({create}) => (
+        <HostComponentWrapper
+          {...props}
+          createtarget={create}
+          onTargetCreateError={onTargetCreateError}
+        />
+      )}
     </TargetComponent>
   );
 };

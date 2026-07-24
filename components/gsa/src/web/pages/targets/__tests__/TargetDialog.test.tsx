@@ -24,7 +24,6 @@ import Credential, {
   SMB_CREDENTIAL_TYPES,
   SNMP_CREDENTIAL_TYPES,
 } from 'gmp/models/credential';
-import Filter from 'gmp/models/filter';
 import {
   ARP_PING,
   CONSIDER_ALIVE,
@@ -332,7 +331,6 @@ describe('TargetDialog tests', () => {
       excludeHosts: '',
       hosts: '123.455.67.434',
       hostsCount: undefined,
-      hostsFilter: undefined,
       inUse: false,
       name: 'ross',
       port: 22,
@@ -638,14 +636,17 @@ describe('TargetDialog tests', () => {
 
   test('should allow to create a target from asset hosts', () => {
     const handleSave = testing.fn();
-    const hostsFilter = new Filter({filter_type: 'asset'});
+    const hostAssetIds = [
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+    ];
 
     const {render} = rendererWith({gmp, capabilities: true});
 
     render(
       <TargetDialog
-        hostsCount={10}
-        hostsFilter={hostsFilter}
+        hostAssetIds={hostAssetIds}
+        hostsCount={2}
         targetSource="asset_hosts"
         onSave={handleSave}
       />,
@@ -668,8 +669,8 @@ describe('TargetDialog tests', () => {
       esxiCredentialId: undefined,
       excludeHosts: '',
       hosts: '',
-      hostsCount: 10,
-      hostsFilter,
+      hostAssetIds,
+      hostsCount: 2,
       id: undefined,
       inUse: false,
       name: 'Unnamed',

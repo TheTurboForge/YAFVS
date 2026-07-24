@@ -20,7 +20,6 @@ import {
   KRB5_CREDENTIAL_TYPES,
   krb5CredentialFilter,
 } from 'gmp/models/credential';
-import type Filter from 'gmp/models/filter';
 import PortList from 'gmp/models/port-list';
 import {
   type AliveTest,
@@ -89,8 +88,8 @@ interface TargetDialogDefaultValues {
   excludeHosts: string;
   file?: File;
   hosts: string;
+  hostAssetIds?: string[];
   hostsCount?: number;
-  hostsFilter?: Filter;
   inUse: boolean;
   name: string;
   port: number;
@@ -111,8 +110,8 @@ interface TargetDialogProps {
   esxiCredentialId?: string;
   excludeHosts?: string;
   hosts?: string;
+  hostAssetIds?: string[];
   hostsCount?: number;
-  hostsFilter?: Filter;
   id?: string;
   inUse?: boolean;
   name?: string;
@@ -166,8 +165,8 @@ const TargetDialog = ({
   esxiCredentialId,
   excludeHosts = '',
   hosts = '',
+  hostAssetIds,
   hostsCount,
-  hostsFilter,
   id,
   inUse = false,
   name,
@@ -283,8 +282,8 @@ const TargetDialog = ({
         comment,
         excludeHosts,
         hosts,
+        hostAssetIds,
         hostsCount,
-        hostsFilter,
         inUse,
         name,
         port,

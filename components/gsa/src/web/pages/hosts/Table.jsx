@@ -100,6 +100,7 @@ const Footer = ({
   entitiesSelected,
   filter,
   selectionType,
+  targetSourceLoading,
   onTargetCreateFromSelection,
   ...props
 }) => {
@@ -130,6 +131,7 @@ const Footer = ({
     };
     has_selected = true;
   }
+  has_selected = has_selected && !targetSourceLoading;
   return (
     <EntitiesFooter {...props} selectionType={selectionType}>
       <NewIcon
@@ -148,6 +150,7 @@ Footer.propTypes = {
   filter: PropTypes.filter.isRequired,
   selectionType: PropTypes.string,
   onTargetCreateFromSelection: PropTypes.func.isRequired,
+  targetSourceLoading: PropTypes.bool,
 };
 
 const HostsFooter = withEntitiesFooter({

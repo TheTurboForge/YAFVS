@@ -110,18 +110,23 @@ export interface NativeTargetCredentialsPatchArgs {
   sshElevate?: NativeTargetCredentialPatchArgs;
 }
 
-export interface NativeTargetCreateArgs {
+interface NativeTargetCreateCommonArgs {
   aliveTests: AliveTest[];
   allowSimultaneousIPs: boolean;
   comment?: string;
   credentials?: NativeTargetCredentialsPatchArgs;
   excludeHosts?: string[];
-  hosts: string[];
   name: string;
   portListId: string;
   reverseLookupOnly: boolean;
   reverseLookupUnify: boolean;
 }
+
+export type NativeTargetCreateArgs = NativeTargetCreateCommonArgs &
+  (
+    | {hosts: string[]; hostAssetIds?: never}
+    | {hosts?: never; hostAssetIds: string[]}
+  );
 
 export interface NativeTargetQuery {
   page: number;
@@ -426,7 +431,10 @@ export const nativeTargetCreateBody = (args: NativeTargetCreateArgs) => {
     name: args.name,
     ...(args.comment !== undefined ? {comment: args.comment} : {}),
     port_list_id: args.portListId,
-    hosts: args.hosts,
+    ...(args.hosts !== undefined ? {hosts: args.hosts} : {}),
+    ...(args.hostAssetIds !== undefined
+      ? {host_asset_ids: args.hostAssetIds}
+      : {}),
     ...(args.excludeHosts !== undefined
       ? {exclude_hosts: args.excludeHosts}
       : {}),

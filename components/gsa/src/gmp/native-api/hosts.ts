@@ -154,6 +154,60 @@ const HOST_SORT_FIELDS: Record<string, string> = {
   modified: 'modified',
 };
 
+const TARGET_SOURCE_CONTROL_KEYWORDS = new Set([
+  'first',
+  'rows',
+  'sort',
+  'sort-reverse',
+]);
+
+const assertLosslessTargetSourceFilter = (filter: Filter) => {
+  const controlKeywordsSeen = new Set<string>();
+  let nameSeen = false;
+  let searchKind: 'bare' | 'explicit' | undefined;
+  filter.forEach(term => {
+    const {keyword, relation, value} = term;
+    if (TARGET_SOURCE_CONTROL_KEYWORDS.has(keyword ?? '')) {
+      const conflictingSort =
+        (keyword === 'sort' && controlKeywordsSeen.has('sort-reverse')) ||
+        (keyword === 'sort-reverse' && controlKeywordsSeen.has('sort'));
+      if (
+        keyword !== undefined &&
+        relation === '=' &&
+        value !== undefined &&
+        !controlKeywordsSeen.has(keyword) &&
+        !conflictingSort
+      ) {
+        controlKeywordsSeen.add(keyword);
+        return;
+      }
+    } else if (keyword === 'name') {
+      if (relation === '=' && value !== undefined && !nameSeen) {
+        nameSeen = true;
+        return;
+      }
+    } else if (keyword === 'search') {
+      if (relation === '=' && value !== undefined && searchKind === undefined) {
+        searchKind = 'explicit';
+        return;
+      }
+    } else if (
+      keyword === undefined &&
+      relation === undefined &&
+      value !== undefined &&
+      String(value).trim().length > 0 &&
+      !['and', 'or', 'not'].includes(String(value).trim().toLowerCase()) &&
+      searchKind === undefined
+    ) {
+      searchKind = 'bare';
+      return;
+    }
+    throw new Error(
+      `Native host target-source preflight cannot preserve filter term "${term.toString()}"`,
+    );
+  });
+};
+
 const stringValue = (value: unknown): string =>
   typeof value === 'string' ? value : '';
 
@@ -481,6 +535,15 @@ const shouldApplyToAllFilteredHosts = (filter: Filter) => {
 const hostIds = (hosts: Host[]) =>
   hosts.flatMap(host => (host.id === undefined ? [] : [host.id]));
 
+const requiredHostId = (id: unknown, index: number): string => {
+  if (typeof id !== 'string' || id.trim().length === 0) {
+    throw new Error(
+      `Native host target-source preflight requires an ID at index ${index}`,
+    );
+  }
+  return id;
+};
+
 export class NativeHostBulkDeleteError extends Error {
   readonly deletedIds: string[];
   readonly failedId: string;
@@ -538,10 +601,32 @@ export class HostCommand {
 }
 
 export class HostsCommand {
+  static readonly TARGET_SOURCE_MAX_HOSTS = 4095;
+
   private readonly http: Http;
 
   constructor(http: Http) {
     this.http = http;
+  }
+
+  async getStableTargetSourceIds(filter: Filter): Promise<string[]> {
+    const allFilter = filter.all();
+    assertLosslessTargetSourceFilter(allFilter);
+    const query = {
+      ...nativeHostsQueryFromFilter(allFilter),
+      sort: 'id',
+    };
+    const firstIds = await this.traverseTargetSourceIds(query);
+    const secondIds = await this.traverseTargetSourceIds(query);
+    if (
+      firstIds.length !== secondIds.length ||
+      firstIds.some((id, index) => id !== secondIds[index])
+    ) {
+      throw new Error(
+        'Native host target-source preflight detected candidate-set drift',
+      );
+    }
+    return secondIds;
   }
 
   async get(params: HostsCommandParams = {}) {
@@ -664,6 +749,60 @@ export class HostsCommand {
       }
       deletedIds.push(id);
     }
+  }
+
+  private async traverseTargetSourceIds(
+    query: NativeHostsQuery,
+  ): Promise<string[]> {
+    const ids: string[] = [];
+    const seenIds = new Set<string>();
+    let traversalTotal: number | undefined;
+
+    for (let page = 1; ; page += 1) {
+      const nativeResponse = await fetchNativeHosts(this.http, {
+        ...query,
+        page,
+        pageSize: NATIVE_COMMAND_PAGE_SIZE,
+      });
+      if (traversalTotal === undefined) {
+        traversalTotal = nativeResponse.page.total;
+        if (
+          traversalTotal < 1 ||
+          traversalTotal > HostsCommand.TARGET_SOURCE_MAX_HOSTS
+        ) {
+          throw new Error(
+            'Host-asset target creation requires 1 to 4095 matching hosts',
+          );
+        }
+      } else if (nativeResponse.page.total !== traversalTotal) {
+        throw new Error(
+          'Native host target-source preflight detected collection drift',
+        );
+      }
+      for (const host of nativeResponse.hosts) {
+        const id = requiredHostId(host.id, ids.length);
+        if (seenIds.has(id)) {
+          throw new Error(
+            'Native host target-source preflight detected duplicate-ID drift',
+          );
+        }
+        seenIds.add(id);
+        ids.push(id);
+      }
+      if (ids.length === traversalTotal) {
+        break;
+      }
+      if (
+        nativeResponse.hosts.length === 0 ||
+        ids.length > traversalTotal ||
+        page >= traversalTotal
+      ) {
+        throw new Error(
+          'Native host target-source preflight detected collection drift',
+        );
+      }
+    }
+    return ids;
   }
 }
 

@@ -15,7 +15,6 @@ import {
   type default as Credential,
   type CredentialType,
 } from 'gmp/models/credential';
-import type Filter from 'gmp/models/filter';
 import type PortList from 'gmp/models/port-list';
 import {
   type default as Target,
@@ -55,15 +54,15 @@ import TargetDialog, {
 import {UNSET_VALUE} from 'web/utils/Render';
 
 interface OpenTargetDialogData {
+  hostAssetIds?: string[];
   hostsCount?: number;
-  hostsFilter?: Filter;
   targetSource?: TargetSource;
   name?: string;
 }
 
 interface TargetComponentRenderProps {
   clone: (target: Target) => Promise<void>;
-  create: (data?: OpenTargetDialogData) => void;
+  create: (data?: OpenTargetDialogData) => Promise<void>;
   delete: (target: Target) => Promise<void>;
   download: (entity: Target) => Promise<void>;
   edit: (target: Target, data?: OpenTargetDialogData) => Promise<void>;
@@ -121,6 +120,7 @@ const TargetComponent = ({
   const gmp = useGmp();
   const [_] = useTranslation();
   const idFieldRef = useRef<ReferenceCredentialId | undefined>(undefined);
+  const targetDialogPreparationRef = useRef(false);
   const [credentialsDialogVisible, setCredentialsDialogVisible] =
     useState(false);
   const [credentialsTitle, setCredentialsTitle] = useState('');
@@ -180,7 +180,9 @@ const TargetComponent = ({
   );
   const [targetId, setTargetId] = useState<string | undefined>(undefined);
   const [hostsCount, setHostsCount] = useState<number | undefined>(undefined);
-  const [hostsFilter, setHostsFilter] = useState<Filter | undefined>(undefined);
+  const [hostAssetIds, setHostAssetIds] = useState<string[] | undefined>(
+    undefined,
+  );
 
   const loadCredentials = async () => {
     if (!canUseNativeApi(gmp)) {
@@ -284,7 +286,7 @@ const TargetComponent = ({
 
   const openTargetDialog = async (
     entity?: Target,
-    {hostsCount, hostsFilter, targetSource, name}: OpenTargetDialogData = {},
+    {hostAssetIds, hostsCount, targetSource, name}: OpenTargetDialogData = {},
   ) => {
     if (isDefined(entity)) {
       setPort(entity?.sshCredential?.port);
@@ -340,13 +342,27 @@ const TargetComponent = ({
       setTargetId(undefined);
     }
     setHostsCount(hostsCount);
-    setHostsFilter(hostsFilter);
+    setHostAssetIds(hostAssetIds);
     await loadAll();
     setTargetDialogVisible(true);
   };
 
-  const openCreateTargetDialog = (data?: OpenTargetDialogData) => {
-    void openTargetDialog(undefined, data);
+  const openCreateTargetDialog = async (data?: OpenTargetDialogData) => {
+    if (targetDialogPreparationRef.current) {
+      return;
+    }
+    targetDialogPreparationRef.current = true;
+    try {
+      await openTargetDialog(undefined, data);
+    } catch (error) {
+      onCreateError?.(
+        error instanceof Error
+          ? error
+          : new Error('Could not prepare target creation'),
+      );
+    } finally {
+      targetDialogPreparationRef.current = false;
+    }
   };
 
   const closeTargetDialog = () => {
@@ -445,21 +461,25 @@ const TargetComponent = ({
   );
 
   const handleSaveClick = async (data: TargetDialogData) => {
-    const promise = isDefined(data.id)
+    const normalizedData: TargetDialogData =
+      data.targetSource === 'asset_hosts'
+        ? data
+        : {...data, hostAssetIds: undefined};
+    const promise = isDefined(normalizedData.id)
       ? handleEntitySave(
-          data.inUse
+          normalizedData.inUse
             ? {
-                id: data.id as string,
-                comment: data.comment,
-                aliveTests: data.aliveTests,
-                name: data.name,
+                id: normalizedData.id as string,
+                comment: normalizedData.comment,
+                aliveTests: normalizedData.aliveTests,
+                name: normalizedData.name,
               }
             : {
-                ...data,
-                id: data.id as string,
+                ...normalizedData,
+                id: normalizedData.id as string,
               },
         )
-      : handleEntityCreate(data);
+      : handleEntityCreate(normalizedData);
     await promise;
     closeTargetDialog();
   };
@@ -498,8 +518,8 @@ const TargetComponent = ({
           esxiCredentialId={esxiCredentialId}
           excludeHosts={excludeHosts}
           hosts={hosts}
+          hostAssetIds={hostAssetIds}
           hostsCount={hostsCount}
-          hostsFilter={hostsFilter}
           id={targetId}
           inUse={inUse}
           krb5CredentialId={krb5CredentialId}

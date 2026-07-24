@@ -7045,6 +7045,61 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(compact["auth_contract_alignment_status"], "pass")
         self.assertEqual(compact["missing_security_scheme_count"], 0)
 
+    def test_openapi_contract_accepts_closed_pairwise_exclusive_union(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "YAFVS"
+            openapi = root / "api" / "openapi" / "yafvs-v1.yaml"
+            openapi.parent.mkdir(parents=True)
+            openapi.write_text(
+                "openapi: 3.1.0\n"
+                "paths: {}\n"
+                "components:\n"
+                "  schemas:\n"
+                "    TargetCreateRequest:\n"
+                "      oneOf:\n"
+                "        - $ref: '#/components/schemas/ExplicitHosts'\n"
+                "        - $ref: '#/components/schemas/HostAssets'\n"
+                "    ExplicitHosts:\n"
+                "      type: object\n"
+                "      additionalProperties: false\n"
+                "      required:\n"
+                "        - name\n"
+                "        - hosts\n"
+                "      properties:\n"
+                "        name:\n"
+                "          type: string\n"
+                "        hosts:\n"
+                "          type: array\n"
+                "        host_asset_ids: false\n"
+                "    HostAssets:\n"
+                "      type: object\n"
+                "      additionalProperties: false\n"
+                "      required:\n"
+                "        - name\n"
+                "        - host_asset_ids\n"
+                "      properties:\n"
+                "        name:\n"
+                "          type: string\n"
+                "        hosts: false\n"
+                "        host_asset_ids:\n"
+                "          type: array\n",
+                encoding="utf-8",
+            )
+            drift = yafvsctl.openapi_request_body_schema_contract_drift(
+                root,
+                [
+                    {
+                        "method": "POST",
+                        "path": "/targets",
+                        "request_body": True,
+                        "request_body_schema_ref": "#/components/schemas/TargetCreateRequest",
+                    }
+                ],
+            )
+
+        self.assertEqual(drift["missing_request_body_schema_refs"], [])
+        self.assertEqual(drift["invalid_request_body_schema_refs"], [])
+
     def test_openapi_contract_warns_on_auth_boundary_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"

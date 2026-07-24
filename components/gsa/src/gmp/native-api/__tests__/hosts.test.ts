@@ -74,6 +74,183 @@ describe('HostsCommand tests', () => {
     });
   });
 
+  test('should stabilize bounded host IDs for target creation', async () => {
+    const page = {
+      page: 1,
+      page_size: 500,
+      total: 2,
+      sort: 'id',
+      filter: 'web',
+    };
+    const payload = {
+      page,
+      items: [
+        {id: 'host-1', name: '192.0.2.10', severity: 7.5},
+        {id: 'host-2', name: '192.0.2.20', severity: 5.0},
+      ],
+    };
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue(payload),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue(payload),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new HostsCommand(fakeHttp);
+
+    await expect(
+      cmd.getStableTargetSourceIds(
+        Filter.fromString('first=1 rows=-1 search=web'),
+      ),
+    ).resolves.toEqual(['host-1', 'host-2']);
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/hosts', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'id',
+      filter: 'web',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenCalledTimes(2);
+  });
+
+  test.each([
+    'severity>7',
+    'hostname=web.example.test',
+    'ip=192.0.2.10',
+    'name~web',
+    'name=production name=staging',
+    'name=production and name=staging',
+    'search=production staging',
+    'search=production search=staging',
+    'search=production or',
+    'first=1 first=2',
+    'rows=25 rows=100',
+    'sort=name sort=severity',
+    'sort=name sort-reverse=severity',
+  ])(
+    'should reject unsupported target-source filter without widening it: %s',
+    async filter => {
+      const fetchMock = testing.fn();
+      testing.stubGlobal('fetch', fetchMock);
+      const fakeHttp = createNativeHttp();
+      const cmd = new HostsCommand(fakeHttp);
+
+      await expect(
+        cmd.getStableTargetSourceIds(
+          Filter.fromString(`first=1 rows=-1 ${filter}`),
+        ),
+      ).rejects.toThrow('cannot preserve filter term');
+      expect(fakeHttp.buildUrl).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  test('should preserve an exact name target-source filter', async () => {
+    const payload = {
+      page: {
+        page: 1,
+        page_size: 500,
+        total: 1,
+        sort: 'id',
+        filter: '',
+      },
+      items: [{id: 'host-1', name: 'web.example.test', severity: 0}],
+    };
+    testing.stubGlobal(
+      'fetch',
+      testing
+        .fn()
+        .mockResolvedValueOnce({
+          json: testing.fn().mockResolvedValue(payload),
+          ok: true,
+          status: 200,
+        })
+        .mockResolvedValueOnce({
+          json: testing.fn().mockResolvedValue(payload),
+          ok: true,
+          status: 200,
+        }),
+    );
+    const fakeHttp = createNativeHttp();
+    const cmd = new HostsCommand(fakeHttp);
+
+    await expect(
+      cmd.getStableTargetSourceIds(
+        Filter.fromString('rows=-1 name=web.example.test'),
+      ),
+    ).resolves.toEqual(['host-1']);
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/hosts', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'id',
+      filter: '',
+      name: 'web.example.test',
+    });
+  });
+
+  test('should reject target-source candidate drift between preflight passes', async () => {
+    const response = id => ({
+      json: testing.fn().mockResolvedValue({
+        page: {
+          page: 1,
+          page_size: 500,
+          total: 1,
+          sort: 'id',
+          filter: '',
+        },
+        items: [{id, name: '192.0.2.10', severity: 0}],
+      }),
+      ok: true,
+      status: 200,
+    });
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce(response('host-1'))
+      .mockResolvedValueOnce(response('host-2'));
+    testing.stubGlobal('fetch', fetchMock);
+    const cmd = new HostsCommand(createNativeHttp());
+
+    await expect(
+      cmd.getStableTargetSourceIds(Filter.fromString('rows=-1')),
+    ).rejects.toThrow('candidate-set drift');
+  });
+
+  test.each([0, 4096])(
+    'should reject target-source totals outside the 1..4095 bound: %s',
+    async total => {
+      const fetchMock = testing.fn().mockResolvedValue({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 1,
+            page_size: 500,
+            total,
+            sort: 'id',
+            filter: '',
+          },
+          items: [],
+        }),
+        ok: true,
+        status: 200,
+      });
+      testing.stubGlobal('fetch', fetchMock);
+      const cmd = new HostsCommand(createNativeHttp());
+
+      await expect(
+        cmd.getStableTargetSourceIds(Filter.fromString('rows=-1')),
+      ).rejects.toThrow(
+        'Host-asset target creation requires 1 to 4095 matching hosts',
+      );
+    },
+  );
+
   test('should fetch all hosts through bounded native pages', async () => {
     const fetchMock = testing
       .fn()

@@ -75,6 +75,59 @@ describe('TargetComponent tests', () => {
     expect(screen.getByTestId('button')).toBeInTheDocument();
   });
 
+  test('should report target dialog preparation failures without an unhandled rejection', async () => {
+    const gmp = createGmp();
+    const failure = new Error('credential inventory unavailable');
+    gmp.credentials.getAll.mockRejectedValue(failure);
+    const onCreateError = testing.fn();
+    const {render} = rendererWith({gmp, capabilities: true});
+
+    render(
+      <TargetComponent onCreateError={onCreateError}>
+        {({create}) => <Button data-testid="button" onClick={() => create()} />}
+      </TargetComponent>,
+    );
+
+    fireEvent.click(screen.getByTestId('button'));
+
+    await expect.poll(() => onCreateError).toHaveBeenCalledWith(failure);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  test('should serialize target dialog preparation and release its lock', async () => {
+    let resolveCredentials: (value: Response<Model[]>) => void = () => {};
+    const credentials = new Promise<Response<Model[]>>(resolve => {
+      resolveCredentials = resolve;
+    });
+    const gmp = createGmp();
+    gmp.credentials.getAll.mockReturnValueOnce(credentials);
+    let createTarget: (() => Promise<void>) | undefined;
+    const {render} = rendererWith({gmp, capabilities: true});
+
+    render(
+      <TargetComponent>
+        {({create}) => {
+          createTarget = create;
+          return <Button data-testid="button" />;
+        }}
+      </TargetComponent>,
+    );
+
+    const first = createTarget?.();
+    const competing = createTarget?.();
+    expect(gmp.credentials.getAll).toHaveBeenCalledTimes(1);
+    expect(gmp.portlists.getAll).toHaveBeenCalledTimes(1);
+
+    resolveCredentials(new Response([]));
+    await first;
+    await competing;
+    await expect.poll(() => screen.getDialog()).toBeInTheDocument();
+
+    await createTarget?.();
+    expect(gmp.credentials.getAll).toHaveBeenCalledTimes(2);
+    expect(gmp.portlists.getAll).toHaveBeenCalledTimes(2);
+  });
+
   test('should load dialog credentials and port lists through the native API when available', async () => {
     const gmp = {
       ...createGmp(),
@@ -181,7 +234,6 @@ describe('TargetComponent tests', () => {
       excludeHosts: '',
       hosts: '',
       hostsCount: undefined,
-      hostsFilter: undefined,
       id: undefined,
       inUse: false,
       krb5CredentialId: undefined,
@@ -212,6 +264,48 @@ describe('TargetComponent tests', () => {
         },
       }),
     );
+  });
+
+  test('should clear hidden asset IDs when switching to a manual target', async () => {
+    const gmp = createGmp();
+    let createTarget: (data?: {
+      hostAssetIds?: string[];
+      hostsCount?: number;
+      targetSource?: 'manual' | 'file' | 'asset_hosts';
+    }) => Promise<void> = async () => {};
+    const {render} = rendererWith({gmp, capabilities: true});
+
+    render(
+      <TargetComponent>
+        {({create}) => {
+          createTarget = create;
+          return <Button data-testid="button" />;
+        }}
+      </TargetComponent>,
+    );
+
+    await createTarget({
+      hostAssetIds: ['11111111-1111-4111-8111-111111111111'],
+      hostsCount: 1,
+      targetSource: 'asset_hosts',
+    });
+    await expect.poll(() => screen.getDialog()).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByName('targetSource')[0]);
+    fireEvent.change(screen.getByName('hosts'), {
+      target: {value: '192.0.2.10'},
+    });
+    fireEvent.click(screen.getDialogSaveButton());
+
+    await expect
+      .poll(() => gmp.target.create)
+      .toHaveBeenCalledWith(
+        expect.objectContaining({
+          hostAssetIds: undefined,
+          hosts: '192.0.2.10',
+          targetSource: 'manual',
+        }),
+      );
   });
 
   test('should allow to edit an existing target', async () => {
@@ -245,7 +339,6 @@ describe('TargetComponent tests', () => {
       excludeHosts: '',
       hosts: '',
       hostsCount: undefined,
-      hostsFilter: undefined,
       id: '1234',
       inUse: false,
       krb5CredentialId: undefined,

@@ -292,11 +292,17 @@ inherited UI, such as credential UUID/name/type and SSH port, but never expose
 credential secret values. Direct write-control may patch target name/comment
 metadata only and validates that adjacent hosts, exclude hosts, port-list,
 alive-test, reverse-DNS, simultaneous-IP, and credential-link state are not part
-of that slice. Native credential reads expose redacted metadata, and direct
-write-control may patch credential name/comment metadata only; credential secret
-material, store selectors, type/allow-insecure settings, scanner/target links,
-export/download, create/clone/restore/delete, and secret-bearing writes remain
-inherited.
+of that slice. Native credential reads expose redacted metadata. Direct
+write-control can create bounded username/password and username/SSH-key
+credentials through the manager's authoritative encryption path, and can patch
+credential name/comment metadata without reading secret rows. The browser now
+uses native PATCH for effective metadata-only saves, including realistic form
+state, while any secret, login, key, certificate, Kerberos, or SNMP mutation
+remains inherited. Other credential-type creation, autogeneration, secret
+updates, store selectors, type/allow-insecure mutation, and scanner/target
+links remain inherited. Native metadata export, clone, restore, trash movement,
+hard delete, SSH public-key retrieval, and stored client-certificate retrieval
+are separately classified native operations.
 
 Native task rows include task identity, status/progress, target/config/scanner
 and schedule references, report counts, current/latest report references,

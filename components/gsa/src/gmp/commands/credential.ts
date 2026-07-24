@@ -13,6 +13,7 @@ import Credential, {
   type CredentialElement,
   type SNMPAuthAlgorithmType,
   type SNMPPrivacyAlgorithmType,
+  SNMP_CREDENTIAL_TYPE,
 } from 'gmp/models/credential';
 import {type Element} from 'gmp/models/model';
 import {
@@ -58,10 +59,7 @@ interface CredentialCommandKrb5Args
   extends CredentialCommandBaseArgs, CredentialCommandKrb5Fields {}
 
 // Save operation interfaces (using utility types)
-type CredentialCommandSaveArgs = Omit<
-  CredentialCommandBaseArgs,
-  'autogenerate'
-> & {id: string};
+type CredentialCommandSaveArgs = CredentialCommandBaseArgs & {id: string};
 
 type CredentialCommandSaveKrb5Args = CredentialCommandSaveArgs &
   CredentialCommandKrb5Fields;
@@ -78,15 +76,56 @@ const saveFile = (file: File | undefined | null): File | undefined | string => {
   return file;
 };
 
-const CREDENTIAL_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
-
 const isCredentialMetadataOnlySave = (
-  args: CredentialCommandSaveArgs,
-): boolean =>
-  Object.keys(args).every(key => CREDENTIAL_METADATA_SAVE_KEYS.has(key)) &&
-  typeof args.id === 'string' &&
-  typeof args.name === 'string' &&
-  (args.comment === undefined || typeof args.comment === 'string');
+  args: CredentialCommandSaveKrb5Args,
+): boolean => {
+  if (
+    typeof args.id !== 'string' ||
+    typeof args.name !== 'string' ||
+    (args.comment !== undefined && typeof args.comment !== 'string') ||
+    (args.autogenerate !== undefined && args.autogenerate !== false)
+  ) {
+    return false;
+  }
+
+  const mutationKeys: (keyof CredentialCommandSaveKrb5Args)[] = [
+    'authAlgorithm',
+    'certificate',
+    'community',
+    'credentialLogin',
+    'kdcs',
+    'passphrase',
+    'password',
+    'privacyPassword',
+    'privateKey',
+    'publicKey',
+    'realm',
+  ];
+
+  const metadataOrContextKeys = new Set([
+    'id',
+    'name',
+    'comment',
+    'credentialType',
+    'autogenerate',
+    'privacyAlgorithm',
+    ...mutationKeys,
+  ]);
+
+  if (
+    mutationKeys.some(key => args[key] !== undefined) ||
+    Object.entries(args).some(
+      ([key, value]) => value !== undefined && !metadataOrContextKeys.has(key),
+    )
+  ) {
+    return false;
+  }
+
+  return !(
+    args.credentialType === SNMP_CREDENTIAL_TYPE &&
+    args.privacyAlgorithm !== undefined
+  );
+};
 
 class CredentialCommand extends EntityCommand<
   Credential,
@@ -212,7 +251,15 @@ class CredentialCommand extends EntityCommand<
     return this.action(baseData);
   }
 
-  saveKrb5(args: CredentialCommandSaveKrb5Args) {
+  async saveKrb5(args: CredentialCommandSaveKrb5Args) {
+    if (canUseNativeApi(this.http) && isCredentialMetadataOnlySave(args)) {
+      return patchNativeCredential(this.http, {
+        id: args.id,
+        name: args.name,
+        comment: args.comment,
+      });
+    }
+
     const baseData = this.saveBase(args);
 
     return this.action({

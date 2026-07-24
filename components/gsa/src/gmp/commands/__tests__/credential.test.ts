@@ -11,6 +11,8 @@ import {createHttp, createActionResultResponse} from 'gmp/commands/testing';
 import {
   CERTIFICATE_CREDENTIAL_TYPE,
   KRB5_CREDENTIAL_TYPE,
+  SNMP_CREDENTIAL_TYPE,
+  USERNAME_PASSWORD_CREDENTIAL_TYPE,
 } from 'gmp/models/credential';
 import {createSession} from 'gmp/testing';
 
@@ -407,7 +409,7 @@ describe('CredentialCommand tests', () => {
     expect(resp.data.id).toEqual('foo');
   });
 
-  test('should save credential metadata through native API when available', async () => {
+  test('should save realistic UP form metadata through native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing
         .fn()
@@ -431,7 +433,18 @@ describe('CredentialCommand tests', () => {
     const resp = await cmd.save({
       id: '1',
       name: 'updated-credential',
-      comment: 'metadata only',
+      comment: '',
+      credentialType: USERNAME_PASSWORD_CREDENTIAL_TYPE,
+      autogenerate: false,
+      privacyAlgorithm: 'aes',
+      credentialLogin: undefined,
+      password: undefined,
+      passphrase: undefined,
+      community: undefined,
+      privacyPassword: undefined,
+      privateKey: undefined,
+      publicKey: undefined,
+      certificate: undefined,
     });
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
@@ -449,11 +462,109 @@ describe('CredentialCommand tests', () => {
         },
         body: JSON.stringify({
           name: 'updated-credential',
-          comment: 'metadata only',
+          comment: '',
         }),
       },
     );
     expect(resp.data.id).toEqual('1');
+  });
+
+  test('should save realistic KRB5 form metadata through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'krb5-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const cmd = new CredentialCommand(fakeHttp);
+    await cmd.saveKrb5({
+      id: 'krb5-id',
+      name: 'updated KRB5 credential',
+      comment: undefined,
+      credentialType: KRB5_CREDENTIAL_TYPE,
+      autogenerate: false,
+      privacyAlgorithm: 'aes',
+      credentialLogin: undefined,
+      password: undefined,
+      realm: undefined,
+      kdcs: undefined,
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/credentials/krb5-id',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({name: 'updated KRB5 credential'}),
+      }),
+    );
+  });
+
+  test('should keep SNMP form metadata save on GMP', async () => {
+    const response = createActionResultResponse();
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response);
+    const cmd = new CredentialCommand(fakeHttp);
+
+    await cmd.save({
+      id: 'snmp-id',
+      name: 'updated SNMP credential',
+      credentialType: SNMP_CREDENTIAL_TYPE,
+      autogenerate: false,
+      privacyAlgorithm: 'aes',
+      authAlgorithm: undefined,
+      community: undefined,
+      privacyPassword: undefined,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: expect.objectContaining({
+        cmd: 'save_credential',
+        credential_id: 'snmp-id',
+        privacy_algorithm: 'aes',
+      }),
+    });
+  });
+
+  test('should keep KRB5 realm and KDC changes on GMP', async () => {
+    const response = createActionResultResponse();
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response);
+    const cmd = new CredentialCommand(fakeHttp);
+
+    await cmd.saveKrb5({
+      id: 'krb5-id',
+      name: 'updated KRB5 credential',
+      credentialType: KRB5_CREDENTIAL_TYPE,
+      autogenerate: false,
+      privacyAlgorithm: 'aes',
+      realm: 'EXAMPLE.COM',
+      kdcs: ['kdc.example.com'],
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: expect.objectContaining({
+        cmd: 'save_credential',
+        credential_id: 'krb5-id',
+        realm: 'EXAMPLE.COM',
+        'kdcs:': ['kdc.example.com'],
+      }),
+    });
   });
 
   test('should keep secret-bearing credential save on GMP', async () => {

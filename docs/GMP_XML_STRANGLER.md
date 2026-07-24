@@ -8,6 +8,10 @@ compatibility and high-consequence scanner control, but it should no longer be
 the default shape for new YAFVS product data flow. Native HTTP/JSON product
 APIs should replace inherited client/tooling paths workflow by workflow.
 
+The unsupported external aliases `export_omp_doc` and `wizard_get`, plus the
+residual `sync_config` schema/capability entry, are removed. No retained
+internal feed or configuration synchronization responsibility is affected.
+
 The legacy-client end-state is complete: `python-gvm` and `gvm-tools` are
 removed from product, runtime-helper, test, build, and operator tooling paths.
 Remaining GMP/XML work is tracked by the native API owner-tail inventory.

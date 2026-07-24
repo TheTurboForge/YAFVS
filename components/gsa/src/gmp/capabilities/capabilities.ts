@@ -77,7 +77,6 @@ const CAPABILITY_NAMES = [
   'modify_user',
   'start_task',
   'stop_task',
-  'sync_config',
   'test_alert',
   'verify_scanner',
 ] as const;

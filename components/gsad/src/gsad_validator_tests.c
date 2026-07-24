@@ -64,6 +64,12 @@ Ensure (gsad_validator, reject_removed_native_only_commands)
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_capabilities"),
                is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "export_omp_doc"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "wizard_get"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "sync_config"),
+               is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "ping"),
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "delete_schedule"),

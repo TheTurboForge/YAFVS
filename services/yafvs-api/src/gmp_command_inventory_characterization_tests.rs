@@ -81,6 +81,19 @@ fn advertised_commands() -> BTreeSet<String> {
 }
 
 #[test]
+fn retired_validator_aliases_and_sync_config_schema_residue_are_absent() {
+    for command in ["export_omp_doc", "wizard_get", "sync_config"] {
+        assert!(!GSAD_VALIDATOR.contains(&format!("|({command})")));
+        assert!(!GSAD_GMP.contains(command));
+        assert!(!GSAD_GMP_HEADER.contains(command));
+        assert!(!GMP.contains(&format!("strcasecmp (\"{}\"", command.to_ascii_uppercase())));
+        assert!(!advertised_commands().contains(&command.to_ascii_uppercase()));
+    }
+    assert!(!GMP_SCHEMA.contains("<name>sync_config</name>"));
+    assert!(!GSA_CAPABILITIES.contains("'sync_config'"));
+}
+
+#[test]
 fn get_resource_names_raw_transport_is_retired_but_native_tag_lookup_remains() {
     assert!(!advertised_commands().contains("GET_RESOURCE_NAMES"));
     assert!(!authenticated_parser_commands().contains("GET_RESOURCE_NAMES"));

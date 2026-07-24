@@ -33,7 +33,6 @@ gsad_init_validator ()
                      "|(download_key_pub)"
                      "|(edit_config_family)"
                      "|(edit_config_family_all)"
-                     "|(export_omp_doc)"
                      "|(export_preference_file)"
                      "|(export_result)"
                      "|(export_results)"
@@ -54,8 +53,7 @@ gsad_init_validator ()
                      "|(save_credential)"
                      "|(save_my_settings)"
                      "|(save_target)"
-                     "|(sync_config)"
-                     "|(wizard_get))$");
+                     ")$");
 
   gvm_validator_add (validator, "action_message", "(?s)^.*$");
   gvm_validator_add (validator, "action_status", "(?s)^.*$");

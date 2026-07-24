@@ -10038,43 +10038,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       </response>
     </example>
   </command>
-  <command>
-    <name>sync_config</name>
-    <summary>Synchronize a config with a scanner</summary>
-    <description>
-      <p>
-        The client uses the "sync_config" command to request an OSP
-        config synchronization with a scanner, adding new parameters and
-        removing old ones.
-      </p>
-    </description>
-    <pattern>
-    </pattern>
-    <response>
-      <pattern>
-        <attrib>
-          <name>status</name>
-          <type>status</type>
-          <required>1</required>
-        </attrib>
-        <attrib>
-          <name>status_text</name>
-          <type>text</type>
-          <required>1</required>
-        </attrib>
-      </pattern>
-    </response>
-    <example>
-      <summary>Sync the config</summary>
-      <request>
-        <sync_config>
-        </sync_config>
-      </request>
-      <response>
-        <sync_config_response status="202" status_text="OK, request submitted"/>
-      </response>
-    </example>
-  </command>
   <!-- Compatibility changes between versions. -->
   <change>
     <command>GET_RESULTS</command>

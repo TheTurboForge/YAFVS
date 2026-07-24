@@ -3774,58 +3774,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     </example>
   </command>
   <command>
-    <name>delete_task</name>
-    <summary>Delete a task</summary>
-    <description>
-      <p>
-        The client uses the delete_task command to delete an existing task,
-        including all reports associated with the task.
-      </p>
-      <p>
-        Since this is a destructive command, the client is advised to ask
-        for confirmation from the user before sending this command to the
-        Manager.
-      </p>
-    </description>
-    <pattern>
-      <attrib>
-        <name>task_id</name>
-        <type>uuid</type>
-        <required>1</required>
-      </attrib>
-      <attrib>
-        <name>ultimate</name>
-        <summary>Whether to remove entirely, or to the trashcan</summary>
-        <type>boolean</type>
-        <required>1</required>
-      </attrib>
-    </pattern>
-    <response>
-      <pattern>
-        <attrib>
-          <name>status</name>
-          <type>status</type>
-          <required>1</required>
-        </attrib>
-        <attrib>
-          <name>status_text</name>
-          <type>text</type>
-          <required>1</required>
-        </attrib>
-      </pattern>
-    </response>
-    <example>
-      <summary>Delete a task</summary>
-      <request>
-        <delete_task task_id="267a3405-e84a-47da-97b2-5fa0d2e8995e">
-        </delete_task>
-      </request>
-      <response>
-        <delete_task_response status="200" status_text="OK"/>
-      </response>
-    </example>
-  </command>
-  <command>
     <name>get_aggregates</name>
     <summary>Get aggregates of various resources</summary>
     <description>

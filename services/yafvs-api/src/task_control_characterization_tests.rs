@@ -310,27 +310,6 @@ fn inherited_osp_start_checks_target_permission_and_creates_report_before_scanne
     }
 }
 
-fn gmp_client_state_block(state: &str) -> String {
-    let marker = format!("      case {state}:");
-    let start = GMP_C
-        .find(&marker)
-        .unwrap_or_else(|| panic!("{state} GMP state block must exist"));
-    let tail = &GMP_C[start..];
-    let end = tail
-        .lines()
-        .enumerate()
-        .skip(1)
-        .find_map(|(index, line)| {
-            if line.starts_with("      case CLIENT_") {
-                Some(index)
-            } else {
-                None
-            }
-        })
-        .unwrap_or_else(|| tail.lines().count());
-    tail.lines().take(end).collect::<Vec<_>>().join("\n")
-}
-
 #[test]
 fn inherited_openvasd_start_stop_paths_have_scanner_side_effects_and_runtime_gate() {
     let run_openvasd_task = inherited_function(MANAGE_C, "run_openvasd_task");
@@ -540,33 +519,6 @@ fn public_start_stop_gmp_parser_and_clients_are_absent() {
         );
     }
     assert!(GMP_SCHEMA.contains("<command>RESUME_OR_START_TASK</command>"));
-}
-
-#[test]
-fn inherited_delete_response_maps_trash_and_scanner_error_cases() {
-    let delete_block = gmp_client_state_block("CLIENT_DELETE_TASK");
-    for required in [
-        "request_delete_task_uuid (delete_task_data->task_id",
-        "delete_task_data->ultimate",
-        "XML_OK (\"delete_task\")",
-        "\"deleted\"",
-        "XML_OK_REQUESTED (\"delete_task\")",
-        "\"requested for delete\"",
-        "Attempt to delete a hidden task",
-        "send_find_error_to_client",
-        "STATUS_ERROR_BUSY",
-        "Reports database is busy. Please try again later.",
-        "Permission denied",
-        "SEND_XML_SERVICE_DOWN (\"delete_task\")",
-        "No CA certificate",
-        "A task_id attribute is required",
-        "abort ();",
-    ] {
-        assert!(
-            delete_block.contains(required),
-            "CLIENT_DELETE_TASK missing {required}"
-        );
-    }
 }
 
 #[test]
@@ -810,12 +762,10 @@ fn native_browser_task_transports_retire_only_the_gsad_gmp_bridges() {
         GSA_CAPABILITIES.contains("'stop_task'"),
         "GSA task-stop availability capability must remain lowercase"
     );
-
-    let gmp_delete = inherited_function(GVM_LIBS_GMP_C, "gmp_delete_task");
-    let gmp_delete_ext = inherited_function(GVM_LIBS_GMP_C, "gmp_delete_task_ext");
-    assert!(gmp_delete.contains("<delete_task task_id=\\\"%s\\\"/>"));
-    assert!(gmp_delete_ext.contains("<delete_task task_id=\\\"%s\\\" ultimate=\\\"%d\\\"/>"));
-    assert!(gmp_delete_ext.contains("opts.ultimate"));
+    assert!(
+        GSA_CAPABILITIES.contains("'delete_task'"),
+        "GSA task-delete availability capability must remain lowercase"
+    );
 
     for retired in [
         "create_task",
@@ -833,9 +783,37 @@ fn native_browser_task_transports_retire_only_the_gsad_gmp_bridges() {
             "retired gsad task command remains valid: {retired}"
         );
     }
-    assert!(GMP_C.contains("strcasecmp (\"DELETE_TASK\", element_name)"));
-    assert!(GMP_C.contains("set_client_state (CLIENT_DELETE_TASK)"));
-    assert!(GMP_C.contains("case CLIENT_DELETE_TASK:"));
+    for retired in [
+        "strcasecmp (\"DELETE_TASK\", element_name)",
+        "CLIENT_DELETE_TASK",
+        "delete_task_data_t",
+        "delete_task_data_reset",
+        "gmp_delete_task",
+        "gmp_delete_task_ext",
+    ] {
+        assert!(
+            !GMP_C.contains(retired)
+                && !GVM_LIBS_GMP_C.contains(retired)
+                && !GVM_LIBS_GMP_H.contains(retired),
+            "retired raw DELETE_TASK transport/client residue remains: {retired}"
+        );
+    }
+    assert!(
+        !GMP_SCHEMA.contains("<name>delete_task</name>"),
+        "live GMP schema DELETE_TASK command remains"
+    );
+    assert!(
+        !MANAGE_COMMANDS_C.contains("{\"DELETE_TASK\","),
+        "public GMP HELP row remains"
+    );
+    assert!(
+        MANAGE_COMMANDS_C.contains("\"DELETE_TASK\","),
+        "retained native ACL operation key is missing"
+    );
+    let core_delete = inherited_function(MANAGE_SQL_C, "request_delete_task_uuid");
+    assert!(core_delete.contains("delete_task"));
+    let core_delete_task = inherited_function(MANAGE_SQL_C, "delete_task");
+    assert!(core_delete_task.contains("ultimate"));
     assert!(!GMP_C.contains("strcasecmp (\"START_TASK\", element_name)"));
     assert!(!GMP_C.contains("strcasecmp (\"STOP_TASK\", element_name)"));
     assert!(!GMP_C.contains("CLIENT_START_TASK"));

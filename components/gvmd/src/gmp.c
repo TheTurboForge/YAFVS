@@ -579,28 +579,6 @@ delete_report_data_reset (delete_report_data_t *data)
 
 
 /**
- * @brief Command data for the delete_task command.
- */
-typedef struct
-{
-  char *task_id;   ///< ID of task to delete.
-  int ultimate;    ///< Boolean.  Whether to remove entirely or to trashcan.
-} delete_task_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_task_data_reset (delete_task_data_t *data)
-{
-  free (data->task_id);
-
-  memset (data, 0, sizeof (delete_task_data_t));
-}
-
-/**
  * @brief Command data for the get_aggregates command.
  */
 typedef struct
@@ -1056,7 +1034,6 @@ typedef union
   create_task_data_t create_task;                     ///< create_task
   delete_config_data_t delete_config;                 ///< delete_config
   delete_report_data_t delete_report;                 ///< delete_report
-  delete_task_data_t delete_task;                     ///< delete_task
   get_aggregates_data_t get_aggregates;               ///< get_aggregates
   get_configs_data_t get_configs;                     ///< get_configs
   get_credentials_data_t get_credentials;             ///< get_credentials
@@ -1117,12 +1094,6 @@ static delete_config_data_t *delete_config_data
 static delete_report_data_t *delete_report_data
  = (delete_report_data_t*) &(command_data.delete_report);
 
-
-/**
- * @brief Parser callback data for DELETE_TASK.
- */
-static delete_task_data_t *delete_task_data
- = (delete_task_data_t*) &(command_data.delete_task);
 
 /**
  * @brief Parser callback data for GET_AGGREGATES.
@@ -1284,7 +1255,6 @@ typedef enum
   CLIENT_CREATE_TASK_USAGE_TYPE,
   CLIENT_DELETE_CONFIG,
   CLIENT_DELETE_REPORT,
-  CLIENT_DELETE_TASK,
   CLIENT_GET_AGGREGATES,
   CLIENT_GET_AGGREGATES_DATA_COLUMN,
   CLIENT_GET_AGGREGATES_SORT,
@@ -1545,18 +1515,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "report_id",
                               &delete_report_data->report_id);
             set_client_state (CLIENT_DELETE_REPORT);
-          }
-        else if (strcasecmp ("DELETE_TASK", element_name) == 0)
-          {
-            const gchar* attribute;
-            append_attribute (attribute_names, attribute_values, "task_id",
-                              &delete_task_data->task_id);
-            if (find_attribute (attribute_names, attribute_values,
-                                "ultimate", &attribute))
-              delete_task_data->ultimate = strcmp (attribute, "0");
-            else
-              delete_task_data->ultimate = 0;
-            set_client_state (CLIENT_DELETE_TASK);
           }
         else if (strcasecmp ("GET_AGGREGATES", element_name) == 0)
           {
@@ -7805,89 +7763,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
            (XML_ERROR_SYNTAX ("delete_report",
                               "A report_id attribute is required"));
         delete_report_data_reset (delete_report_data);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
-
-
-
-
-      case CLIENT_DELETE_TASK:
-        if (delete_task_data->task_id)
-          {
-            switch (request_delete_task_uuid (delete_task_data->task_id,
-                                              delete_task_data->ultimate))
-              {
-                case 0:    /* Deleted. */
-                  SEND_TO_CLIENT_OR_FAIL (XML_OK ("delete_task"));
-                  log_event ("task", "Task", delete_task_data->task_id,
-                             "deleted");
-                  break;
-                case 1:    /* Delete requested. */
-                  SEND_TO_CLIENT_OR_FAIL (XML_OK_REQUESTED ("delete_task"));
-                  log_event ("task", "Task", delete_task_data->task_id,
-                             "requested for delete");
-                  break;
-                case 2:    /* Hidden task. */
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("delete_task",
-                                      "Attempt to delete a hidden task"));
-                  log_event_fail ("task", "Task", delete_task_data->task_id,
-                                  "deleted");
-                  break;
-                case 3:  /* Failed to find task. */
-                  if (send_find_error_to_client
-                       ("delete_task", "task", delete_task_data->task_id,
-                        gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  break;
-                case 4:
-                  SENDF_TO_CLIENT_OR_FAIL(
-                    "<delete_task_response"
-                    " status=\"%s\""
-                    " status_text=\"%s\"/>",
-                    STATUS_ERROR_BUSY,
-                    "Reports database is busy. Please try again later.");
-                  log_event_fail ("task", "Task", delete_task_data->task_id,
-                                  "deleted");
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("delete_task",
-                                      "Permission denied"));
-                  log_event_fail ("task", "Task", delete_task_data->task_id,
-                                  "deleted");
-                  break;
-                default:   /* Programming error. */
-                  assert (0);
-                case -1:
-                  /* Some other error occurred. */
-                  /** @todo Should respond with internal error. */
-                  g_debug ("delete_task failed");
-                  abort ();
-                  break;
-                case -5:
-                  SEND_XML_SERVICE_DOWN ("delete_task");
-                  log_event_fail ("task", "Task",
-                                  delete_task_data->task_id,
-                                  "deleted");
-                  break;
-                case -7:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("delete_task", "No CA certificate"));
-                  log_event_fail ("task", "Task",
-                                  delete_task_data->task_id,
-                                  "deleted");
-                  break;
-              }
-          }
-        else
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("delete_task",
-                              "A task_id attribute is required"));
-        delete_task_data_reset (delete_task_data);
         set_client_state (CLIENT_AUTHENTIC);
         break;
 

@@ -611,35 +611,6 @@ gmp_read_create_response (gnutls_session_t *session, gchar **uuid)
 }
 
 /**
- * @brief Delete a task and read the manager response.
- *
- * @param[in]  session   Pointer to GNUTLS session.
- * @param[in]  id        ID of task.
- * @param[in]  opts      Struct containing the options to apply.
- *
- * @return 0 on success, GMP response code on failure, -1 on error.
- */
-int
-gmp_delete_task_ext (gnutls_session_t *session, const char *id,
-                     gmp_delete_opts_t opts)
-{
-  entity_t entity;
-  int ret;
-
-  if (gvm_server_sendf (session,
-                        "<delete_task task_id=\"%s\" ultimate=\"%d\"/>", id,
-                        opts.ultimate)
-      == -1)
-    return -1;
-
-  entity = NULL;
-  ret = gmp_check_response (session, &entity);
-  if (ret == 0)
-    free_entity (entity);
-  return ret;
-}
-
-/**
  * @brief Get the status of a task.
  *
  * @param[in]  session         Pointer to GNUTLS session.
@@ -830,30 +801,6 @@ gmp_modify_task_file (gnutls_session_t *session, const char *id,
     }
 
   if (gvm_server_sendf (session, "</modify_task>"))
-    return -1;
-
-  entity = NULL;
-  ret = gmp_check_response (session, &entity);
-  if (ret == 0)
-    free_entity (entity);
-  return ret;
-}
-
-/**
- * @brief Delete a task and read the manager response.
- *
- * @param[in]  session  Pointer to GNUTLS session.
- * @param[in]  id       ID of task.
- *
- * @return 0 on success, GMP response code on failure, -1 on error.
- */
-int
-gmp_delete_task (gnutls_session_t *session, const char *id)
-{
-  entity_t entity;
-  int ret;
-
-  if (gvm_server_sendf (session, "<delete_task task_id=\"%s\"/>", id) == -1)
     return -1;
 
   entity = NULL;

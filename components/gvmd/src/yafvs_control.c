@@ -1229,6 +1229,7 @@ yafvs_control_start_task (const char *operator_uuid, const char *task_uuid,
   result = start_task (task_uuid, &report_id);
   if (result == YAFVS_CONTROL_START_TASK_OK)
     {
+      log_event ("task", "Task", task_uuid, "requested to start");
       if (report_id == NULL)
         memcpy (report_uuid, "0", 2);
       else if (yafvs_control_uuid_is_valid (report_id))
@@ -1238,6 +1239,8 @@ yafvs_control_start_task (const char *operator_uuid, const char *task_uuid,
       else
         result = YAFVS_CONTROL_START_TASK_INTERNAL;
     }
+  else if (result != YAFVS_CONTROL_START_TASK_NOT_FOUND)
+    log_event_fail ("task", "Task", task_uuid, "started");
   yafvs_control_secure_free (report_id);
   yafvs_control_finish_operator_session ();
   return result;

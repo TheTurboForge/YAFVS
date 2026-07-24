@@ -183,6 +183,8 @@ static gboolean auth_settings_empty_required;
 static int start_task_calls;
 static int start_task_result;
 static const char *start_task_report_uuid;
+static int start_task_audit_success_calls;
+static int start_task_audit_fail_calls;
 
 int
 yafvs_control_test_start_task (const char *task_uuid, char **report_uuid)
@@ -251,6 +253,8 @@ Ensure (yafvs_control, starts_task_in_operator_session_and_maps_response)
   start_task_calls = 0;
   start_task_result = 0;
   start_task_report_uuid = "123e4567-e89b-12d3-a456-426614174002";
+  start_task_audit_success_calls = 0;
+  start_task_audit_fail_calls = 0;
   g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE);
   response_len = dispatch_trash_empty_request (request, response);
   g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
@@ -259,6 +263,8 @@ Ensure (yafvs_control, starts_task_in_operator_session_and_maps_response)
   assert_that (response,
                is_equal_to_string ("0 started 123e4567-e89b-12d3-a456-426614174002\n"));
   assert_that (start_task_calls, is_equal_to (1));
+  assert_that (start_task_audit_success_calls, is_equal_to (1));
+  assert_that (start_task_audit_fail_calls, is_equal_to (0));
   assert_that (reinit_calls > 0, is_true);
   assert_that (cleanup_calls > 0, is_true);
 
@@ -270,6 +276,27 @@ Ensure (yafvs_control, starts_task_in_operator_session_and_maps_response)
   g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   assert_that (response_len, is_equal_to (strlen ("0 started 0\n")));
   assert_that (response, is_equal_to_string ("0 started 0\n"));
+  assert_that (start_task_audit_success_calls, is_equal_to (2));
+
+  start_task_result = 99;
+  memset (response, 0, sizeof (response));
+  g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE);
+  response_len = dispatch_trash_empty_request (request, response);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
+  assert_that (response_len, is_equal_to (strlen ("99 forbidden\n")));
+  assert_that (response, is_equal_to_string ("99 forbidden\n"));
+  assert_that (start_task_audit_success_calls, is_equal_to (2));
+  assert_that (start_task_audit_fail_calls, is_equal_to (1));
+
+  start_task_result = 3;
+  memset (response, 0, sizeof (response));
+  g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE);
+  response_len = dispatch_trash_empty_request (request, response);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
+  assert_that (response_len, is_equal_to (strlen ("3 not_found\n")));
+  assert_that (response, is_equal_to_string ("3 not_found\n"));
+  assert_that (start_task_audit_success_calls, is_equal_to (2));
+  assert_that (start_task_audit_fail_calls, is_equal_to (1));
 }
 
 Ensure (yafvs_control, maps_start_task_control_responses)
@@ -1015,8 +1042,13 @@ __wrap_log_event (const char *resource, const char *resource_name,
   else if (strcmp (resource, "task") == 0)
     {
       assert_that (resource_name, is_equal_to_string ("Task"));
-      assert_that (action, is_equal_to_string ("created"));
-      task_audit_success_calls++;
+      if (strcmp (action, "requested to start") == 0)
+        start_task_audit_success_calls++;
+      else
+        {
+          assert_that (action, is_equal_to_string ("created"));
+          task_audit_success_calls++;
+        }
       g_free (received_audit_uuid);
       received_audit_uuid = g_strdup (uuid);
     }
@@ -1080,8 +1112,13 @@ __wrap_log_event_fail (const char *resource, const char *resource_name,
   else if (strcmp (resource, "task") == 0)
     {
       assert_that (resource_name, is_equal_to_string ("Task"));
-      assert_that (action, is_equal_to_string ("created"));
-      task_audit_fail_calls++;
+      if (strcmp (action, "started") == 0)
+        start_task_audit_fail_calls++;
+      else
+        {
+          assert_that (action, is_equal_to_string ("created"));
+          task_audit_fail_calls++;
+        }
       g_free (received_audit_uuid);
       received_audit_uuid = g_strdup (uuid);
     }

@@ -62,6 +62,23 @@ interface NativeCredentialPatchArgs {
   comment?: string;
 }
 
+export type NativeCredentialCreateArgs =
+  | {
+      name: string;
+      comment?: string;
+      login: string;
+      type: 'up';
+      password: string;
+    }
+  | {
+      name: string;
+      comment?: string;
+      login: string;
+      type: 'usk';
+      passphrase?: string;
+      privateKey: string;
+    };
+
 export interface NativeCredentialsQuery {
   page: number;
   pageSize: number;
@@ -390,6 +407,45 @@ export const patchNativeCredential = async (
     new ActionResult({
       action_result: {
         action: 'save_credential',
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
+};
+
+export const createNativeCredential = async (
+  gmp: NativeApiGmp,
+  args: NativeCredentialCreateArgs,
+): Promise<Response<ActionResult>> => {
+  const body =
+    args.type === 'up'
+      ? {
+          name: args.name,
+          ...(args.comment !== undefined ? {comment: args.comment} : {}),
+          login: args.login,
+          type: args.type,
+          password: args.password,
+        }
+      : {
+          name: args.name,
+          ...(args.comment !== undefined ? {comment: args.comment} : {}),
+          login: args.login,
+          type: args.type,
+          ...(args.passphrase !== undefined
+            ? {passphrase: args.passphrase}
+            : {}),
+          private_key: args.privateKey,
+        };
+  const payload = await writeNativeJson<NativeCredentialPayload>(
+    gmp,
+    'api/v1/credentials',
+    body,
+  );
+  return new Response(
+    new ActionResult({
+      action_result: {
+        action: 'create_credential',
         id: stringValue(payload.id),
         message: 'OK',
       },

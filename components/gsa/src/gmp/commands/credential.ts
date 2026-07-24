@@ -14,10 +14,13 @@ import Credential, {
   type SNMPAuthAlgorithmType,
   type SNMPPrivacyAlgorithmType,
   SNMP_CREDENTIAL_TYPE,
+  USERNAME_PASSWORD_CREDENTIAL_TYPE,
+  USERNAME_SSH_KEY_CREDENTIAL_TYPE,
 } from 'gmp/models/credential';
 import {type Element} from 'gmp/models/model';
 import {
   cloneNativeCredential,
+  createNativeCredential,
   deleteNativeCredential,
   exportNativeCredentialMetadata,
   fetchNativeCredential,
@@ -188,7 +191,34 @@ class CredentialCommand extends EntityCommand<
     };
   }
 
-  create(args: CredentialCommandCreateArgs) {
+  async create(args: CredentialCommandCreateArgs) {
+    if (
+      canUseNativeApi(this.http) &&
+      args.autogenerate !== true &&
+      args.credentialType === USERNAME_PASSWORD_CREDENTIAL_TYPE
+    ) {
+      return createNativeCredential(this.http, {
+        name: args.name,
+        comment: args.comment,
+        login: args.credentialLogin ?? '',
+        type: USERNAME_PASSWORD_CREDENTIAL_TYPE,
+        password: args.password ?? '',
+      });
+    }
+    if (
+      canUseNativeApi(this.http) &&
+      args.autogenerate !== true &&
+      args.credentialType === USERNAME_SSH_KEY_CREDENTIAL_TYPE
+    ) {
+      return createNativeCredential(this.http, {
+        name: args.name,
+        comment: args.comment,
+        login: args.credentialLogin ?? '',
+        type: USERNAME_SSH_KEY_CREDENTIAL_TYPE,
+        passphrase: args.passphrase,
+        privateKey: args.privateKey ? await args.privateKey.text() : '',
+      });
+    }
     const baseData = this.createBase(args);
     return this.action(baseData);
   }

@@ -48,6 +48,62 @@ fn openapi_path_block(path: &str) -> String {
 }
 
 #[test]
+fn credential_create_gsa_routes_only_manual_up_and_usk_to_native_api() {
+    for required in [
+        "createNativeCredential(this.http, {",
+        "args.autogenerate !== true",
+        "args.credentialType === USERNAME_PASSWORD_CREDENTIAL_TYPE",
+        "args.credentialType === USERNAME_SSH_KEY_CREDENTIAL_TYPE",
+        "type: USERNAME_PASSWORD_CREDENTIAL_TYPE",
+        "type: USERNAME_SSH_KEY_CREDENTIAL_TYPE",
+        "privateKey: args.privateKey ? await args.privateKey.text() : ''",
+    ] {
+        assert!(
+            GSA_CREDENTIAL_COMMAND.contains(required),
+            "manual UP/USK native creation marker is missing: {required}"
+        );
+    }
+    let native_create = GSA_NATIVE_CREDENTIALS
+        .split_once("export const createNativeCredential")
+        .expect("native credential-create adapter")
+        .1
+        .split_once("export const cloneNativeCredential")
+        .expect("native credential-create adapter boundary")
+        .0;
+    assert!(
+        !native_create.contains("allow_insecure"),
+        "manual browser creation must keep the native secure-use default"
+    );
+    for required in [
+        "export const createNativeCredential",
+        "'api/v1/credentials'",
+        "action: 'create_credential'",
+        "private_key: args.privateKey",
+    ] {
+        assert!(
+            GSA_NATIVE_CREDENTIALS.contains(required),
+            "native credential-create adapter marker is missing: {required}"
+        );
+    }
+
+    let (create, _) = GSA_CREDENTIAL_COMMAND
+        .split_once("async create(args: CredentialCommandCreateArgs)")
+        .expect("credential create command")
+        .1
+        .split_once("  createKrb5(")
+        .expect("credential create command boundary");
+    assert!(
+        create
+            .contains("const baseData = this.createBase(args);\n    return this.action(baseData);"),
+        "autogenerate and other credential types must retain inherited create_credential"
+    );
+    assert!(
+        GSA_CREDENTIAL_COMMAND.contains("cmd: 'create_credential'"),
+        "raw inherited CREATE_CREDENTIAL must remain for compatibility paths"
+    );
+}
+
+#[test]
 fn credential_live_delete_is_native_only() {
     assert!(GSA_CREDENTIAL_COMMAND.contains("deleteNativeCredential(this.http, id)"));
     assert!(!GSA_CREDENTIAL_COMMAND.contains("cmd: 'delete_credential'"));

@@ -300,14 +300,16 @@ alive-test, reverse-DNS, simultaneous-IP, and credential-link state are not part
 of that slice. Native credential reads expose redacted metadata. Direct
 write-control can create bounded username/password and username/SSH-key
 credentials through the manager's authoritative encryption path, and can patch
-credential name/comment metadata without reading secret rows. The browser now
-uses native PATCH for effective metadata-only saves, including realistic form
-state, while any secret, login, key, certificate, Kerberos, or SNMP mutation
-remains inherited. Other credential-type creation, autogeneration, secret
-updates, store selectors, type/allow-insecure mutation, and scanner/target
-links remain inherited. Native metadata export, clone, restore, trash movement,
-hard delete, SSH public-key retrieval, and stored client-certificate retrieval
-are separately classified native operations.
+credential name/comment metadata without reading secret rows. The browser uses
+native POST without a GMP fallback for manual username/password and
+username/SSH-key creation, and native PATCH for effective metadata-only saves,
+including realistic form state. Any secret update, login change, key or
+certificate replacement, Kerberos detail change, or SNMP mutation remains
+inherited. Other credential-type creation, autogeneration, store selectors,
+type/allow-insecure mutation, and scanner/target links also remain inherited.
+Native metadata export, clone, restore, trash movement, hard delete, SSH
+public-key retrieval, and stored client-certificate retrieval are separately
+classified native operations.
 
 Native task rows include task identity, status/progress, target/config/scanner
 and schedule references, report counts, current/latest report references,

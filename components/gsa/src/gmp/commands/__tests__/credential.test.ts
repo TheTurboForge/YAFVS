@@ -13,6 +13,7 @@ import {
   KRB5_CREDENTIAL_TYPE,
   SNMP_CREDENTIAL_TYPE,
   USERNAME_PASSWORD_CREDENTIAL_TYPE,
+  USERNAME_SSH_KEY_CREDENTIAL_TYPE,
 } from 'gmp/models/credential';
 import {createSession} from 'gmp/testing';
 
@@ -291,6 +292,151 @@ describe('CredentialCommand tests', () => {
 
     const {data} = resp;
     expect(data.id).toEqual('foo');
+  });
+
+  test('should create a manual UP credential through the native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'up-credential-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    const result = await new CredentialCommand(fakeHttp).create({
+      name: 'UP credential',
+      comment: 'native comment',
+      credentialLogin: 'alice',
+      credentialType: USERNAME_PASSWORD_CREDENTIAL_TYPE,
+      password: 'secret-password',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/credentials',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-YAFVS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'UP credential',
+          comment: 'native comment',
+          login: 'alice',
+          type: 'up',
+          password: 'secret-password',
+        }),
+      },
+    );
+    expect(result.data).toMatchObject({
+      action: 'create_credential',
+      id: 'up-credential-id',
+      message: 'OK',
+    });
+  });
+
+  test('should create a manual USK credential through the native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'usk-credential-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+
+    await new CredentialCommand(fakeHttp).create({
+      name: 'USK credential',
+      credentialLogin: 'alice',
+      credentialType: USERNAME_SSH_KEY_CREDENTIAL_TYPE,
+      passphrase: 'secret-passphrase',
+      privateKey,
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/credentials',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'USK credential',
+          login: 'alice',
+          type: 'usk',
+          passphrase: 'secret-passphrase',
+          private_key: 'private_key',
+        }),
+      }),
+    );
+  });
+
+  test('should propagate manual native credential-create failure without GMP fallback', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({ok: false, status: 500});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+
+    await expect(
+      new CredentialCommand(fakeHttp).create({
+        name: 'UP credential',
+        credentialLogin: 'alice',
+        credentialType: USERNAME_PASSWORD_CREDENTIAL_TYPE,
+        password: 'secret-password',
+      }),
+    ).rejects.toThrow('Native API request failed with status 500');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should retain autogenerate credential creation on inherited GMP', async () => {
+    const response = createActionResultResponse();
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+
+    await new CredentialCommand(fakeHttp).create({
+      name: 'generated UP credential',
+      autogenerate: true,
+      credentialLogin: 'alice',
+      credentialType: USERNAME_PASSWORD_CREDENTIAL_TYPE,
+      password: 'secret-password',
+    });
+
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: expect.objectContaining({
+        cmd: 'create_credential',
+        autogenerate: 1,
+        credential_type: USERNAME_PASSWORD_CREDENTIAL_TYPE,
+      }),
+    });
   });
 
   test('should create credential with all params', async () => {

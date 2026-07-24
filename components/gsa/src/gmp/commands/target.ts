@@ -6,7 +6,6 @@
 
 import EntityCommand from 'gmp/commands/entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
-import {feedStatusRejection} from 'gmp/native-api/feeds';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
@@ -35,8 +34,6 @@ import {
   type NativeTargetCreateArgs,
   type NativeTargetPatchArgs,
 } from 'gmp/native-api/targets';
-import {parseYesNo} from 'gmp/parser';
-import {isDefined} from 'gmp/utils/identity';
 import {UNSET_VALUE} from 'web/utils/Render';
 
 export type TargetSource = 'manual' | 'file' | 'asset_hosts';
@@ -647,103 +644,65 @@ class TargetCommand extends EntityCommand<Target> {
     excludeFile,
     hostAssetIds,
   }: TargetCommandCreateParams) {
-    const nativeApiAvailable = canUseNativeApi(this.http);
+    requireNativeTargetApi(this.http);
     const isHostAssetRequest =
       targetSource === 'asset_hosts' || hostAssetIds !== undefined;
-    if (isHostAssetRequest && !nativeApiAvailable) {
-      requireNativeTargetApi(this.http);
+    const nativeParams = await prepareNativeTargetHostSources({
+      aliveTests,
+      allowSimultaneousIPs,
+      comment,
+      esxiCredentialId,
+      excludeFile,
+      excludeHosts,
+      file,
+      hosts,
+      hostAssetIds,
+      krb5CredentialId,
+      name,
+      port,
+      portListId,
+      reverseLookupOnly,
+      reverseLookupUnify,
+      smbCredentialId,
+      snmpCredentialId,
+      sshCredentialId,
+      sshElevateCredentialId,
+      sshHostKeyPins,
+      targetExcludeSource,
+      targetSource,
+    });
+    if (nativeParams === undefined) {
+      if (isHostAssetRequest) {
+        throw new Error(
+          'Host-asset target creation requires the native asset_hosts source and 1 to 4095 unique host asset IDs',
+        );
+      }
+      throw new Error('Native target source preparation failed');
     }
-    const nativeParams = nativeApiAvailable
-      ? await prepareNativeTargetHostSources({
-          aliveTests,
-          allowSimultaneousIPs,
-          comment,
-          esxiCredentialId,
-          excludeFile,
-          excludeHosts,
-          file,
-          hosts,
-          hostAssetIds,
-          krb5CredentialId,
-          name,
-          port,
-          portListId,
-          reverseLookupOnly,
-          reverseLookupUnify,
-          smbCredentialId,
-          snmpCredentialId,
-          sshCredentialId,
-          sshElevateCredentialId,
-          sshHostKeyPins,
-          targetExcludeSource,
-          targetSource,
-        })
-      : undefined;
-    const nativeCreateArgs =
-      nativeParams === undefined
-        ? undefined
-        : nativeTargetCreateArgsFromParams(nativeParams);
-    if (
-      nativeCreateArgs !== undefined &&
-      nativeTargetWriteBodyFits(nativeTargetCreateBody(nativeCreateArgs))
-    ) {
-      return createNativeTarget(this.http, nativeCreateArgs);
-    }
-    if (isHostAssetRequest) {
+    const nativeCreateArgs = nativeTargetCreateArgsFromParams(nativeParams);
+    if (nativeCreateArgs === undefined) {
+      if (isHostAssetRequest) {
+        throw new Error(
+          'Host-asset target creation requires the native asset_hosts source and 1 to 4095 unique host asset IDs',
+        );
+      }
       throw new Error(
-        nativeCreateArgs === undefined || targetSource !== 'asset_hosts'
-          ? 'Host-asset target creation requires the native asset_hosts source and 1 to 4095 unique host asset IDs'
-          : 'Host-asset target request exceeds the native request-size limit',
+        !isUnsetCredential(sshCredentialId)
+          ? 'SSH credential targets require valid per-IP OpenSSH SHA-256 host-key pins and the native manual target workflow.'
+          : 'Native target request conversion failed',
       );
     }
-    if (nativeApiAvailable && !isUnsetCredential(sshCredentialId)) {
+    if (!nativeTargetWriteBodyFits(nativeTargetCreateBody(nativeCreateArgs))) {
       throw new Error(
-        'SSH credential targets require valid per-IP OpenSSH SHA-256 host-key pins and the native manual target workflow.',
+        isHostAssetRequest
+          ? 'Host-asset target request exceeds the native request-size limit'
+          : 'Native target request exceeds the native request-size limit',
       );
     }
-
-    try {
-      return await this.entityAction({
-        cmd: 'create_target',
-        name,
-        comment,
-        allow_simultaneous_ips: isDefined(allowSimultaneousIPs)
-          ? parseYesNo(allowSimultaneousIPs)
-          : undefined,
-        target_source: targetSource,
-        target_exclude_source: targetExcludeSource,
-        hosts,
-        exclude_hosts: excludeHosts,
-        reverse_lookup_only: isDefined(reverseLookupOnly)
-          ? parseYesNo(reverseLookupOnly)
-          : undefined,
-        reverse_lookup_unify: isDefined(reverseLookupUnify)
-          ? parseYesNo(reverseLookupUnify)
-          : undefined,
-        port_list_id: portListId,
-        'alive_tests:': aliveTests,
-        port,
-        ssh_credential_id: sshCredentialId,
-        ssh_elevate_credential_id:
-          sshCredentialId === UNSET_VALUE
-            ? UNSET_VALUE
-            : sshElevateCredentialId,
-        smb_credential_id: smbCredentialId,
-        esxi_credential_id: esxiCredentialId,
-        snmp_credential_id: snmpCredentialId,
-        krb5_credential_id: krb5CredentialId,
-        file,
-        exclude_file: excludeFile,
-      });
-    } catch (rejection) {
-      await feedStatusRejection(rejection as Error);
-      // never reached because feedStatusRejection always throws. just to satisfy TS
-      throw rejection;
-    }
+    return createNativeTarget(this.http, nativeCreateArgs);
   }
 
   async save(args: TargetCommandSaveArgs) {
-    const nativeApiAvailable = canUseNativeApi(this.http);
     if (
       args.targetSource === 'asset_hosts' ||
       args.hostAssetIds !== undefined
@@ -752,90 +711,26 @@ class TargetCommand extends EntityCommand<Target> {
         'Host-asset target IDs cannot be forwarded through the inherited target save path',
       );
     }
-    const nativeParams = nativeApiAvailable
-      ? await prepareNativeTargetHostSources(args)
-      : undefined;
-    const nativePatchArgs =
-      nativeParams === undefined
-        ? undefined
-        : nativeTargetPatchArgsFromParams(nativeParams);
-    if (
-      nativePatchArgs !== undefined &&
-      nativeTargetWriteBodyFits(nativeTargetPatchBody(nativePatchArgs))
-    ) {
-      return patchNativeTarget(this.http, nativePatchArgs);
+    requireNativeTargetApi(this.http);
+    const nativeParams = await prepareNativeTargetHostSources(args);
+    if (nativeParams === undefined) {
+      throw new Error('Native target source preparation failed');
     }
-    if (
-      nativeApiAvailable &&
-      args.sshCredentialId !== undefined &&
-      args.sshCredentialId !== UNSET_VALUE
-    ) {
+    const nativePatchArgs = nativeTargetPatchArgsFromParams(nativeParams);
+    if (nativePatchArgs === undefined) {
       throw new Error(
-        'SSH credential targets require valid per-IP OpenSSH SHA-256 host-key pins and the native manual target workflow.',
+        args.sshCredentialId !== undefined &&
+          args.sshCredentialId !== UNSET_VALUE
+          ? 'SSH credential targets require valid per-IP OpenSSH SHA-256 host-key pins and the native manual target workflow.'
+          : 'Native target request conversion failed',
       );
     }
-
-    const {
-      id,
-      name,
-      comment,
-      targetSource,
-      targetExcludeSource,
-      hosts,
-      excludeHosts,
-      reverseLookupOnly,
-      reverseLookupUnify,
-      portListId,
-      aliveTests,
-      allowSimultaneousIPs,
-      sshCredentialId,
-      sshElevateCredentialId,
-      port,
-      smbCredentialId,
-      esxiCredentialId,
-      snmpCredentialId,
-      krb5CredentialId,
-      file,
-      excludeFile,
-    } = args;
-    try {
-      return await this.action({
-        cmd: 'save_target',
-        target_id: id,
-        'alive_tests:': aliveTests,
-        allow_simultaneous_ips: isDefined(allowSimultaneousIPs)
-          ? parseYesNo(allowSimultaneousIPs)
-          : undefined,
-        comment,
-        esxi_credential_id: esxiCredentialId,
-        exclude_hosts: excludeHosts,
-        file,
-        exclude_file: excludeFile,
-        hosts,
-        name,
-        port,
-        port_list_id: portListId,
-        reverse_lookup_only: isDefined(reverseLookupOnly)
-          ? parseYesNo(reverseLookupOnly)
-          : undefined,
-        reverse_lookup_unify: isDefined(reverseLookupUnify)
-          ? parseYesNo(reverseLookupUnify)
-          : undefined,
-        smb_credential_id: smbCredentialId,
-        snmp_credential_id: snmpCredentialId,
-        ssh_credential_id: sshCredentialId,
-        ssh_elevate_credential_id: isDefined(sshCredentialId)
-          ? sshElevateCredentialId
-          : undefined,
-        krb5_credential_id: krb5CredentialId,
-        target_source: targetSource,
-        target_exclude_source: targetExcludeSource,
-      });
-    } catch (rejection) {
-      await feedStatusRejection(rejection as Error);
-      // never reached because feedStatusRejection always throws. just to satisfy TS
-      throw rejection;
+    if (!nativeTargetWriteBodyFits(nativeTargetPatchBody(nativePatchArgs))) {
+      throw new Error(
+        'Native target request exceeds the native request-size limit',
+      );
     }
+    return patchNativeTarget(this.http, nativePatchArgs);
   }
 }
 

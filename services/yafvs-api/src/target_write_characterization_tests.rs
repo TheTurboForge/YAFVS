@@ -157,8 +157,8 @@ fn target_reads_exports_and_acl_are_native_only_without_retiring_target_control(
         assert!(!TARGET_QUERY_SQL.contains(secret_column));
     }
 
-    for retained in ["ELSE (create_target)", "ELSE (save_target)"] {
-        assert!(GSAD_GMP_C.contains(retained));
+    for retired in ["ELSE (create_target)", "ELSE (save_target)"] {
+        assert!(!GSAD_GMP_C.contains(retired));
     }
     for retained in [
         "target_openvas_ssh_credential_db",
@@ -408,7 +408,7 @@ fn inherited_target_clone_delete_and_restore_preserve_login_data_and_task_links(
 }
 
 #[test]
-fn target_delete_is_native_only_while_raw_gmp_and_create_save_bridges_remain() {
+fn target_writes_are_native_only_while_raw_gmp_and_manager_writers_remain() {
     for required in [
         "copy_target (create_target_data->name,",
         "create_target_data->copy",
@@ -424,59 +424,60 @@ fn target_delete_is_native_only_while_raw_gmp_and_create_save_bridges_remain() {
         );
     }
 
-    let create_gsad = inherited_function(GSAD_GMP_C, "create_target_gmp");
-    for required in [
-        "CHECK_VARIABLE_INVALID (name, \"Create Target\")",
-        "CHECK_VARIABLE_INVALID (target_source, \"Create Target\")",
-        "<create_target>",
-        "<ssh_credential id=\\\"%s\\\">",
-        "<ssh_elevate_credential id=\\\"%s\\\"/>",
-        "<smb_credential id=\\\"%s\\\"/>",
-        "<esxi_credential id=\\\"%s\\\"/>",
-        "<snmp_credential id=\\\"%s\\\"/>",
-        "<krb5_credential id=\\\"%s\\\"/>",
-        "<asset_hosts",
-    ] {
+    for removed in ["create_target_gmp", "save_target_gmp"] {
         assert!(
-            create_gsad.contains(required),
-            "create_target_gmp missing {required}"
+            !GSAD_GMP_C.contains(removed),
+            "gsad bridge retains {removed}"
+        );
+        assert!(
+            !GSAD_GMP_H.contains(removed),
+            "gsad header retains {removed}"
         );
     }
+    for removed in ["create_target", "save_target"] {
+        assert!(!GSAD_GMP_C.contains(&format!("ELSE ({removed})")));
+        assert!(!GSAD_VALIDATOR.contains(&format!("|({removed})")));
+    }
 
-    let save_gsad = inherited_function(GSAD_GMP_C, "save_target_gmp");
-    for required in [
-        "<modify_target target_id=\\\"%s\\\">",
-        "<ssh_credential id=\\\"%s\\\">",
-        "<alive_tests>",
-    ] {
+    let create_gsa = GSA_TARGET_COMMAND
+        .split_once("  async create({")
+        .expect("GSA target create method must exist")
+        .1
+        .split_once("  async save(")
+        .expect("GSA target create method must end before save")
+        .0;
+    let save_gsa = GSA_TARGET_COMMAND
+        .split_once("  async save(")
+        .expect("GSA target save method must exist")
+        .1;
+    for method in [create_gsa, save_gsa] {
+        assert!(method.contains("requireNativeTargetApi(this.http)"));
+        assert!(!method.contains("entityAction("));
+        assert!(!method.contains("this.action("));
+        assert!(!method.contains("cmd: 'create_target'"));
+        assert!(!method.contains("cmd: 'save_target'"));
+    }
+    assert!(create_gsa.contains("createNativeTarget(this.http, nativeCreateArgs)"));
+    assert!(save_gsa.contains("patchNativeTarget(this.http, nativePatchArgs)"));
+
+    for retained in ["create_target", "modify_target", "delete_target"] {
+        assert!(GMP_C.contains(retained), "raw gvmd GMP lost {retained}");
+    }
+    for retained in ["gmp_create_target_ext", "gmp_delete_target_ext"] {
         assert!(
-            save_gsad.contains(required),
-            "save_target_gmp missing {required}"
+            GVM_LIBS_GMP_C.contains(retained),
+            "gvm-libs lost {retained}"
         );
     }
-
-    for retained in ["create_target_gmp", "save_target_gmp"] {
-        assert!(GSAD_GMP_C.contains(retained));
-        assert!(GSAD_GMP_H.contains(retained));
-    }
-    for retained in ["create_target", "save_target"] {
-        assert!(GSAD_GMP_C.contains(&format!("ELSE ({retained})")));
-        assert!(GSAD_VALIDATOR.contains(&format!("|({retained})")));
-    }
-
-    for required in [
-        "cmd: 'create_target'",
-        "cmd: 'save_target'",
-        "hostAssetIds",
-        "ssh_credential_id: sshCredentialId",
-        "ssh_elevate_credential_id:",
-        "smb_credential_id: smbCredentialId",
-        "snmp_credential_id: snmpCredentialId",
-        "krb5_credential_id: krb5CredentialId",
+    for retained in [
+        "create_target",
+        "modify_target",
+        "copy_target",
+        "delete_target",
     ] {
         assert!(
-            GSA_TARGET_COMMAND.contains(required),
-            "GSA target command missing {required}"
+            MANAGE_SQL_TARGETS_C.contains(&format!("\n{retained} (")),
+            "manager target writer lost {retained}"
         );
     }
     assert!(!GSA_TARGET_COMMAND.contains("hosts_filter"));

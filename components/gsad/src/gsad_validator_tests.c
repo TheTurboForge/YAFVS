@@ -106,6 +106,10 @@ Ensure (gsad_validator, reject_removed_native_only_commands)
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "export_targets"),
                is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "create_target"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "save_target"),
+               is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_asset"),
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_assets"),

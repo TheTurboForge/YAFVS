@@ -25,7 +25,6 @@ gsad_init_validator ()
                      "|(bulk_export)"
                      "|(change_password)"
                      "|(create_credential)"
-                     "|(create_target)"
                      "|(delete_config)"
                      "|(delete_report)"
                      "|(download_ssl_cert)"
@@ -52,7 +51,6 @@ gsad_init_validator ()
                      "|(save_config_family)"
                      "|(save_credential)"
                      "|(save_my_settings)"
-                     "|(save_target)"
                      ")$");
 
   gvm_validator_add (validator, "action_message", "(?s)^.*$");

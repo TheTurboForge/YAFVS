@@ -7,15 +7,44 @@
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import TargetCommand from 'gmp/commands/target';
 import {createActionResultResponse, createHttp} from 'gmp/commands/testing';
-import type Http from 'gmp/http/http';
-import {ResponseRejection} from 'gmp/http/rejection';
-import {SCAN_CONFIG_DEFAULT} from 'gmp/models/target';
-import {NO_VALUE, YES_VALUE} from 'gmp/parser';
+import {SCAN_CONFIG_DEFAULT, type AliveTest} from 'gmp/models/target';
 import {createSession} from 'gmp/testing';
 import {UNSET_VALUE} from 'web/utils/Render';
 
 afterEach(() => {
   testing.unstubAllGlobals();
+});
+
+const nativeHttp = () => {
+  const http = createHttp(undefined) as ReturnType<typeof createHttp> & {
+    buildUrl: ReturnType<typeof testing.fn>;
+    session: ReturnType<typeof createSession>;
+  };
+  http.buildUrl = testing.fn((path: string) => `https://yafvs.example/${path}`);
+  http.session = createSession();
+  http.session.token = 'test-token';
+  http.session.jwt = 'jwt-token';
+  return http;
+};
+
+const nativeWriteParams = () => ({
+  allowSimultaneousIPs: true,
+  aliveTests: [SCAN_CONFIG_DEFAULT] as AliveTest[],
+  esxiCredentialId: UNSET_VALUE,
+  excludeHosts: '',
+  hosts: '192.0.2.10',
+  krb5CredentialId: UNSET_VALUE,
+  name: 'Native Target',
+  port: 22,
+  portListId: 'port-list-id',
+  reverseLookupOnly: false,
+  reverseLookupUnify: false,
+  smbCredentialId: UNSET_VALUE,
+  snmpCredentialId: UNSET_VALUE,
+  sshCredentialId: UNSET_VALUE,
+  sshElevateCredentialId: UNSET_VALUE,
+  targetExcludeSource: 'manual' as const,
+  targetSource: 'manual' as const,
 });
 
 describe('TargetCommand tests', () => {
@@ -26,6 +55,109 @@ describe('TargetCommand tests', () => {
     await expect(cmd.get({id: 'target-id'})).rejects.toThrow(
       'Native target API is required for target command',
     );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test.each(['create', 'save'] as const)(
+    'should refuse target %s locally when native API is unavailable',
+    async operation => {
+      const fakeHttp = createHttp(undefined);
+      const cmd = new TargetCommand(fakeHttp);
+      const params = nativeWriteParams();
+
+      await expect(
+        operation === 'create'
+          ? cmd.create(params)
+          : cmd.save({id: 'target-id', ...params}),
+      ).rejects.toThrow('Native target API is required for target command');
+
+      expect(fakeHttp.request).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(['create', 'save'] as const)(
+    'should propagate native target %s failure without a GMP request',
+    async operation => {
+      const fetchMock = testing.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+      });
+      testing.stubGlobal('fetch', fetchMock);
+      const fakeHttp = nativeHttp();
+      const cmd = new TargetCommand(fakeHttp);
+      const params = nativeWriteParams();
+
+      await expect(
+        operation === 'create'
+          ? cmd.create(params)
+          : cmd.save({id: 'target-id', ...params}),
+      ).rejects.toThrow('Native API request failed with status 409');
+
+      expect(fakeHttp.request).not.toHaveBeenCalled();
+    },
+  );
+
+  test('should reject unreadable save files without GMP fallback', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = nativeHttp();
+    const file = {
+      size: 16,
+      text: testing.fn().mockRejectedValue(new Error('read failed')),
+    } as unknown as File;
+
+    await expect(
+      new TargetCommand(fakeHttp).save({
+        id: 'target-id',
+        ...nativeWriteParams(),
+        file,
+        targetSource: 'file',
+      }),
+    ).rejects.toThrow('Native target source preparation failed');
+
+    expect(file.text).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should reject oversized native save bodies without GMP fallback', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = nativeHttp();
+    const hosts = Array.from(
+      {length: 4095},
+      (_, index) => `host-${index}-${'a'.repeat(55)}`,
+    ).join(',');
+
+    await expect(
+      new TargetCommand(fakeHttp).save({
+        id: 'target-id',
+        ...nativeWriteParams(),
+        hosts,
+      }),
+    ).rejects.toThrow(
+      'Native target request exceeds the native request-size limit',
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should reject invalid save credential links without GMP fallback', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = nativeHttp();
+
+    await expect(
+      new TargetCommand(fakeHttp).save({
+        id: 'target-id',
+        ...nativeWriteParams(),
+        sshCredentialId: undefined,
+        sshElevateCredentialId: '54b05b45-02be-4123-9b05-b4502be11234',
+      }),
+    ).rejects.toThrow('Native target request conversion failed');
+
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
@@ -575,11 +707,10 @@ describe('TargetCommand tests', () => {
     );
   });
 
-  test('should fall back when a bounded host file cannot be read', async () => {
-    const response = createActionResultResponse();
+  test('should reject when a bounded host file cannot be read', async () => {
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -593,32 +724,31 @@ describe('TargetCommand tests', () => {
     } as unknown as File;
     const cmd = new TargetCommand(fakeHttp);
 
-    await cmd.create({
-      allowSimultaneousIPs: true,
-      name: 'Unreadable File Target',
-      targetSource: 'file',
-      targetExcludeSource: 'manual',
-      file,
-      excludeHosts: '',
-      reverseLookupOnly: false,
-      reverseLookupUnify: false,
-      portListId: 'pl-id',
-      aliveTests: [SCAN_CONFIG_DEFAULT],
-      port: 22,
-    });
+    await expect(
+      cmd.create({
+        allowSimultaneousIPs: true,
+        name: 'Unreadable File Target',
+        targetSource: 'file',
+        targetExcludeSource: 'manual',
+        file,
+        excludeHosts: '',
+        reverseLookupOnly: false,
+        reverseLookupUnify: false,
+        portListId: 'pl-id',
+        aliveTests: [SCAN_CONFIG_DEFAULT],
+        port: 22,
+      }),
+    ).rejects.toThrow('Native target source preparation failed');
 
     expect(file.text).toHaveBeenCalledOnce();
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: expect.objectContaining({cmd: 'create_target', file}),
-    });
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
-  test('should keep oversized host files on the inherited bounded upload path', async () => {
-    const response = createActionResultResponse();
+  test('should reject oversized host files without a legacy upload', async () => {
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -632,42 +762,37 @@ describe('TargetCommand tests', () => {
     } as unknown as File;
     const cmd = new TargetCommand(fakeHttp);
 
-    await cmd.create({
-      allowSimultaneousIPs: true,
-      name: 'Large File Target',
-      targetSource: 'file',
-      targetExcludeSource: 'manual',
-      file,
-      excludeHosts: '',
-      reverseLookupOnly: false,
-      reverseLookupUnify: false,
-      portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
-      aliveTests: [SCAN_CONFIG_DEFAULT],
-      port: 22,
-      sshCredentialId: UNSET_VALUE,
-      sshElevateCredentialId: UNSET_VALUE,
-      smbCredentialId: UNSET_VALUE,
-      esxiCredentialId: UNSET_VALUE,
-      snmpCredentialId: UNSET_VALUE,
-      krb5CredentialId: UNSET_VALUE,
-    });
+    await expect(
+      cmd.create({
+        allowSimultaneousIPs: true,
+        name: 'Large File Target',
+        targetSource: 'file',
+        targetExcludeSource: 'manual',
+        file,
+        excludeHosts: '',
+        reverseLookupOnly: false,
+        reverseLookupUnify: false,
+        portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+        aliveTests: [SCAN_CONFIG_DEFAULT],
+        port: 22,
+        sshCredentialId: UNSET_VALUE,
+        sshElevateCredentialId: UNSET_VALUE,
+        smbCredentialId: UNSET_VALUE,
+        esxiCredentialId: UNSET_VALUE,
+        snmpCredentialId: UNSET_VALUE,
+        krb5CredentialId: UNSET_VALUE,
+      }),
+    ).rejects.toThrow('Native target source preparation failed');
 
     expect(file.text).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: expect.objectContaining({
-        cmd: 'create_target',
-        file,
-        target_source: 'file',
-      }),
-    });
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
-  test('should fall back when JSON encoding expands a bounded file past the native body limit', async () => {
-    const response = createActionResultResponse();
+  test('should reject when encoded JSON exceeds the native body limit', async () => {
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -685,56 +810,61 @@ describe('TargetCommand tests', () => {
     } as unknown as File;
     const cmd = new TargetCommand(fakeHttp);
 
-    await cmd.create({
-      allowSimultaneousIPs: true,
-      name: 'Encoded Large File Target',
-      targetSource: 'file',
-      targetExcludeSource: 'manual',
-      file,
-      excludeHosts: '',
-      reverseLookupOnly: false,
-      reverseLookupUnify: false,
-      portListId: 'pl-id',
-      aliveTests: [SCAN_CONFIG_DEFAULT],
-      port: 22,
-    });
+    await expect(
+      cmd.create({
+        allowSimultaneousIPs: true,
+        name: 'Encoded Large File Target',
+        targetSource: 'file',
+        targetExcludeSource: 'manual',
+        file,
+        excludeHosts: '',
+        reverseLookupOnly: false,
+        reverseLookupUnify: false,
+        portListId: 'pl-id',
+        aliveTests: [SCAN_CONFIG_DEFAULT],
+        port: 22,
+      }),
+    ).rejects.toThrow(
+      'Native target request exceeds the native request-size limit',
+    );
 
     expect(file.size).toBeLessThan(256 * 1024);
     expect(file.text).toHaveBeenCalledOnce();
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: expect.objectContaining({cmd: 'create_target', file}),
-    });
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
-  test('should keep an inconsistent file shape on the inherited target path', async () => {
-    const response = createActionResultResponse();
+  test('should reject an inconsistent file shape without legacy fallback', async () => {
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
     const cmd = new TargetCommand(fakeHttp);
 
-    await cmd.create({
-      allowSimultaneousIPs: true,
-      name: 'Inherited Target',
-      targetSource: 'file',
-      targetExcludeSource: 'manual',
-      hosts: '',
-      excludeHosts: '',
-      reverseLookupOnly: false,
-      reverseLookupUnify: false,
-      portListId: 'pl-id',
-      aliveTests: [SCAN_CONFIG_DEFAULT],
-      port: 22,
-    });
+    await expect(
+      cmd.create({
+        allowSimultaneousIPs: true,
+        name: 'Inherited Target',
+        targetSource: 'file',
+        targetExcludeSource: 'manual',
+        hosts: '',
+        excludeHosts: '',
+        reverseLookupOnly: false,
+        reverseLookupUnify: false,
+        portListId: 'pl-id',
+        aliveTests: [SCAN_CONFIG_DEFAULT],
+        port: 22,
+      }),
+    ).rejects.toThrow('Native target source preparation failed');
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: expect.objectContaining({
-        cmd: 'create_target',
-        target_source: 'file',
-      }),
-    });
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should not fall back to GMP when native target delete fails', async () => {
@@ -772,58 +902,6 @@ describe('TargetCommand tests', () => {
     );
     expect(fetchMock).not.toHaveBeenCalled();
     expect(fakeHttp.request).not.toHaveBeenCalled();
-  });
-
-  test('should create target', async () => {
-    const response = createActionResultResponse();
-    const fakeHttp = createHttp(response);
-    const cmd = new TargetCommand(fakeHttp);
-    const resp = await cmd.create({
-      allowSimultaneousIPs: true,
-      name: 'name',
-      comment: 'comment',
-      targetSource: 'manual',
-      targetExcludeSource: 'manual',
-      hosts: '123.456, 678.9',
-      excludeHosts: '',
-      reverseLookupOnly: false,
-      reverseLookupUnify: true,
-      portListId: 'pl_id1',
-      aliveTests: [SCAN_CONFIG_DEFAULT],
-      port: 22,
-      sshCredentialId: 'ssh_id',
-      sshElevateCredentialId: '0',
-      smbCredentialId: '0',
-      esxiCredentialId: '0',
-      snmpCredentialId: '0',
-      krb5CredentialId: '0',
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'create_target',
-        allow_simultaneous_ips: 1,
-        'alive_tests:': ['Scan Config Default'],
-        comment: 'comment',
-        esxi_credential_id: '0',
-        exclude_file: undefined,
-        exclude_hosts: '',
-        file: undefined,
-        hosts: '123.456, 678.9',
-        name: 'name',
-        port: 22,
-        port_list_id: 'pl_id1',
-        reverse_lookup_unify: YES_VALUE,
-        reverse_lookup_only: NO_VALUE,
-        smb_credential_id: '0',
-        snmp_credential_id: '0',
-        ssh_credential_id: 'ssh_id',
-        ssh_elevate_credential_id: '0',
-        target_exclude_source: 'manual',
-        target_source: 'manual',
-        krb5_credential_id: '0',
-      },
-    });
-    expect(resp.data.id).toEqual('foo');
   });
 
   test('should create simple manual target through native API when available', async () => {
@@ -1180,7 +1258,7 @@ describe('TargetCommand tests', () => {
     );
   });
 
-  test('should keep invalid credential target creates on GMP when native API is available', async () => {
+  test('should reject invalid credential target creates without GMP fallback', async () => {
     const response = createActionResultResponse();
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
@@ -1195,34 +1273,30 @@ describe('TargetCommand tests', () => {
     fakeHttp.session.token = 'test-token';
     const cmd = new TargetCommand(fakeHttp);
 
-    await cmd.create({
-      allowSimultaneousIPs: true,
-      name: 'name',
-      comment: 'comment',
-      targetSource: 'manual',
-      targetExcludeSource: 'manual',
-      hosts: '192.0.2.10',
-      excludeHosts: '',
-      reverseLookupOnly: false,
-      reverseLookupUnify: true,
-      portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
-      aliveTests: [SCAN_CONFIG_DEFAULT],
-      sshCredentialId: UNSET_VALUE,
-      sshElevateCredentialId: '54b05b45-02be-4123-9b05-b4502be11234',
-      smbCredentialId: UNSET_VALUE,
-      esxiCredentialId: UNSET_VALUE,
-      snmpCredentialId: UNSET_VALUE,
-      krb5CredentialId: UNSET_VALUE,
-    });
+    await expect(
+      cmd.create({
+        allowSimultaneousIPs: true,
+        name: 'name',
+        comment: 'comment',
+        targetSource: 'manual',
+        targetExcludeSource: 'manual',
+        hosts: '192.0.2.10',
+        excludeHosts: '',
+        reverseLookupOnly: false,
+        reverseLookupUnify: true,
+        portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+        aliveTests: [SCAN_CONFIG_DEFAULT],
+        sshCredentialId: UNSET_VALUE,
+        sshElevateCredentialId: '54b05b45-02be-4123-9b05-b4502be11234',
+        smbCredentialId: UNSET_VALUE,
+        esxiCredentialId: UNSET_VALUE,
+        snmpCredentialId: UNSET_VALUE,
+        krb5CredentialId: UNSET_VALUE,
+      }),
+    ).rejects.toThrow('Native target request conversion failed');
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: expect.objectContaining({
-        cmd: 'create_target',
-        hosts: '192.0.2.10',
-        ssh_elevate_credential_id: UNSET_VALUE,
-      }),
-    });
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should create bounded manual host expressions through native API', async () => {
@@ -1290,167 +1364,6 @@ describe('TargetCommand tests', () => {
         }),
       }),
     );
-  });
-
-  test.each([
-    {
-      name: 'missing port list',
-      message: 'Failed to find port_list XYZ',
-      expectedMessage:
-        'Failed to create a new Target because the default Port List is not available. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
-    },
-    {
-      name: 'missing scan config',
-      message: 'Failed to find config XYZ',
-      expectedMessage:
-        'Failed to create a new Task because the default Scan Config is not available. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
-    },
-  ])(
-    'should not create new target while feed is not available: $name',
-    async ({message, expectedMessage}) => {
-      const xhr = {
-        status: 404,
-      } as XMLHttpRequest;
-      const rejection = new ResponseRejection(xhr, message);
-      const request = testing.fn().mockRejectedValue(rejection);
-      const fakeHttp = {
-        request,
-      } as unknown as Http;
-
-      const cmd = new TargetCommand(fakeHttp);
-      await expect(
-        cmd.create({
-          allowSimultaneousIPs: true,
-          name: 'name',
-          comment: 'comment',
-          targetSource: 'manual',
-          targetExcludeSource: 'manual',
-          hosts: '123.456, 678.9',
-          excludeHosts: '',
-          reverseLookupOnly: false,
-          reverseLookupUnify: true,
-          portListId: 'pl_id1',
-          aliveTests: [SCAN_CONFIG_DEFAULT],
-          port: 22,
-          sshCredentialId: 'ssh_id',
-          sshElevateCredentialId: '0',
-          smbCredentialId: '0',
-          esxiCredentialId: '0',
-          snmpCredentialId: '0',
-          krb5CredentialId: '0',
-        }),
-      ).rejects.toThrow(expectedMessage);
-      expect(request).toHaveBeenCalledTimes(1);
-    },
-  );
-
-  test('should nullify ssh_elevate_credential in create command', async () => {
-    const response = createActionResultResponse();
-    const fakeHttp = createHttp(response);
-    const cmd = new TargetCommand(fakeHttp);
-    const resp = await cmd.create({
-      allowSimultaneousIPs: true,
-      name: 'name',
-      comment: 'comment',
-      targetSource: 'manual',
-      targetExcludeSource: 'manual',
-      hosts: '123.456, 678.9',
-      excludeHosts: '',
-      reverseLookupOnly: false,
-      reverseLookupUnify: true,
-      portListId: 'pl_id1',
-      aliveTests: [SCAN_CONFIG_DEFAULT],
-      port: 22,
-      sshCredentialId: '0',
-      sshElevateCredentialId: 'ssh_elevate_id',
-      smbCredentialId: '0',
-      esxiCredentialId: '0',
-      snmpCredentialId: '0',
-      krb5CredentialId: '0',
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'create_target',
-        allow_simultaneous_ips: YES_VALUE,
-        'alive_tests:': ['Scan Config Default'],
-        comment: 'comment',
-        esxi_credential_id: '0',
-        exclude_file: undefined,
-        exclude_hosts: '',
-        file: undefined,
-        hosts: '123.456, 678.9',
-        name: 'name',
-        port: 22,
-        port_list_id: 'pl_id1',
-        reverse_lookup_unify: YES_VALUE,
-        reverse_lookup_only: NO_VALUE,
-        smb_credential_id: '0',
-        snmp_credential_id: '0',
-        ssh_credential_id: '0',
-        ssh_elevate_credential_id: '0',
-        target_exclude_source: 'manual',
-        target_source: 'manual',
-        krb5_credential_id: '0',
-      },
-    });
-    const {data} = resp;
-    expect(data.id).toEqual('foo');
-  });
-
-  test('should save target', async () => {
-    const response = createActionResultResponse();
-    const fakeHttp = createHttp(response);
-    const cmd = new TargetCommand(fakeHttp);
-    const resp = await cmd.save({
-      id: 'target_id1',
-      allowSimultaneousIPs: true,
-      name: 'name',
-      comment: 'comment',
-      targetSource: 'manual',
-      targetExcludeSource: 'manual',
-      excludeFile: undefined,
-      hosts: '123.456, 678.9',
-      excludeHosts: '',
-      reverseLookupOnly: false,
-      reverseLookupUnify: true,
-      portListId: 'pl_id1',
-      aliveTests: [SCAN_CONFIG_DEFAULT],
-      port: 22,
-      sshCredentialId: 'ssh_id',
-      sshElevateCredentialId: '0',
-      smbCredentialId: '0',
-      esxiCredentialId: '0',
-      snmpCredentialId: '0',
-      krb5CredentialId: '0',
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_target',
-        allow_simultaneous_ips: YES_VALUE,
-        'alive_tests:': ['Scan Config Default'],
-        comment: 'comment',
-        esxi_credential_id: '0',
-        exclude_file: undefined,
-        exclude_hosts: '',
-        file: undefined,
-        hosts: '123.456, 678.9',
-        name: 'name',
-        port: 22,
-        port_list_id: 'pl_id1',
-        reverse_lookup_unify: YES_VALUE,
-        reverse_lookup_only: NO_VALUE,
-        smb_credential_id: '0',
-        snmp_credential_id: '0',
-        ssh_credential_id: 'ssh_id',
-        ssh_elevate_credential_id: '0',
-        krb5_credential_id: '0',
-        target_exclude_source: 'manual',
-        target_id: 'target_id1',
-        target_source: 'manual',
-      },
-    });
-    const {data} = resp;
-    expect(data.id).toEqual('foo');
   });
 
   test('should save target metadata through native API when available', async () => {
@@ -1660,99 +1573,5 @@ describe('TargetCommand tests', () => {
         }),
       }),
     );
-  });
-
-  test.each([
-    {
-      name: 'missing port list',
-      message: 'Failed to find port_list XYZ',
-      expectedMessage:
-        'Failed to create a new Target because the default Port List is not available. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
-    },
-    {
-      name: 'missing scan config',
-      message: 'Failed to find config XYZ',
-      expectedMessage:
-        'Failed to create a new Task because the default Scan Config is not available. This issue may be due to the feed not having completed its synchronization.\nPlease try again shortly.',
-    },
-  ])(
-    'should not save target while feed is not available: $name',
-    async ({message, expectedMessage}) => {
-      const xhr = {
-        status: 404,
-      } as XMLHttpRequest;
-      const rejection = new ResponseRejection(xhr, message);
-      const request = testing.fn().mockRejectedValue(rejection);
-      const fakeHttp = {
-        request,
-      } as unknown as Http;
-
-      const cmd = new TargetCommand(fakeHttp);
-      await expect(
-        cmd.save({
-          id: 'target_id1',
-          allowSimultaneousIPs: true,
-          name: 'name',
-          comment: 'comment',
-          targetSource: 'manual',
-          targetExcludeSource: 'manual',
-          excludeFile: undefined,
-          hosts: '123.456, 678.9',
-          excludeHosts: '',
-          reverseLookupOnly: false,
-          reverseLookupUnify: true,
-          portListId: 'pl_id1',
-          aliveTests: [SCAN_CONFIG_DEFAULT],
-          port: 22,
-          sshCredentialId: UNSET_VALUE,
-          sshElevateCredentialId: 'ssh_elevate_id',
-          smbCredentialId: UNSET_VALUE,
-          esxiCredentialId: UNSET_VALUE,
-          snmpCredentialId: UNSET_VALUE,
-          krb5CredentialId: UNSET_VALUE,
-        }),
-      ).rejects.toThrow(expectedMessage);
-      expect(request).toHaveBeenCalledTimes(1);
-    },
-  );
-
-  test('should nullify ssh_elevate_credential if ssh_credential is not set in save command', async () => {
-    const response = createActionResultResponse();
-    const fakeHttp = createHttp(response);
-    const cmd = new TargetCommand(fakeHttp);
-    const resp = await cmd.save({
-      id: 'target_id1',
-      name: 'name',
-      sshCredentialId: undefined,
-      sshElevateCredentialId: 'ssh_elevate_id',
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_target',
-        allow_simultaneous_ips: undefined,
-        'alive_tests:': undefined,
-        comment: undefined,
-        esxi_credential_id: undefined,
-        exclude_file: undefined,
-        exclude_hosts: undefined,
-        file: undefined,
-        hosts: undefined,
-        name: 'name',
-        port: undefined,
-        port_list_id: undefined,
-        reverse_lookup_unify: undefined,
-        reverse_lookup_only: undefined,
-        smb_credential_id: undefined,
-        snmp_credential_id: undefined,
-        ssh_credential_id: undefined,
-        ssh_elevate_credential_id: undefined,
-        target_exclude_source: undefined,
-        target_id: 'target_id1',
-        target_source: undefined,
-        krb5_credential_id: undefined,
-      },
-    });
-    const {data} = resp;
-    expect(data.id).toEqual('foo');
   });
 });

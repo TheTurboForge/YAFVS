@@ -8406,6 +8406,8 @@ class YAFVSCtlTests(unittest.TestCase):
         package = json.loads(package_path.read_text(encoding="utf-8"))
         script = package["scripts"]["test:web-fast"]
         self.assertIn("vitest run", script)
+        self.assertIn("--maxWorkers=50%", script)
+        self.assertIn("--vmMemoryLimit=1GB", script)
         self.assertNotRegex(script, r"^vitest\s+--")
 
 

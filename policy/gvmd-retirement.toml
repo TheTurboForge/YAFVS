@@ -321,7 +321,7 @@ kind = "product"
 status = "inventoried"
 evidence = ["components/gsad/src/gsad_http_handler_functions.c::gsad_http_handle_gmp_get"]
 replacement = ["crud-query-api-surface"]
-notes = "The public user, alert, and schedule inventory, export, and lifecycle bridges are retired. Remove the remaining live /gmp GET/POST bridge after GSA has no legacy request path."
+notes = "The public user, alert, schedule, and browser task-start bridges are retired. GSA keeps lowercase start_task as capability vocabulary; authenticated gvmd START_TASK handling and gvm-libs clients remain live for scheduler, alert execution, and external compatibility. Remove the remaining live /gmp GET/POST bridge after GSA has no legacy request path."
 
 [[callers]]
 id = "gsad-manager-socket-auth"

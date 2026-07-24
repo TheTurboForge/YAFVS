@@ -1,5 +1,6 @@
 /* Copyright (C) 2009-2021 Greenbone AG
  * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -39,9 +40,6 @@ delete_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
 char *
 save_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                gsad_command_response_data_t *);
-char *
-start_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                gsad_command_response_data_t *);
 char *
 stop_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                gsad_command_response_data_t *);

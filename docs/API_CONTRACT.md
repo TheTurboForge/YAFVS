@@ -69,7 +69,9 @@ The registry currently covers these representative workflow families:
   systems, CVEs, TLS certificates, error messages, and metrics.
 - guarded task start through `POST /api/v1/tasks/{task_id}/start`, which
   transactionally creates the report and gvmd `scan_queue` request; scanner
-  execution and result ingestion remain gvmd-owned. The operator-facing
+  execution and result ingestion remain gvmd-owned. The superseded browser-facing
+  gsad `start_task` GMP action is not available; GSA retains lowercase
+  `start_task` only as capability vocabulary. The operator-facing
   `native-start-tasks-from-csv` helper composes paginated native task reads
   with this endpoint and replaces the inherited CSV start script without
   adding a bulk mutation endpoint.
@@ -302,7 +304,9 @@ remain inherited. The guarded
 `POST /api/v1/tasks/{task_id}/start` is available
 through direct native access and the authenticated browser proxy; it
 transactionally creates the report and gvmd `scan_queue` request, while gvmd
-remains the scanner execution and result-ingestion owner. Direct scriptable
+remains the scanner execution and result-ingestion owner. The gsad `start_task`
+GMP action is retired, but gvmd authenticated `START_TASK` handling and gvm-libs
+start-task clients remain retained. Direct scriptable
 `GET /api/v1/tasks/{task_id}/export` returns
 the same read-only task detail JSON for metadata export; it does not replace
 legacy task file export or lifecycle control.

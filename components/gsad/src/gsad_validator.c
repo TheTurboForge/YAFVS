@@ -1,5 +1,6 @@
 /* Copyright (C) 2009-2021 Greenbone AG
  * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -61,7 +62,6 @@ gsad_init_validator ()
                      "|(save_my_settings)"
                      "|(save_target)"
                      "|(save_task)"
-                     "|(start_task)"
                      "|(stop_task)"
                      "|(sync_feed)"
                      "|(sync_scap)"

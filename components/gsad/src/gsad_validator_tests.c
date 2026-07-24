@@ -1,5 +1,6 @@
 /* Copyright (C) 2022 Greenbone AG
  * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -100,7 +101,7 @@ Ensure (gsad_validator, reject_removed_native_only_commands)
   assert_that (gvm_validate (validator, "cmd", "move_task"),
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "start_task"),
-               is_equal_to (0));
+               is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "stop_task"),
                is_equal_to (0));
   assert_that (gvm_validate (validator, "cmd", "get_vulns"),

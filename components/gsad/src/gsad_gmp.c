@@ -1,5 +1,6 @@
 /* Copyright (C) 2009-2021 Greenbone AG
  * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -2030,24 +2031,6 @@ stop_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
                params_t *params, gsad_command_response_data_t *response_data)
 {
   return resource_action (connection, credentials, params, "task", "stop",
-                          response_data);
-}
-
-/**
- * @brief Start a task, get all tasks, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-start_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                params_t *params, gsad_command_response_data_t *response_data)
-{
-  return resource_action (connection, credentials, params, "task", "start",
                           response_data);
 }
 
@@ -6421,7 +6404,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (save_credential)
   ELSE (save_target)
   ELSE (save_task)
-  ELSE (start_task)
   ELSE (stop_task)
   ELSE (sync_feed)
   ELSE (sync_scap)

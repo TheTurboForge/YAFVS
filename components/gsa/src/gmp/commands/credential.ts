@@ -1,5 +1,6 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
  * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <robert@pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -190,32 +191,34 @@ class CredentialCommand extends EntityCommand<
 
   async create(args: CredentialCommandCreateArgs) {
     if (
-      canUseNativeApi(this.http) &&
-      (args.credentialType === USERNAME_PASSWORD_CREDENTIAL_TYPE ||
-        args.credentialType === USERNAME_SSH_KEY_CREDENTIAL_TYPE)
+      args.credentialType === USERNAME_PASSWORD_CREDENTIAL_TYPE ||
+      args.credentialType === USERNAME_SSH_KEY_CREDENTIAL_TYPE
     ) {
+      if (!canUseNativeApi(this.http)) {
+        throw new Error('Native credential creation is unavailable for UP/USK');
+      }
+
+      const nativeArgs = {
+        name: args.name,
+        comment: args.comment,
+        login: args.credentialLogin ?? '',
+        type: args.credentialType,
+      };
       if (args.autogenerate === true) {
         return createNativeCredential(this.http, {
-          name: args.name,
-          comment: args.comment,
-          login: args.credentialLogin ?? '',
-          type: args.credentialType,
+          ...nativeArgs,
           autogenerate: true,
         });
       }
       if (args.credentialType === USERNAME_PASSWORD_CREDENTIAL_TYPE) {
         return createNativeCredential(this.http, {
-          name: args.name,
-          comment: args.comment,
-          login: args.credentialLogin ?? '',
+          ...nativeArgs,
           type: USERNAME_PASSWORD_CREDENTIAL_TYPE,
           password: args.password ?? '',
         });
       }
       return createNativeCredential(this.http, {
-        name: args.name,
-        comment: args.comment,
-        login: args.credentialLogin ?? '',
+        ...nativeArgs,
         type: USERNAME_SSH_KEY_CREDENTIAL_TYPE,
         passphrase: args.passphrase,
         privateKey: args.privateKey ? await args.privateKey.text() : '',

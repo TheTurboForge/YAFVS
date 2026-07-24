@@ -1577,125 +1577,93 @@ create_credential_gmp (gvm_connection_t *connection,
   CHECK_VARIABLE_INVALID (name, "Create Credential");
   CHECK_VARIABLE_INVALID (comment, "Create Credential");
   CHECK_VARIABLE_INVALID (type, "Create Credential");
-  if (str_equal (type, "up"))
+  if (str_equal (type, "up") || str_equal (type, "usk"))
+    {
+      gsad_command_response_data_set_status_code (response_data,
+                                                  MHD_HTTP_BAD_REQUEST);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "Username/password and SSH-key credential creation must use the "
+        "native API; the raw browser GMP bridge is no longer supported.",
+        response_data);
+    }
+
+  if (str_equal (type, "krb5"))
+    {
+      GString *login_password_xml = g_string_new ("");
+      CHECK_LOGIN_NAME_INVALID_CREATE (credential_login, "Create Credential");
+
+      CHECK_VARIABLE_INVALID (password, "Create Credential");
+
+      gchar *login_esc =
+        g_markup_escape_text (credential_login ? credential_login : "", -1);
+      gchar *password_esc = g_markup_escape_text (password ? password : "", -1);
+
+      g_string_append_printf (login_password_xml,
+                              "<login>%s</login>"
+                              "<password>%s</password>",
+                              login_esc, password_esc);
+      g_free (login_esc);
+      g_free (password_esc);
+      // escape provided values
+      gchar *name_esc = g_markup_escape_text (name ? name : "", -1);
+      gchar *comment_esc = g_markup_escape_text (comment ? comment : "", -1);
+      gchar *type_esc = g_markup_escape_text (type, -1);
+      gchar *realm_esc = g_markup_escape_text (realm ? realm : "", -1);
+
+      GString *kdcs_xml = g_string_new ("");
+      if (kdcs_param)
         {
-          CHECK_VARIABLE_INVALID (credential_login, "Create Credential");
-          CHECK_VARIABLE_INVALID (password, "Create Credential");
+          g_string_append (kdcs_xml, "<kdcs>");
+          params_iterator_t iter;
+          char *param_name;
+          param_t *param;
 
-          ret = gmpf (connection, credentials, NULL, &entity, response_data,
-                      "<create_credential>"
-                      "<name>%s</name>"
-                      "<comment>%s</comment>"
-                      "<type>%s</type>"
-                      "<login>%s</login>"
-                      "<password>%s</password>"
-                      "</create_credential>",
-                      name, comment ? comment : "", type,
-                      credential_login ? credential_login : "",
-                      password ? password : "");
-        }
-      else if (str_equal (type, "krb5"))
-        {
-          GString *login_password_xml = g_string_new ("");
-          CHECK_LOGIN_NAME_INVALID_CREATE (credential_login,
-                                           "Create Credential");
-
-          CHECK_VARIABLE_INVALID (password, "Create Credential");
-
-          gchar *login_esc = g_markup_escape_text (
-            credential_login ? credential_login : "", -1);
-          gchar *password_esc =
-            g_markup_escape_text (password ? password : "", -1);
-
-          g_string_append_printf (login_password_xml,
-                                  "<login>%s</login>"
-                                  "<password>%s</password>",
-                                  login_esc, password_esc);
-          g_free (login_esc);
-          g_free (password_esc);
-          // escape provided values
-          gchar *name_esc = g_markup_escape_text (name ? name : "", -1);
-          gchar *comment_esc =
-            g_markup_escape_text (comment ? comment : "", -1);
-          gchar *type_esc = g_markup_escape_text (type, -1);
-          gchar *realm_esc = g_markup_escape_text (realm ? realm : "", -1);
-
-          GString *kdcs_xml = g_string_new ("");
-          if (kdcs_param)
+          params_iterator_init (&iter, kdcs_param);
+          while (params_iterator_next (&iter, &param_name, &param))
             {
-              g_string_append (kdcs_xml, "<kdcs>");
-              params_iterator_t iter;
-              char *param_name;
-              param_t *param;
-
-              params_iterator_init (&iter, kdcs_param);
-              while (params_iterator_next (&iter, &param_name, &param))
+              if (param->value && *param->value)
                 {
-                  if (param->value && *param->value)
-                    {
-                      gchar *escaped = g_markup_escape_text (param->value, -1);
-                      g_string_append_printf (kdcs_xml, "<kdc>%s</kdc>",
-                                              escaped);
-                      g_free (escaped);
-                    }
+                  gchar *escaped = g_markup_escape_text (param->value, -1);
+                  g_string_append_printf (kdcs_xml, "<kdc>%s</kdc>", escaped);
+                  g_free (escaped);
                 }
-              g_string_append (kdcs_xml, "</kdcs>");
             }
-          else if (kdc && *kdc)
-            {
-              gchar *kdc_esc = g_markup_escape_text (kdc, -1);
-              g_string_append_printf (kdcs_xml, "<kdc>%s</kdc>", kdc_esc);
-              g_free (kdc_esc);
-            }
-
-          // build full command XML
-          gchar *command = g_strdup_printf (
-            "<create_credential>"
-            "<name>%s</name>"
-            "<comment>%s</comment>"
-            "<type>%s</type>"
-            "%s" // login and password block
-            "%s" // kdcs or kdc block
-            "<realm>%s</realm>"
-            "</create_credential>",
-            name_esc, comment_esc, type_esc,
-            login_password_xml->str ? login_password_xml->str : "",
-            kdcs_xml->str ? kdcs_xml->str : "", realm_esc);
-
-          ret = gmp (connection, credentials, NULL, &entity, response_data,
-                     command);
-
-          // cleanup
-          g_free (command);
-          g_string_free (kdcs_xml, TRUE);
-          g_free (name_esc);
-          g_free (comment_esc);
-          g_free (type_esc);
-          g_string_free (login_password_xml, TRUE);
-          g_free (realm_esc);
+          g_string_append (kdcs_xml, "</kdcs>");
         }
-      else if (str_equal (type, "usk"))
+      else if (kdc && *kdc)
         {
-          CHECK_VARIABLE_INVALID (credential_login, "Create Credential");
-          CHECK_VARIABLE_INVALID (private_key, "Create Credential");
-
-          if (params_given (params, "passphrase"))
-            CHECK_VARIABLE_INVALID (passphrase, "Create Credential");
-
-          ret = gmpf (connection, credentials, NULL, &entity, response_data,
-                      "<create_credential>"
-                      "<name>%s</name>"
-                      "<comment>%s</comment>"
-                      "<type>%s</type>"
-                      "<login>%s</login>"
-                      "<key>"
-                      "<private>%s</private>"
-                      "<phrase>%s</phrase>"
-                      "</key>"
-                      "</create_credential>",
-                      name, comment ? comment : "", type, credential_login,
-                      private_key, passphrase ? passphrase : "");
+          gchar *kdc_esc = g_markup_escape_text (kdc, -1);
+          g_string_append_printf (kdcs_xml, "<kdc>%s</kdc>", kdc_esc);
+          g_free (kdc_esc);
         }
+
+      // build full command XML
+      gchar *command =
+        g_strdup_printf ("<create_credential>"
+                         "<name>%s</name>"
+                         "<comment>%s</comment>"
+                         "<type>%s</type>"
+                         "%s" // login and password block
+                         "%s" // kdcs or kdc block
+                         "<realm>%s</realm>"
+                         "</create_credential>",
+                         name_esc, comment_esc, type_esc,
+                         login_password_xml->str ? login_password_xml->str : "",
+                         kdcs_xml->str ? kdcs_xml->str : "", realm_esc);
+
+      ret =
+        gmp (connection, credentials, NULL, &entity, response_data, command);
+
+      // cleanup
+      g_free (command);
+      g_string_free (kdcs_xml, TRUE);
+      g_free (name_esc);
+      g_free (comment_esc);
+      g_free (type_esc);
+      g_string_free (login_password_xml, TRUE);
+      g_free (realm_esc);
+    }
       else if (str_equal (type, "cc"))
         {
           CHECK_VARIABLE_INVALID (certificate, "Create Credential");

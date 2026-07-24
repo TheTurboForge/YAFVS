@@ -23,8 +23,10 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const POSTGRES_COLLATION_BASE_DATABASES: [&str; 2] = ["postgres", "template1"];
+const POSTGRES_SERVICE: &str = "postgres";
 const PG_GVM_CONTROL: &str = "pg-gvm.control";
 const PG_GVM_LIBRARY: &str = "libpg-gvm.so";
+const COMPOSE_STATE_OUTPUT_MAX_BYTES: usize = 256;
 #[derive(Clone, Copy)]
 pub(crate) struct PostgresExtension {
     pub(crate) name: &'static str,
@@ -130,31 +132,50 @@ pub(crate) fn command_runtime_init_with(
     }
     let artifacts = artifacts.expect("passing pg-gvm findings have open artifacts");
 
-    let postgres_up = run_compose(
-        repo_root,
-        runner,
-        &environment,
-        &[
-            "up".into(),
-            "-d".into(),
-            "--build".into(),
-            "postgres".into(),
-        ],
-    );
-    findings.push(process_finding(
-        &postgres_up,
-        "postgres.up",
-        "docker compose up postgres",
-        80,
-        None,
-    ));
-    if !process_succeeded(&postgres_up) {
-        return result(
-            repo_root,
-            runner,
-            "Runtime initialization stopped at Postgres startup.",
-            findings,
-        );
+    match postgres_is_running(repo_root, runner, &environment) {
+        Ok(true) => findings.push(Finding::new(
+            "pass",
+            "postgres.running-state",
+            "Existing PostgreSQL service is running and was preserved without Compose lifecycle changes."
+                .to_string(),
+        )),
+        Ok(false) => {
+            let postgres_up = run_compose(
+                repo_root,
+                runner,
+                &environment,
+                &[
+                    "up".into(),
+                    "-d".into(),
+                    "--build".into(),
+                    POSTGRES_SERVICE.into(),
+                ],
+            );
+            findings.push(process_finding(
+                &postgres_up,
+                "postgres.up",
+                "docker compose up postgres",
+                80,
+                None,
+            ));
+            if !process_succeeded(&postgres_up) {
+                return result(
+                    repo_root,
+                    runner,
+                    "Runtime initialization stopped at Postgres startup.",
+                    findings,
+                );
+            }
+        }
+        Err(finding) => {
+            findings.push(finding);
+            return result(
+                repo_root,
+                runner,
+                "Runtime initialization stopped before Postgres lifecycle changes.",
+                findings,
+            );
+        }
     }
 
     let mut ready = None;
@@ -364,6 +385,51 @@ pub(crate) fn command_runtime_init_with(
         runtime_dir(repo_root).display().to_string(),
         "build/prefix".to_string(),
     ])
+}
+
+fn postgres_is_running(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<OsString, OsString>,
+) -> Result<bool, Finding> {
+    let output = run_compose(
+        repo_root,
+        runner,
+        environment,
+        &[
+            "ps".into(),
+            "--status".into(),
+            "running".into(),
+            "--services".into(),
+            POSTGRES_SERVICE.into(),
+        ],
+    );
+    if !process_succeeded(&output) {
+        return Err(process_finding(
+            &output,
+            "postgres.running-state",
+            "PostgreSQL running-state inspection",
+            20,
+            None,
+        ));
+    }
+    let stdout = output.as_ref().map_or("", |output| output.stdout.as_str());
+    let state = match stdout {
+        "" => Ok(false),
+        "postgres\n" => Ok(true),
+        _ if stdout.len() > COMPOSE_STATE_OUTPUT_MAX_BYTES => {
+            Err("output exceeded the bounded size")
+        }
+        _ => Err("output was not the exact expected service name"),
+    };
+    state.map_err(|reason| {
+        Finding::new(
+            "fail",
+            "postgres.running-state",
+            format!("PostgreSQL running-state inspection was unsafe: {reason}."),
+        )
+        .with_details(json!({ "output_tail": process_tail(&output, 20) }))
+    })
 }
 
 fn result(
@@ -1057,6 +1123,8 @@ mod tests {
     struct Runner {
         calls: Mutex<Vec<Call>>,
         ready: bool,
+        postgres_state_success: bool,
+        postgres_state_output: &'static str,
         collation: &'static str,
         relations: &'static str,
         extension_create_success: bool,
@@ -1072,6 +1140,8 @@ mod tests {
             Self {
                 calls: Mutex::new(Vec::new()),
                 ready: true,
+                postgres_state_success: true,
+                postgres_state_output: "",
                 collation: "1|1\n",
                 relations: "0\n",
                 extension_create_success: true,
@@ -1085,6 +1155,12 @@ mod tests {
 
         fn docker_output(&self, args: &[&str]) -> ProcessOutput {
             let joined = args.join(" ");
+            if joined.ends_with("ps --status running --services postgres") {
+                return output(
+                    if self.postgres_state_success { 0 } else { 1 },
+                    self.postgres_state_output,
+                );
+            }
             if joined.contains("pg_isready") {
                 return output(if self.ready { 0 } else { 1 }, "");
             }
@@ -1208,6 +1284,10 @@ mod tests {
             .iter()
             .position(|call| call.ends_with("config --quiet"))
             .unwrap();
+        let running_state = joined
+            .iter()
+            .position(|call| call.ends_with("ps --status running --services postgres"))
+            .unwrap();
         let foundational_create = joined
             .iter()
             .position(|call| call.contains("CREATE TABLE IF NOT EXISTS meta"))
@@ -1244,7 +1324,13 @@ mod tests {
             .iter()
             .position(|call| call.contains("CREATE EXTENSION IF NOT EXISTS \"pg-gvm\";"))
             .unwrap();
-        assert!(config < up && up < ready && ready < copy && copy < role);
+        assert!(
+            config < running_state
+                && running_state < up
+                && up < ready
+                && ready < copy
+                && copy < role
+        );
         assert!(
             role < uuid_create && uuid_create < pgcrypto_create && pgcrypto_create < pg_gvm_create
         );
@@ -1309,6 +1395,87 @@ mod tests {
                 call.environment.get(&OsString::from("PGPASSWORD")),
                 Some(&OsString::from("yafvs-dev"))
             );
+        }
+    }
+
+    #[test]
+    fn running_postgres_skips_compose_up_and_preserves_service() {
+        let fixture = Fixture::new("postgres-running");
+        let runner = Runner {
+            postgres_state_output: "postgres\n",
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "pass", "{:?}", result.findings);
+        assert!(result.findings.iter().any(|finding| {
+            finding.check == "postgres.running-state"
+                && finding.status == "pass"
+                && finding.message.contains("preserved")
+        }));
+        let calls = runner.calls.lock().unwrap();
+        assert!(calls.iter().any(|call| {
+            call.args.ends_with(&[
+                "ps".into(),
+                "--status".into(),
+                "running".into(),
+                "--services".into(),
+                "postgres".into(),
+            ])
+        }));
+        assert!(!calls.iter().any(|call| {
+            call.args.ends_with(&[
+                "up".into(),
+                "-d".into(),
+                "--build".into(),
+                "postgres".into(),
+            ])
+        }));
+    }
+
+    #[test]
+    fn absent_postgres_performs_compose_up_build() {
+        let fixture = Fixture::new("postgres-absent");
+        let runner = Runner::passing();
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "pass", "{:?}", result.findings);
+        let calls = runner.calls.lock().unwrap();
+        assert!(calls.iter().any(|call| {
+            call.args.ends_with(&[
+                "up".into(),
+                "-d".into(),
+                "--build".into(),
+                "postgres".into(),
+            ])
+        }));
+    }
+
+    #[test]
+    fn failed_or_malformed_postgres_state_inspection_stops_before_mutation() {
+        for (name, state_success, state_output) in [
+            ("state-command-failure", false, ""),
+            ("state-malformed-output", true, "postgres\nunexpected\n"),
+        ] {
+            let fixture = Fixture::new(name);
+            let runner = Runner {
+                postgres_state_success: state_success,
+                postgres_state_output: state_output,
+                ..Runner::passing()
+            };
+            let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+            assert_eq!(result.status, "fail", "{:?}", result.findings);
+            assert_eq!(
+                result.summary,
+                "Runtime initialization stopped before Postgres lifecycle changes."
+            );
+            assert!(result.findings.iter().any(|finding| {
+                finding.check == "postgres.running-state" && finding.status == "fail"
+            }));
+            let calls = runner.calls.lock().unwrap();
+            assert!(!calls.iter().any(|call| {
+                call.args
+                    .iter()
+                    .any(|argument| matches!(argument.as_str(), "up" | "exec" | "restart" | "stop"))
+            }));
         }
     }
 

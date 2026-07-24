@@ -67,7 +67,15 @@ export type NativeCredentialCreateArgs =
       name: string;
       comment?: string;
       login: string;
+      type: 'up' | 'usk';
+      autogenerate: true;
+    }
+  | {
+      name: string;
+      comment?: string;
+      login: string;
       type: 'up';
+      autogenerate?: false;
       password: string;
     }
   | {
@@ -75,6 +83,7 @@ export type NativeCredentialCreateArgs =
       comment?: string;
       login: string;
       type: 'usk';
+      autogenerate?: false;
       passphrase?: string;
       privateKey: string;
     };
@@ -419,24 +428,32 @@ export const createNativeCredential = async (
   args: NativeCredentialCreateArgs,
 ): Promise<Response<ActionResult>> => {
   const body =
-    args.type === 'up'
+    args.autogenerate === true
       ? {
           name: args.name,
           ...(args.comment !== undefined ? {comment: args.comment} : {}),
           login: args.login,
           type: args.type,
-          password: args.password,
+          autogenerate: true,
         }
-      : {
-          name: args.name,
-          ...(args.comment !== undefined ? {comment: args.comment} : {}),
-          login: args.login,
-          type: args.type,
-          ...(args.passphrase !== undefined
-            ? {passphrase: args.passphrase}
-            : {}),
-          private_key: args.privateKey,
-        };
+      : args.type === 'up'
+        ? {
+            name: args.name,
+            ...(args.comment !== undefined ? {comment: args.comment} : {}),
+            login: args.login,
+            type: args.type,
+            password: args.password,
+          }
+        : {
+            name: args.name,
+            ...(args.comment !== undefined ? {comment: args.comment} : {}),
+            login: args.login,
+            type: args.type,
+            ...(args.passphrase !== undefined
+              ? {passphrase: args.passphrase}
+              : {}),
+            private_key: args.privateKey,
+          };
   const payload = await writeNativeJson<NativeCredentialPayload>(
     gmp,
     'api/v1/credentials',

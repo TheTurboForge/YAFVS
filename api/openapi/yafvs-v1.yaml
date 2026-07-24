@@ -11004,7 +11004,7 @@ components:
       type: object
       additionalProperties: false
       required: [name, login, type]
-      description: Write-only secret-bearing request for username/password (`up`) or username/SSH-key (`usk`) credential creation. `up` requires password and forbids passphrase/private_key; `usk` requires private_key, accepts an optional passphrase, and forbids password. The combined decoded name, comment, login, secret, and private-key content must not exceed 48,800 bytes so every accepted request fits the bounded private control frame.
+      description: Write-only secret-bearing request for username/password (`up`) or username/SSH-key (`usk`) credential creation. `up` requires password and forbids passphrase/private_key; `usk` requires private_key, accepts an optional passphrase, and forbids password. With autogenerate true, only `up` and `usk` are accepted and password, passphrase, and private_key must all be omitted; the native service generates the write-only values before its bounded manager control dispatch. The combined decoded name, comment, login, secret, and private-key content must not exceed 48,800 bytes so every accepted request fits the bounded private control frame.
       properties:
         name:
           type: string
@@ -11020,6 +11020,10 @@ components:
         type:
           type: string
           enum: [up, usk]
+        autogenerate:
+          type: boolean
+          default: false
+          description: Generate native credential secrets for `up` or `usk`. When true, password, passphrase, and private_key are forbidden even when empty.
         password:
           type: string
           minLength: 1

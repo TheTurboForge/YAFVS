@@ -13,6 +13,7 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
+    credential_generation::generate_credential_secrets,
     credential_payloads::CredentialAssetItem,
     credential_write_db::*,
     credential_write_transactions::{
@@ -75,7 +76,8 @@ pub(crate) async fn create_credential(
     Json(request): Json<CredentialCreateRequest>,
 ) -> Result<(StatusCode, Json<CredentialAssetItem>), ApiError> {
     let operator = require_credential_write_operator(operator)?;
-    let request = validate_credential_create_request(request)?;
+    let mut request = validate_credential_create_request(request)?;
+    generate_credential_secrets(&mut request).await?;
     let control_secret = gvmd_control_secret()?;
     let credential_id = request_credential_create(
         &gvmd_control_socket_path(),

@@ -194,22 +194,27 @@ class CredentialCommand extends EntityCommand<
   async create(args: CredentialCommandCreateArgs) {
     if (
       canUseNativeApi(this.http) &&
-      args.autogenerate !== true &&
-      args.credentialType === USERNAME_PASSWORD_CREDENTIAL_TYPE
+      (args.credentialType === USERNAME_PASSWORD_CREDENTIAL_TYPE ||
+        args.credentialType === USERNAME_SSH_KEY_CREDENTIAL_TYPE)
     ) {
-      return createNativeCredential(this.http, {
-        name: args.name,
-        comment: args.comment,
-        login: args.credentialLogin ?? '',
-        type: USERNAME_PASSWORD_CREDENTIAL_TYPE,
-        password: args.password ?? '',
-      });
-    }
-    if (
-      canUseNativeApi(this.http) &&
-      args.autogenerate !== true &&
-      args.credentialType === USERNAME_SSH_KEY_CREDENTIAL_TYPE
-    ) {
+      if (args.autogenerate === true) {
+        return createNativeCredential(this.http, {
+          name: args.name,
+          comment: args.comment,
+          login: args.credentialLogin ?? '',
+          type: args.credentialType,
+          autogenerate: true,
+        });
+      }
+      if (args.credentialType === USERNAME_PASSWORD_CREDENTIAL_TYPE) {
+        return createNativeCredential(this.http, {
+          name: args.name,
+          comment: args.comment,
+          login: args.credentialLogin ?? '',
+          type: USERNAME_PASSWORD_CREDENTIAL_TYPE,
+          password: args.password ?? '',
+        });
+      }
       return createNativeCredential(this.http, {
         name: args.name,
         comment: args.comment,

@@ -5358,15 +5358,15 @@ task_run_status (task_t task)
 /**
  * @brief Set a report's scheduled flag.
  *
- * Set flag if task was scheduled, else clear flag.
+ * Set flag when this report was created for a scheduler start, else clear it.
  *
- * @param[in]   report  Report.
+ * @param[in]   report     Report.
+ * @param[in]   scheduled  Whether the start was scheduler initiated.
  */
 void
-set_report_scheduled (report_t report)
+set_report_scheduled (report_t report, gboolean scheduled)
 {
-  if (authenticate_allow_all == 1)
-    /* The task was scheduled. */
+  if (scheduled)
     sql ("UPDATE reports SET flags = 1 WHERE id = %llu;",
          report);
   else
@@ -8064,12 +8064,14 @@ make_report (task_t task, const char* uuid, task_status_t status)
  * @param[in]   task       The task.
  * @param[out]  report_id  Freshly allocated report ID on success.
  * @param[in]   status     Run status of scan associated with report.
+ * @param[in]   scheduled  Whether the start was scheduler initiated.
  *
  * @return 0 success, -1 global_current_report is already set, -2 failed to
  *         generate ID.
  */
 int
-create_current_report (task_t task, char **report_id, task_status_t status)
+create_current_report (task_t task, char **report_id, task_status_t status,
+                       gboolean scheduled)
 {
   char *id;
 
@@ -8088,7 +8090,7 @@ create_current_report (task_t task, char **report_id, task_status_t status)
 
   global_current_report = make_report (task, *report_id, status);
 
-  set_report_scheduled (global_current_report);
+  set_report_scheduled (global_current_report, scheduled);
 
   return 0;
 }

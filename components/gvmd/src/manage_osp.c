@@ -753,18 +753,21 @@ handle_osp_result_batch_failure (task_t task, report_t report, int *retry_ptr,
  * @param[in]   task      The task.
  * @param[in]   from      Must be 0. Resume semantics are not supported.
  * @param[out]  report_id UUID of the report.
+ * @param[in]   scheduled Whether this task start was scheduler initiated.
  *
  * @return 0 success, -1 error
  */
 int
-run_osp_scan_get_report (task_t task, int from, char **report_id)
+run_osp_scan_get_report (task_t task, int from, char **report_id,
+                         gboolean scheduled)
 {
   if (from != 0)
     return -1;
 
   *report_id = NULL;
 
-  if (create_current_report (task, report_id, TASK_STATUS_REQUESTED))
+  if (create_current_report (task, report_id, TASK_STATUS_REQUESTED,
+                             scheduled))
     {
       g_debug ("   %s: failed to create report", __func__);
       return -1;

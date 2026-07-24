@@ -32,6 +32,7 @@
  *                         <comment_b64> <status_b64> <task_uuid>\n
  *
  * start <secret> <operator_uuid> <task_uuid>\n
+ * start-scheduled <secret> <operator_uuid> <task_uuid>\n
  * stop <secret> <operator_uuid> <task_uuid>\n
  *
  * alert-test <secret> <operator_uuid> <alert_uuid>\n
@@ -92,6 +93,9 @@ yafvs_control_configure_task_client (const char *);
 /* Task-control clients never retry a sent frame. */
 int
 yafvs_control_start_task_client (const char *, const char *);
+
+int
+yafvs_control_start_scheduled_task_client (const char *, const char *);
 
 yafvs_control_stop_task_result_t
 yafvs_control_stop_task_client (const char *, const char *);

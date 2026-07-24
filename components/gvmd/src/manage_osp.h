@@ -45,7 +45,7 @@ osp_connection_t *
 osp_scanner_connect (scanner_t);
 
 int
-run_osp_scan_get_report (task_t, int, char **);
+run_osp_scan_get_report (task_t, int, char **, gboolean);
 
 int
 handle_osp_scan_start(task_t, target_t, const char *, int, gboolean,

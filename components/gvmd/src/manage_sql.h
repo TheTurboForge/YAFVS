@@ -293,7 +293,7 @@ const char *
 preference_iterator_value (iterator_t *);
 
 int
-create_current_report (task_t, char **, task_status_t);
+create_current_report (task_t, char **, task_status_t, gboolean);
 
 int
 set_task_schedule_uuid (const gchar*, schedule_t, int);
@@ -314,7 +314,7 @@ int
 parse_iso_time (const char *);
 
 void
-set_report_scheduled (report_t);
+set_report_scheduled (report_t, gboolean);
 
 int
 parse_osp_report (task_t, report_t, const char *);

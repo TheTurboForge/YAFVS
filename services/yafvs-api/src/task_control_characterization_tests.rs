@@ -7,8 +7,11 @@ use axum::http::Method;
 use crate::direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed};
 
 const MANAGE_C: &str = include_str!("../../../components/gvmd/src/manage.c");
+const MANAGE_H: &str = include_str!("../../../components/gvmd/src/manage.h");
 const MANAGE_OSP_C: &str = include_str!("../../../components/gvmd/src/manage_osp.c");
 const MANAGE_SQL_C: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
+const MANAGE_SQL_SCHEDULES_C: &str =
+    include_str!("../../../components/gvmd/src/manage_sql_schedules.c");
 const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
@@ -49,7 +52,7 @@ fn alert_and_scheduler_task_control_use_private_control_without_retiring_public_
     let private_start = inherited_function(YAFVS_CONTROL_C, "yafvs_control_start_task");
     for required in [
         "yafvs_control_start_operator_session (operator_uuid)",
-        "start_task (task_uuid, &report_id)",
+        "start_task_with_mode (task_uuid, &report_id, mode)",
         "yafvs_control_finish_operator_session ()",
     ] {
         assert!(
@@ -58,6 +61,9 @@ fn alert_and_scheduler_task_control_use_private_control_without_retiring_public_
         );
     }
     assert!(YAFVS_CONTROL_C.contains("YAFVS_CONTROL_START_TASK_COMMAND \"start \""));
+    assert!(
+        YAFVS_CONTROL_C.contains("YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND \"start-scheduled \"")
+    );
 
     let public_start = gmp_client_state_block("CLIENT_START_TASK");
     assert!(public_start.contains("start_task (start_task_data->task_id, &report_id)"));
@@ -77,7 +83,7 @@ fn alert_and_scheduler_task_control_use_private_control_without_retiring_public_
         "setup_signal_handler (SIGTERM, SIG_DFL, 0)",
         "setup_signal_handler (SIGINT, SIG_DFL, 0)",
         "setup_signal_handler (SIGQUIT, SIG_DFL, 0)",
-        "yafvs_control_start_task_client (scheduled_task->owner_uuid,",
+        "yafvs_control_start_scheduled_task_client (",
         "scheduled_task->task_uuid)",
         "case YAFVS_CONTROL_START_TASK_OK:",
         "case YAFVS_CONTROL_START_TASK_FORBIDDEN:",
@@ -97,6 +103,7 @@ fn alert_and_scheduler_task_control_use_private_control_without_retiring_public_
         "gmp_authenticate_info_ext_c",
         "gmp_start_task_ext_c",
         "fork_connection (",
+        "yafvs_control_start_task_client (scheduled_task->owner_uuid,",
     ] {
         assert!(
             !scheduler_start.contains(forbidden),
@@ -189,8 +196,8 @@ fn inherited_osp_start_checks_target_permission_and_creates_report_before_scanne
         "if (found == 0)",
         "return 99",
         "get_use_scan_queue ()",
-        "queue_scan_task (task, from, report_id)",
-        "fork_osp_scan_handler (task, target, from, report_id)",
+        "queue_scan_task (task, from, report_id, scheduled)",
+        "fork_osp_scan_handler (task, target, from, report_id, scheduled)",
     ] {
         assert!(
             run_osp_task.contains(required),
@@ -202,7 +209,8 @@ fn inherited_osp_start_checks_target_permission_and_creates_report_before_scanne
         "if (from != 0)",
         "return -1",
         "*report_id = NULL",
-        "create_current_report (task, report_id, TASK_STATUS_REQUESTED)",
+        "create_current_report (task, report_id, TASK_STATUS_REQUESTED,",
+        "scheduled)",
     ] {
         assert!(
             get_report.contains(required),
@@ -245,8 +253,9 @@ fn inherited_openvasd_start_stop_paths_have_scanner_side_effects_and_runtime_gat
         "feature_enabled (FEATURE_ID_OPENVASD_SCANNER)",
         "target = task_target (task)",
         "find_target_with_permission (uuid, &found, \"get_targets\")",
-        "queue_scan_task (task, from, report_id)",
-        "fork_openvasd_scan_handler (task, target, from, report_id)",
+        "queue_scan_task (task, from, report_id, scheduled)",
+        "fork_openvasd_scan_handler (task, target, from, report_id,",
+        "scheduled)",
     ] {
         assert!(
             run_openvasd_task.contains(required),
@@ -295,17 +304,20 @@ fn openapi_path_block(path: &str) -> String {
 #[test]
 fn inherited_start_task_is_permission_gated_and_delegates_to_run_task() {
     let start_task = inherited_function(MANAGE_C, "start_task");
+    assert!(start_task.contains("start_task_with_mode (task_id, report_id, TASK_START_MANUAL)"));
+    assert!(!start_task.contains("stop_task"));
+
+    let start_task_with_mode = inherited_function(MANAGE_C, "start_task_with_mode");
     for required in [
         "acl_user_may (\"start_task\") == 0",
         "return 99",
-        "run_task (task_id, report_id, 0)",
+        "run_task (task_id, report_id, 0, mode)",
     ] {
         assert!(
-            start_task.contains(required),
-            "start_task missing {required}"
+            start_task_with_mode.contains(required),
+            "start_task_with_mode missing {required}"
         );
     }
-    assert!(!start_task.contains("stop_task"));
 }
 
 #[test]
@@ -322,16 +334,70 @@ fn inherited_run_task_checks_process_resume_permission_scanner_and_dispatches() 
         "task_scanner (task)",
         "check_available (\"scanner\", scanner, \"get_scanners\")",
         "scanner_type (scanner) == SCANNER_TYPE_CVE",
-        "run_cve_task (task)",
+        "run_cve_task (task, mode == TASK_START_SCHEDULED)",
         "scanner_type (scanner) == SCANNER_TYPE_OPENVAS",
         "scanner_type (scanner) == SCANNER_TYPE_OSP_SENSOR",
-        "run_osp_task (task, from, report_id)",
+        "run_osp_task (task, from, report_id, mode == TASK_START_SCHEDULED)",
         "SCANNER_TYPE_OPENVASD",
-        "run_openvasd_task (task, from, report_id)",
+        "run_openvasd_task (task, from, report_id,",
+        "mode == TASK_START_SCHEDULED)",
         "return -1; // Unknown scanner type",
     ] {
         assert!(run_task.contains(required), "run_task missing {required}");
     }
+}
+
+#[test]
+fn scheduled_report_marker_is_explicit_and_reaches_every_report_creation_branch() {
+    assert!(MANAGE_H.contains("TASK_START_MANUAL"));
+    assert!(MANAGE_H.contains("TASK_START_SCHEDULED"));
+    assert!(MANAGE_H.contains("start_task_with_mode"));
+
+    let private_start = inherited_function(YAFVS_CONTROL_C, "yafvs_control_start_task");
+    assert!(private_start.contains("start_task_with_mode (task_uuid, &report_id, mode)"));
+    assert!(YAFVS_CONTROL_C.contains("TASK_START_MANUAL, created_uuid"));
+    assert!(YAFVS_CONTROL_C.contains("TASK_START_SCHEDULED, created_uuid"));
+    assert!(YAFVS_CONTROL_C.contains("yafvs_control_start_task_client_with_command"));
+    assert!(YAFVS_CONTROL_C.contains("yafvs_control_start_scheduled_task_client"));
+
+    let run_task = inherited_function(MANAGE_C, "run_task");
+    for required in [
+        "run_cve_task (task, mode == TASK_START_SCHEDULED)",
+        "run_osp_task (task, from, report_id, mode == TASK_START_SCHEDULED)",
+        "run_openvasd_task (task, from, report_id,",
+        "mode == TASK_START_SCHEDULED)",
+    ] {
+        assert!(run_task.contains(required), "run_task missing {required}");
+    }
+    for helper in [
+        "fork_cve_scan_handler",
+        "fork_osp_scan_handler",
+        "queue_scan_task",
+        "fork_openvasd_scan_handler",
+    ] {
+        let body = inherited_function(MANAGE_C, helper);
+        assert!(
+            body.contains("scheduled"),
+            "{helper} must retain the explicit mode"
+        );
+    }
+    let osp_report = inherited_function(MANAGE_OSP_C, "run_osp_scan_get_report");
+    assert!(osp_report.contains("create_current_report (task, report_id, TASK_STATUS_REQUESTED,"));
+    assert!(osp_report.contains("scheduled"));
+
+    let report_marker = inherited_function(MANAGE_SQL_C, "set_report_scheduled");
+    assert!(report_marker.contains("if (scheduled)"));
+    assert!(report_marker.contains("UPDATE reports SET flags = 1"));
+    assert!(report_marker.contains("UPDATE reports SET flags = 0"));
+    assert!(!report_marker.contains("authenticate_allow_all"));
+    let current_report = inherited_function(MANAGE_SQL_C, "create_current_report");
+    assert!(current_report.contains("make_report (task, *report_id, status)"));
+    assert!(current_report.contains("set_report_scheduled (global_current_report, scheduled)"));
+
+    let duration_stop =
+        inherited_function(MANAGE_SQL_SCHEDULES_C, "task_schedule_iterator_stop_due");
+    assert!(duration_stop.contains("report_scheduled (report) == 0"));
+    assert!(crate::task_control_sql::task_start_insert_report_sql().contains("0, 0)"));
 }
 
 #[test]

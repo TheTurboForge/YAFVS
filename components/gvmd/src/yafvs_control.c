@@ -57,6 +57,9 @@
 #define YAFVS_CONTROL_START_TASK_COMMAND_LENGTH \
   (sizeof (YAFVS_CONTROL_START_TASK_COMMAND) - 1)
 #define YAFVS_CONTROL_START_TASK_MAX_REQUEST_BYTES 256
+#define YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND "start-scheduled "
+#define YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND) - 1)
 #define YAFVS_CONTROL_TRASH_EMPTY_COMMAND "trash-empty "
 #define YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH \
   (sizeof (YAFVS_CONTROL_TRASH_EMPTY_COMMAND) - 1)
@@ -407,6 +410,10 @@ yafvs_control_uuid_is_valid (const char *);
 static gboolean
 yafvs_control_parse_start_task_request (const char *, size_t, const char *,
                                         size_t, char[37], char[37]);
+
+static gboolean
+yafvs_control_parse_start_scheduled_task_request (
+  const char *, size_t, const char *, size_t, char[37], char[37]);
 
 static void
 yafvs_control_array_add_data (array_t *, const char *, const char *);
@@ -1220,7 +1227,7 @@ done:
 
 static int
 yafvs_control_start_task (const char *operator_uuid, const char *task_uuid,
-                          char report_uuid[37])
+                          task_start_mode_t mode, char report_uuid[37])
 {
   char *report_id = NULL;
   int result;
@@ -1228,7 +1235,7 @@ yafvs_control_start_task (const char *operator_uuid, const char *task_uuid,
   if (!yafvs_control_start_operator_session (operator_uuid))
     return YAFVS_CONTROL_START_TASK_FORBIDDEN;
 
-  result = start_task (task_uuid, &report_id);
+  result = start_task_with_mode (task_uuid, &report_id, mode);
   if (result == YAFVS_CONTROL_START_TASK_OK)
     {
       log_event ("task", "Task", task_uuid, "requested to start");
@@ -1630,9 +1637,10 @@ yafvs_control_parse_request (const char *request, size_t request_len,
 }
 
 static gboolean
-yafvs_control_parse_start_task_request (
-  const char *request, size_t request_len, const char *expected_secret,
-  size_t expected_secret_len, char operator_uuid[37], char task_uuid[37])
+yafvs_control_parse_start_task_request_with_command (
+  const char *request, size_t request_len, const char *command,
+  size_t command_len, const char *expected_secret, size_t expected_secret_len,
+  char operator_uuid[37], char task_uuid[37])
 {
   const char *cursor;
   const char *end;
@@ -1642,8 +1650,7 @@ yafvs_control_parse_start_task_request (
   if (request == NULL
       || request_len > YAFVS_CONTROL_START_TASK_MAX_REQUEST_BYTES
       || !yafvs_control_parse_authenticated_prefix (
-           request, request_len, YAFVS_CONTROL_START_TASK_COMMAND,
-           YAFVS_CONTROL_START_TASK_COMMAND_LENGTH, expected_secret,
+           request, request_len, command, command_len, expected_secret,
            expected_secret_len, operator_uuid, &cursor, &end)
       || !yafvs_control_next_field (&cursor, end, &field, &field_len)
       || cursor != end || field_len != 36)
@@ -1652,6 +1659,28 @@ yafvs_control_parse_start_task_request (
   memcpy (task_uuid, field, field_len);
   task_uuid[field_len] = 0;
   return yafvs_control_uuid_is_valid (task_uuid);
+}
+
+static gboolean
+yafvs_control_parse_start_task_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37], char task_uuid[37])
+{
+  return yafvs_control_parse_start_task_request_with_command (
+    request, request_len, YAFVS_CONTROL_START_TASK_COMMAND,
+    YAFVS_CONTROL_START_TASK_COMMAND_LENGTH, expected_secret,
+    expected_secret_len, operator_uuid, task_uuid);
+}
+
+static gboolean
+yafvs_control_parse_start_scheduled_task_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37], char task_uuid[37])
+{
+  return yafvs_control_parse_start_task_request_with_command (
+    request, request_len, YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND,
+    YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND_LENGTH, expected_secret,
+    expected_secret_len, operator_uuid, task_uuid);
 }
 
 static gboolean
@@ -3621,9 +3650,10 @@ yafvs_control_parse_stop_task_response (char *response, size_t response_len)
   return YAFVS_CONTROL_STOP_TASK_MALFORMED;
 }
 
-int
-yafvs_control_start_task_client (const char *operator_uuid,
-                                 const char *task_uuid)
+static int
+yafvs_control_start_task_client_with_command (const char *operator_uuid,
+                                              const char *task_uuid,
+                                              const char *command)
 {
   char request[YAFVS_CONTROL_START_TASK_MAX_REQUEST_BYTES] = {0};
   char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES + 2] = {0};
@@ -3642,7 +3672,7 @@ yafvs_control_start_task_client (const char *operator_uuid,
     goto done;
   request_len = (size_t) g_snprintf (
     request, sizeof (request), "%s%s %s %s\n",
-    YAFVS_CONTROL_START_TASK_COMMAND, secret, operator_uuid, task_uuid);
+    command, secret, operator_uuid, task_uuid);
   if (request_len >= sizeof (request))
     goto done;
 
@@ -3670,6 +3700,22 @@ done:
   yafvs_control_secure_clear (response, sizeof (response));
   yafvs_control_secure_clear (request, sizeof (request));
   return result;
+}
+
+int
+yafvs_control_start_task_client (const char *operator_uuid,
+                                 const char *task_uuid)
+{
+  return yafvs_control_start_task_client_with_command (
+    operator_uuid, task_uuid, YAFVS_CONTROL_START_TASK_COMMAND);
+}
+
+int
+yafvs_control_start_scheduled_task_client (const char *operator_uuid,
+                                           const char *task_uuid)
+{
+  return yafvs_control_start_task_client_with_command (
+    operator_uuid, task_uuid, YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND);
 }
 
 yafvs_control_stop_task_result_t
@@ -5039,12 +5085,28 @@ yafvs_control_serve_client (int client_socket)
                     == 0)
         result_response =
           yafvs_control_task_clone_response (-2, NULL, response);
+      else if (yafvs_control_parse_start_scheduled_task_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, task_uuid))
+        {
+          result = yafvs_control_start_task (
+            operator_uuid, task_uuid, TASK_START_SCHEDULED, created_uuid);
+          result_response = yafvs_control_start_task_response (
+            result, result == YAFVS_CONTROL_START_TASK_OK ? created_uuid : NULL,
+            response);
+        }
+      else if (request_len >= YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND,
+                          YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND_LENGTH)
+                    == 0)
+        result_response = yafvs_control_start_task_response (
+          YAFVS_CONTROL_START_TASK_MALFORMED, NULL, response);
       else if (yafvs_control_parse_start_task_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, task_uuid))
         {
-          result = yafvs_control_start_task (operator_uuid, task_uuid,
-                                             created_uuid);
+          result = yafvs_control_start_task (
+            operator_uuid, task_uuid, TASK_START_MANUAL, created_uuid);
           result_response = yafvs_control_start_task_response (
             result, result == YAFVS_CONTROL_START_TASK_OK ? created_uuid : NULL,
             response);
@@ -5286,6 +5348,12 @@ yafvs_control_serve_client (int client_socket)
                       YAFVS_CONTROL_TASK_CLONE_COMMAND_LENGTH)
                 == 0)
     result_response = yafvs_control_task_clone_response (-2, NULL, response);
+  else if (request_len >= YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND,
+                      YAFVS_CONTROL_START_SCHEDULED_TASK_COMMAND_LENGTH)
+                == 0)
+    result_response = yafvs_control_start_task_response (
+      YAFVS_CONTROL_START_TASK_MALFORMED, NULL, response);
   else if (request_len >= YAFVS_CONTROL_START_TASK_COMMAND_LENGTH
            && memcmp (request, YAFVS_CONTROL_START_TASK_COMMAND,
                       YAFVS_CONTROL_START_TASK_COMMAND_LENGTH) == 0)

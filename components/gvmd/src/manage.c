@@ -1505,7 +1505,7 @@ set_task_interrupted (task_t task, const gchar *message)
  */
 static int
 fork_osp_scan_handler (task_t task, target_t target, int start_from,
-                       char **report_id_return)
+                       char **report_id_return, gboolean scheduled)
 {
   char *report_id = NULL;
   gboolean discovery_scan = FALSE;
@@ -1517,7 +1517,7 @@ fork_osp_scan_handler (task_t task, target_t target, int start_from,
   if (report_id_return)
     *report_id_return = NULL;
 
-  if (run_osp_scan_get_report (task, start_from, &report_id))
+  if (run_osp_scan_get_report (task, start_from, &report_id, scheduled))
     return -1;
 
   current_scanner_task = task;
@@ -1589,7 +1589,8 @@ fork_osp_scan_handler (task_t task, target_t target, int start_from,
  * @return 0 on success, -1 on failure.
  */
 static int
-queue_scan_task (task_t task, int start_from, char **report_id_return)
+queue_scan_task (task_t task, int start_from, char **report_id_return,
+                 gboolean scheduled)
 {
   char *report_id = NULL;
   report_t report = 0;
@@ -1597,7 +1598,7 @@ queue_scan_task (task_t task, int start_from, char **report_id_return)
   if (report_id_return)
     *report_id_return = NULL;
 
-  if (run_osp_scan_get_report (task, start_from, &report_id))
+  if (run_osp_scan_get_report (task, start_from, &report_id, scheduled))
     return -1;
 
   if (find_resource_no_acl ("report", report_id, &report))
@@ -1634,11 +1635,12 @@ queue_scan_task (task_t task, int start_from, char **report_id_return)
  * @param[in]   from       0 start from beginning, 1 continue from stopped,
  *                         2 continue if stopped else start from beginning.
  * @param[out]  report_id  The report ID.
+ * @param[in]   scheduled  Whether this task start was scheduler initiated.
  *
  * @return 0 success, 99 permission denied, -1 error.
  */
 static int
-run_osp_task (task_t task, int from, char **report_id)
+run_osp_task (task_t task, int from, char **report_id, gboolean scheduled)
 {
   target_t target;
 
@@ -1661,7 +1663,7 @@ run_osp_task (task_t task, int from, char **report_id)
 
   if (get_use_scan_queue ())
     {
-      if (queue_scan_task (task, from, report_id))
+      if (queue_scan_task (task, from, report_id, scheduled))
         {
           g_warning ("Couldn't queue OSP scan");
           return -1;
@@ -1669,7 +1671,7 @@ run_osp_task (task_t task, int from, char **report_id)
     }
   else
     {
-      if (fork_osp_scan_handler (task, target, from, report_id))
+      if (fork_osp_scan_handler (task, target, from, report_id, scheduled))
         {
           g_warning ("Couldn't fork OSP scan handler");
           return -1;
@@ -2234,11 +2236,12 @@ cve_scan_host (task_t task, report_t report, gvm_host_t *gvm_host,
  *
  * @param[in]   task        The task.
  * @param[in]   target      The target.
+ * @param[in]   scheduled   Whether this task start was scheduler initiated.
  *
  * @return 0 success, -1 error, -9 failed to fork.
  */
 static int
-fork_cve_scan_handler (task_t task, target_t target)
+fork_cve_scan_handler (task_t task, target_t target, gboolean scheduled)
 {
   int pid;
   char *report_id, *hosts, *exclude_hosts;
@@ -2248,7 +2251,8 @@ fork_cve_scan_handler (task_t task, target_t target)
   assert (task);
   assert (target);
 
-  if (create_current_report (task, &report_id, TASK_STATUS_REQUESTED))
+  if (create_current_report (task, &report_id, TASK_STATUS_REQUESTED,
+                             scheduled))
     {
       g_debug ("   %s: failed to create report", __func__);
       return -1;
@@ -2365,12 +2369,13 @@ fork_cve_scan_handler (task_t task, target_t target)
 /**
  * @brief Start a CVE task.
  *
- * @param[in]   task    The task.
+ * @param[in]   task       The task.
+ * @param[in]   scheduled  Whether this task start was scheduler initiated.
  *
  * @return 0 success, 99 permission denied, -1 error, -9 failed to fork.
  */
 static int
-run_cve_task (task_t task)
+run_cve_task (task_t task, gboolean scheduled)
 {
   target_t target;
 
@@ -2391,7 +2396,7 @@ run_cve_task (task_t task)
         return 99;
     }
 
-  if (fork_cve_scan_handler (task, target))
+  if (fork_cve_scan_handler (task, target, scheduled))
     {
       g_warning ("Couldn't fork CVE scan handler");
       return -1;
@@ -2406,7 +2411,7 @@ run_cve_task (task_t task)
 #if ENABLE_OPENVASD
 /* Prototype */
 static int
-run_openvasd_task (task_t task, int from, char **report_id);
+run_openvasd_task (task_t task, int from, char **report_id, gboolean);
 #endif
 
 
@@ -2419,6 +2424,7 @@ run_openvasd_task (task_t task, int from, char **report_id);
  * @param[in]   task_id     The task ID.
  * @param[out]  report_id   The report ID.
  * @param[in]   from        Must be 0. Resume semantics are not supported.
+ * @param[in]   mode        Explicit task-start mode.
  *
  * @return 1 task is active already,
  *         3 failed to find task,
@@ -2432,7 +2438,8 @@ run_openvasd_task (task_t task, int from, char **report_id);
  *         -9 fork failed.
  */
 static int
-run_task (const char *task_id, char **report_id, int from)
+run_task (const char *task_id, char **report_id, int from,
+          task_start_mode_t mode)
 {
   task_t task;
   scanner_t scanner;
@@ -2456,16 +2463,17 @@ run_task (const char *task_id, char **report_id, int from)
     return ret;
 
   if (scanner_type (scanner) == SCANNER_TYPE_CVE)
-    return run_cve_task (task);
+    return run_cve_task (task, mode == TASK_START_SCHEDULED);
 
   if (scanner_type (scanner) == SCANNER_TYPE_OPENVAS
       || scanner_type (scanner) == SCANNER_TYPE_OSP_SENSOR)
-    return run_osp_task (task, from, report_id);
+    return run_osp_task (task, from, report_id, mode == TASK_START_SCHEDULED);
 
 #if ENABLE_OPENVASD
   if (scanner_type (scanner) == SCANNER_TYPE_OPENVASD
     || scanner_type (scanner) == SCANNER_TYPE_OPENVASD_SENSOR)
-    return run_openvasd_task (task, from, report_id);
+    return run_openvasd_task (task, from, report_id,
+                              mode == TASK_START_SCHEDULED);
 #endif
 
 
@@ -2494,12 +2502,22 @@ run_task (const char *task_id, char **report_id, int from)
  *         -9 fork failed.
  */
 int
-start_task (const char *task_id, char **report_id)
+start_task_with_mode (const char *task_id, char **report_id,
+                      task_start_mode_t mode)
 {
+  if (mode != TASK_START_MANUAL && mode != TASK_START_SCHEDULED)
+    return -1;
+
   if (acl_user_may ("start_task") == 0)
     return 99;
 
-  return run_task (task_id, report_id, 0);
+  return run_task (task_id, report_id, 0, mode);
+}
+
+int
+start_task (const char *task_id, char **report_id)
+{
+  return start_task_with_mode (task_id, report_id, TASK_START_MANUAL);
 }
 
 int
@@ -2993,8 +3011,8 @@ scheduled_task_start (scheduled_task_t *scheduled_task,
         setup_signal_handler (SIGQUIT, SIG_DFL, 0);
 
         setproctitle ("scheduler: starting %s", scheduled_task->task_uuid);
-        switch (yafvs_control_start_task_client (scheduled_task->owner_uuid,
-                                                  scheduled_task->task_uuid))
+        switch (yafvs_control_start_scheduled_task_client (
+                  scheduled_task->owner_uuid, scheduled_task->task_uuid))
           {
             case YAFVS_CONTROL_START_TASK_OK:
               scheduled_task_free (scheduled_task);
@@ -5494,7 +5512,7 @@ end_stop_openvasd:
  */
 static int
 fork_openvasd_scan_handler (task_t task, target_t target, int from,
-                            char **report_id_return)
+                            char **report_id_return, gboolean scheduled)
 {
   char *report_id;
   gboolean discovery_scan = FALSE;
@@ -5506,7 +5524,7 @@ fork_openvasd_scan_handler (task_t task, target_t target, int from,
   if (report_id_return)
     *report_id_return = NULL;
 
-  if (run_osp_scan_get_report (task, from, &report_id))
+  if (run_osp_scan_get_report (task, from, &report_id, scheduled))
     return -1;
 
   current_scanner_task = task;
@@ -5574,11 +5592,13 @@ fork_openvasd_scan_handler (task_t task, target_t target, int from,
  * @param[in]   from       0 start from beginning, 1 continue from stopped,
  *                         2 continue if stopped else start from beginning.
  * @param[out]  report_id  The report ID.
+ * @param[in]   scheduled  Whether this task start was scheduler initiated.
  *
  * @return 0 success, 99 permission denied, -1 error.
  */
 static int
-run_openvasd_task (task_t task, int from, char **report_id)
+run_openvasd_task (task_t task, int from, char **report_id,
+                   gboolean scheduled)
 {
   if (!feature_enabled (FEATURE_ID_OPENVASD_SCANNER))
     {
@@ -5606,7 +5626,7 @@ run_openvasd_task (task_t task, int from, char **report_id)
 
   if (get_use_scan_queue ())
     {
-      if (queue_scan_task (task, from, report_id))
+      if (queue_scan_task (task, from, report_id, scheduled))
         {
           g_warning ("Couldn't queue openvasd scan");
           return -1;
@@ -5614,7 +5634,8 @@ run_openvasd_task (task_t task, int from, char **report_id)
     }
   else
     {
-      if (fork_openvasd_scan_handler (task, target, from, report_id))
+      if (fork_openvasd_scan_handler (task, target, from, report_id,
+                                      scheduled))
         {
           g_warning ("Couldn't fork openvasd scan handler");
           return -1;

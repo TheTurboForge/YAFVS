@@ -12,10 +12,12 @@
   yafvs_control_test_manage_auth_settings_write_ldap
 #define manage_auth_settings_write_radius \
   yafvs_control_test_manage_auth_settings_write_radius
-int yafvs_control_test_start_task (const char *, char **);
-#define start_task yafvs_control_test_start_task
+#include "manage.h"
+int yafvs_control_test_start_task_with_mode (const char *, char **,
+                                             task_start_mode_t);
+#define start_task_with_mode yafvs_control_test_start_task_with_mode
 #include "yafvs_control.c"
-#undef start_task
+#undef start_task_with_mode
 #undef manage_auth_settings_write_radius
 #undef manage_auth_settings_write_ldap
 #undef manage_auth_settings_read
@@ -189,9 +191,12 @@ static int start_task_result;
 static const char *start_task_report_uuid;
 static int start_task_audit_success_calls;
 static int start_task_audit_fail_calls;
+static task_start_mode_t start_task_mode;
 
 int
-yafvs_control_test_start_task (const char *task_uuid, char **report_uuid)
+yafvs_control_test_start_task_with_mode (const char *task_uuid,
+                                         char **report_uuid,
+                                         task_start_mode_t mode)
 {
   assert_that (current_credentials.uuid,
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
@@ -199,6 +204,7 @@ yafvs_control_test_start_task (const char *task_uuid, char **report_uuid)
   assert_that (task_uuid,
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
   start_task_calls++;
+  start_task_mode = mode;
   *report_uuid = start_task_report_uuid ? g_strdup (start_task_report_uuid)
                                         : NULL;
   return start_task_result;
@@ -267,6 +273,7 @@ Ensure (yafvs_control, starts_task_in_operator_session_and_maps_response)
   assert_that (response,
                is_equal_to_string ("0 started 123e4567-e89b-12d3-a456-426614174002\n"));
   assert_that (start_task_calls, is_equal_to (1));
+  assert_that (start_task_mode, is_equal_to (TASK_START_MANUAL));
   assert_that (start_task_audit_success_calls, is_equal_to (1));
   assert_that (start_task_audit_fail_calls, is_equal_to (0));
   assert_that (reinit_calls > 0, is_true);
@@ -301,6 +308,82 @@ Ensure (yafvs_control, starts_task_in_operator_session_and_maps_response)
   assert_that (response, is_equal_to_string ("3 not_found\n"));
   assert_that (start_task_audit_success_calls, is_equal_to (2));
   assert_that (start_task_audit_fail_calls, is_equal_to (1));
+}
+
+Ensure (yafvs_control, keeps_scheduled_start_frames_and_modes_distinct)
+{
+  const char *manual =
+    "start " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001\n";
+  const char *scheduled =
+    "start-scheduled " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001\n";
+  const char *invalid[] = {
+    "start-scheduled " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 extra\n",
+    "start-scheduled " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001\nextra",
+  };
+  char operator_uuid[37];
+  char task_uuid[37];
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  size_t index;
+
+  assert_that (yafvs_control_parse_start_task_request (
+                 manual, strlen (manual), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, task_uuid),
+               is_true);
+  assert_that (yafvs_control_parse_start_scheduled_task_request (
+                 manual, strlen (manual), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, task_uuid),
+               is_false);
+  assert_that (yafvs_control_parse_start_scheduled_task_request (
+                 scheduled, strlen (scheduled), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, task_uuid),
+               is_true);
+  assert_that (yafvs_control_parse_start_task_request (
+                 scheduled, strlen (scheduled), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, task_uuid),
+               is_false);
+  for (index = 0; index < G_N_ELEMENTS (invalid); index++)
+    assert_that (yafvs_control_parse_start_scheduled_task_request (
+                   invalid[index], strlen (invalid[index]), TEST_CONTROL_SECRET,
+                   strlen (TEST_CONTROL_SECRET), operator_uuid, task_uuid),
+                 is_false);
+
+  mock_operator_name = "operator";
+  start_task_calls = 0;
+  start_task_result = 0;
+  start_task_report_uuid = "123e4567-e89b-12d3-a456-426614174002";
+  start_task_audit_success_calls = 0;
+  start_task_audit_fail_calls = 0;
+  g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE);
+  dispatch_trash_empty_request (manual, response);
+  assert_that (response,
+               is_equal_to_string ("0 started 123e4567-e89b-12d3-a456-426614174002\n"));
+  assert_that (start_task_mode, is_equal_to (TASK_START_MANUAL));
+  memset (response, 0, sizeof (response));
+  dispatch_trash_empty_request (scheduled, response);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
+  assert_that (response,
+               is_equal_to_string ("0 started 123e4567-e89b-12d3-a456-426614174002\n"));
+  assert_that (start_task_calls, is_equal_to (2));
+  assert_that (start_task_mode, is_equal_to (TASK_START_SCHEDULED));
+  assert_that (start_task_audit_success_calls, is_equal_to (2));
+  assert_that (start_task_audit_fail_calls, is_equal_to (0));
+
+  memset (response, 0, sizeof (response));
+  g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE);
+  dispatch_trash_empty_request (invalid[0], response);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
+  assert_that (response, is_equal_to_string ("-2 malformed\n"));
+  assert_that (start_task_calls, is_equal_to (2));
+  assert_that (start_task_audit_success_calls, is_equal_to (2));
+  assert_that (start_task_audit_fail_calls, is_equal_to (0));
 }
 
 Ensure (yafvs_control, maps_start_task_control_responses)
@@ -6873,6 +6956,8 @@ main (int argc, char **argv)
                          parses_strict_authenticated_start_task_requests);
   add_test_with_context (suite, yafvs_control,
                          starts_task_in_operator_session_and_maps_response);
+  add_test_with_context (suite, yafvs_control,
+                         keeps_scheduled_start_frames_and_modes_distinct);
   add_test_with_context (suite, yafvs_control,
                          maps_start_task_control_responses);
   add_test_with_context (suite, yafvs_control,

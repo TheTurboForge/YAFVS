@@ -847,8 +847,17 @@ run_status_name (task_status_t);
 void
 set_task_interrupted (task_t, const gchar *);
 
+typedef enum
+{
+  TASK_START_MANUAL,
+  TASK_START_SCHEDULED
+} task_start_mode_t;
+
 int
 start_task (const char *, char**);
+
+int
+start_task_with_mode (const char *, char **, task_start_mode_t);
 
 int
 stop_task (const char *);

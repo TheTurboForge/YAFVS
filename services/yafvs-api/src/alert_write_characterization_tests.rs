@@ -67,7 +67,7 @@ fn alert_start_execution_uses_private_control_and_does_not_remove_gmp_owners() {
         "YAFVS_CONTROL_START_TASK_COMMAND",
         "yafvs_control_parse_start_task_request",
         "yafvs_control_start_operator_session (operator_uuid)",
-        "start_task (task_uuid, &report_id)",
+        "start_task_with_mode (task_uuid, &report_id, mode)",
         "log_event (\"task\", \"Task\", task_uuid, \"requested to start\")",
         "log_event_fail (\"task\", \"Task\", task_uuid, \"started\")",
         "yafvs_control_secure_clear (request, sizeof (request))",

@@ -20,6 +20,7 @@ mod doctor;
 mod feed;
 mod feed_cache_sync;
 mod feed_generation;
+mod filter_schema;
 mod foundational_schema;
 mod gvmd_retirement;
 mod gvmd_smoke;

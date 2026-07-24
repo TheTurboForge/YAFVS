@@ -9,6 +9,9 @@ use super::config_schedule_schema::{
     CONFIG_SCHEDULE_SCHEMA_FINGERPRINT, CONFIG_SCHEDULE_SCHEMA_SQL,
     config_schedule_schema_fingerprint_sql,
 };
+use super::filter_schema::{
+    FILTER_SCHEMA_FINGERPRINT, FILTER_SCHEMA_SQL, filter_schema_fingerprint_sql,
+};
 use super::foundational_schema::{
     FOUNDATIONAL_SCHEMA_FINGERPRINT, FOUNDATIONAL_SCHEMA_SQL, foundational_schema_fingerprint_sql,
 };
@@ -450,6 +453,79 @@ pub(crate) fn command_runtime_init_with(
             repo_root,
             runner,
             "Runtime initialization stopped while verifying configuration and schedule schema.",
+            findings,
+        );
+    }
+    let create_filter_schema = psql(
+        repo_root,
+        runner,
+        &environment,
+        &database,
+        FILTER_SCHEMA_SQL,
+    );
+    findings.push(process_finding(
+        &create_filter_schema,
+        "postgres.filter-schema.create",
+        "Create/verify filter schema",
+        80,
+        None,
+    ));
+    if !process_succeeded(&create_filter_schema) {
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped while creating filter schema.",
+            findings,
+        );
+    }
+    let filter_fingerprint = psql(
+        repo_root,
+        runner,
+        &environment,
+        &database,
+        &filter_schema_fingerprint_sql(),
+    );
+    if !process_succeeded(&filter_fingerprint) {
+        findings.push(process_finding(
+            &filter_fingerprint,
+            "postgres.filter-schema",
+            "Filter schema fingerprint query",
+            40,
+            None,
+        ));
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped while verifying filter schema.",
+            findings,
+        );
+    }
+    let observed_fingerprint = psql_value(
+        filter_fingerprint
+            .as_ref()
+            .map_or("", |output| &output.stdout),
+    );
+    let schema_matches = observed_fingerprint == FILTER_SCHEMA_FINGERPRINT;
+    findings.push(
+        Finding::new(
+            if schema_matches { "pass" } else { "fail" },
+            "postgres.filter-schema",
+            if schema_matches {
+                "Filter schema matches the fixed catalog contract.".to_string()
+            } else {
+                "Filter schema does not match the fixed catalog contract.".to_string()
+            },
+        )
+        .with_details(json!({
+            "expected": FILTER_SCHEMA_FINGERPRINT,
+            "observed": observed_fingerprint,
+        })),
+    );
+    if has_failure(&findings) {
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped while verifying filter schema.",
             findings,
         );
     }
@@ -1214,6 +1290,9 @@ mod tests {
         config_schedule_create_success: bool,
         config_schedule_fingerprint_success: bool,
         config_schedule_fingerprint: String,
+        filter_create_success: bool,
+        filter_fingerprint_success: bool,
+        filter_fingerprint: String,
     }
 
     impl Runner {
@@ -1234,6 +1313,9 @@ mod tests {
                 config_schedule_create_success: true,
                 config_schedule_fingerprint_success: true,
                 config_schedule_fingerprint: format!("{CONFIG_SCHEDULE_SCHEMA_FINGERPRINT}\n"),
+                filter_create_success: true,
+                filter_fingerprint_success: true,
+                filter_fingerprint: format!("{FILTER_SCHEMA_FINGERPRINT}\n"),
             }
         }
 
@@ -1301,6 +1383,19 @@ mod tests {
                         1
                     },
                     &self.config_schedule_fingerprint,
+                );
+            }
+            if joined.contains("CREATE TABLE IF NOT EXISTS filters (") {
+                return output(if self.filter_create_success { 0 } else { 1 }, "");
+            }
+            if joined.contains("filter_schema_items") {
+                return output(
+                    if self.filter_fingerprint_success {
+                        0
+                    } else {
+                        1
+                    },
+                    &self.filter_fingerprint,
                 );
             }
             output(0, "")
@@ -1408,6 +1503,14 @@ mod tests {
             .iter()
             .position(|call| call.contains("config_schedule_schema_items"))
             .unwrap();
+        let filter_create = joined
+            .iter()
+            .position(|call| call.contains("CREATE TABLE IF NOT EXISTS filters ("))
+            .unwrap();
+        let filter_fingerprint = joined
+            .iter()
+            .position(|call| call.contains("filter_schema_items"))
+            .unwrap();
         let up = joined
             .iter()
             .position(|call| call.ends_with("up -d --build postgres"))
@@ -1453,6 +1556,7 @@ mod tests {
             foundational_fingerprint < config_schedule_create
                 && config_schedule_create < config_schedule_fingerprint
         );
+        assert!(config_schedule_fingerprint < filter_create && filter_create < filter_fingerprint);
         let foundational_sql = calls[foundational_create]
             .args
             .iter()
@@ -1469,6 +1573,14 @@ mod tests {
         assert!(config_schedule_sql.trim_start().starts_with("BEGIN;"));
         assert!(config_schedule_sql.trim_end().ends_with("COMMIT;"));
         assert!(!config_schedule_sql.contains("database_version"));
+        let filter_sql = calls[filter_create]
+            .args
+            .iter()
+            .find(|argument| argument.contains("CREATE TABLE IF NOT EXISTS filters ("))
+            .unwrap();
+        assert!(filter_sql.trim_start().starts_with("BEGIN;"));
+        assert!(filter_sql.trim_end().ends_with("COMMIT;"));
+        assert!(!filter_sql.contains("database_version"));
         for extension in POSTGRES_EXTENSIONS {
             assert!(
                 joined
@@ -1728,6 +1840,70 @@ mod tests {
         );
         assert!(result.findings.iter().any(|finding| {
             finding.check == "postgres.config-schedule-schema" && finding.status == "fail"
+        }));
+    }
+
+    #[test]
+    fn filter_schema_creation_failure_stops_before_attestation() {
+        let fixture = Fixture::new("filter-create-failure");
+        let runner = Runner {
+            filter_create_success: false,
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail", "{:?}", result.findings);
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped while creating filter schema."
+        );
+        let calls = runner.calls.lock().unwrap();
+        assert!(calls.iter().any(|call| {
+            call.args
+                .join(" ")
+                .contains("CREATE TABLE IF NOT EXISTS filters (")
+        }));
+        assert!(
+            !calls
+                .iter()
+                .any(|call| call.args.join(" ").contains("filter_schema_items"))
+        );
+    }
+
+    #[test]
+    fn filter_schema_mismatch_fails_closed() {
+        let fixture = Fixture::new("filter-mismatch");
+        let runner = Runner {
+            filter_fingerprint: "not-the-contract\n".into(),
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail", "{:?}", result.findings);
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped while verifying filter schema."
+        );
+        assert!(result.findings.iter().any(|finding| {
+            finding.check == "postgres.filter-schema"
+                && finding.status == "fail"
+                && finding.message.contains("does not match")
+        }));
+    }
+
+    #[test]
+    fn filter_schema_attestation_query_failure_fails_closed() {
+        let fixture = Fixture::new("filter-query-failure");
+        let runner = Runner {
+            filter_fingerprint_success: false,
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail", "{:?}", result.findings);
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped while verifying filter schema."
+        );
+        assert!(result.findings.iter().any(|finding| {
+            finding.check == "postgres.filter-schema" && finding.status == "fail"
         }));
     }
 

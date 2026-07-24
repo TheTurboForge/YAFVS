@@ -5,23 +5,20 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {createAll} from 'web/store/entities/utils/main';
 import {
   fetchNativeTask,
   fetchNativeTasks,
   nativeTaskQueryFromFilter,
 } from 'gmp/native-api/tasks';
+import {createAll} from 'web/store/entities/utils/main';
 
 const {
   loadAllEntities,
-  loadEntity,
   reducer,
   selector,
   entitiesLoadingActions,
   entityLoadingActions,
 } = createAll('task');
-
-const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
 
 const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
   const rootState = getState();
@@ -48,10 +45,6 @@ const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
 };
 
 const nativeLoadEntity = gmp => id => (dispatch, getState) => {
-  if (!canUseNativeApi(gmp)) {
-    return loadEntity(gmp)(id)(dispatch, getState);
-  }
-
   const rootState = getState();
   const state = selector(rootState);
 

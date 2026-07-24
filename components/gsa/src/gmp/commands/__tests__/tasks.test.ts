@@ -6,11 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import TasksCommand from 'gmp/commands/tasks';
-import {
-  createHttp,
-  createEntitiesResponse,
-  createAggregatesResponse,
-} from 'gmp/commands/testing';
+import {createHttp, createAggregatesResponse} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import Task from 'gmp/models/task';
 import {createSession} from 'gmp/testing';
@@ -34,102 +30,7 @@ const createNativeHttp = () => {
 };
 
 describe('TasksCommand tests', () => {
-  test('should fetch tasks with default params', async () => {
-    const response = createEntitiesResponse('task', [
-      {_id: '1', name: 'Scan Task 1'},
-      {_id: '2', name: 'Scan Task 2'},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new TasksCommand(fakeHttp);
-    const result = await cmd.get();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_tasks', usage_type: 'scan'},
-    });
-    expect(result.data).toEqual([
-      new Task({id: '1', name: 'Scan Task 1'}),
-      new Task({id: '2', name: 'Scan Task 2'}),
-    ]);
-  });
-
-  test('should fetch tasks with custom params', async () => {
-    const response = createEntitiesResponse('task', [
-      {_id: '3', name: 'Custom Task'},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new TasksCommand(fakeHttp);
-    const result = await cmd.get({filter: "name='Custom Task'"});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_tasks',
-        filter: "name='Custom Task'",
-        usage_type: 'scan',
-      },
-    });
-    expect(result.data).toEqual([new Task({id: '3', name: 'Custom Task'})]);
-  });
-
-  test('should fetch tasks with schedules only', async () => {
-    const response = createEntitiesResponse('task', [
-      {_id: '3', name: 'Custom Task'},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new TasksCommand(fakeHttp);
-    const result = await cmd.get({schedulesOnly: true});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_tasks',
-        usage_type: 'scan',
-        schedules_only: 1,
-      },
-    });
-    expect(result.data).toEqual([new Task({id: '3', name: 'Custom Task'})]);
-  });
-
-  test('should fetch all tasks', async () => {
-    const response = createEntitiesResponse('task', [
-      {_id: '4', name: 'All Tasks 1'},
-      {_id: '5', name: 'All Tasks 2'},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new TasksCommand(fakeHttp);
-    const result = await cmd.getAll();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'get_tasks', filter: 'first=1 rows=-1', usage_type: 'scan'},
-    });
-    expect(result.data).toEqual([
-      new Task({id: '4', name: 'All Tasks 1'}),
-      new Task({id: '5', name: 'All Tasks 2'}),
-    ]);
-  });
-
-  test('should fetch all tasks with schedules only', async () => {
-    const response = createEntitiesResponse('task', [
-      {_id: '4', name: 'All Tasks 1'},
-      {_id: '5', name: 'All Tasks 2'},
-    ]);
-    const fakeHttp = createHttp(response);
-
-    const cmd = new TasksCommand(fakeHttp);
-    const result = await cmd.getAll({schedulesOnly: true});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_tasks',
-        filter: 'first=1 rows=-1',
-        usage_type: 'scan',
-        schedules_only: 1,
-      },
-    });
-    expect(result.data).toEqual([
-      new Task({id: '4', name: 'All Tasks 1'}),
-      new Task({id: '5', name: 'All Tasks 2'}),
-    ]);
-  });
-
-  test('should fetch tasks through native API when available', async () => {
+  test('should fetch tasks through native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: 'scan'},

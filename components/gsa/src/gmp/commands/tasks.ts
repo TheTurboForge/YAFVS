@@ -4,14 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import type CollectionCounts from 'gmp/collection/collection-counts';
 import EntitiesCommand from 'gmp/commands/entities';
+import {type HttpCommandInputParams} from 'gmp/commands/http';
 import {
-  type HttpCommandInputParams,
-  type HttpCommandOptions,
-} from 'gmp/commands/http';
-import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
@@ -26,8 +21,7 @@ import {
   fetchNativeTasks,
   nativeTaskQueryFromFilter,
 } from 'gmp/native-api/tasks';
-import {parseYesNo, type YesNo} from 'gmp/parser';
-import {isDefined} from 'gmp/utils/identity';
+import {type YesNo} from 'gmp/parser';
 
 interface GetTasksResponse extends Element {
   apply_overrides: YesNo;
@@ -74,49 +68,21 @@ class TasksCommand extends EntitiesCommand<Task, GetTasksResponse> {
     return root.get_tasks.get_tasks_response;
   }
 
-  async get(
-    {filter, schedulesOnly}: TasksCommandGetParams = {},
-    options?: HttpCommandOptions,
-  ) {
-    if (canUseNativeApi(this.http)) {
-      const nativeFilter = filterFromCommandParams({filter});
-      const nativeResponse = await fetchNativeTasks(this.http, {
-        ...nativeTaskQueryFromFilter(nativeFilter),
-        schedulesOnly,
-      });
-      return new Response(nativeResponse.tasks, {
-        filter: nativeFilter,
-        counts: nativeResponse.counts,
-      });
-    }
-
-    const params = {
-      filter,
-      usage_type: 'scan',
-      schedules_only: isDefined(schedulesOnly)
-        ? parseYesNo(schedulesOnly)
-        : undefined,
-    };
-    const response = await this.httpGetWithTransform(params, options);
-    const {
-      entities,
-      filter: responseFilter,
-      counts,
-    } = this.getCollectionListFromRoot(response.data);
-    return response.set<Task[], {filter: Filter; counts: CollectionCounts}>(
-      entities,
-      {filter: responseFilter, counts},
-    );
+  async get({filter, schedulesOnly}: TasksCommandGetParams = {}) {
+    const nativeFilter = filterFromCommandParams({filter});
+    const nativeResponse = await fetchNativeTasks(this.http, {
+      ...nativeTaskQueryFromFilter(nativeFilter),
+      schedulesOnly,
+    });
+    return new Response(nativeResponse.tasks, {
+      filter: nativeFilter,
+      counts: nativeResponse.counts,
+    });
   }
 
   async getAll(
     params: HttpCommandInputParams & {schedulesOnly?: boolean} = {},
-    options?: HttpCommandOptions,
   ) {
-    if (!canUseNativeApi(this.http)) {
-      return super.getAll(params, options);
-    }
-
     const filter = filterFromCommandParams(params).all();
     const tasks: Task[] = [];
     let total = Number.POSITIVE_INFINITY;
@@ -147,9 +113,7 @@ class TasksCommand extends EntitiesCommand<Task, GetTasksResponse> {
 
   export(entities: Task[]) {
     return this.exportByIds(
-      entities.flatMap(entity =>
-        entity.id === undefined ? [] : [entity.id],
-      ),
+      entities.flatMap(entity => (entity.id === undefined ? [] : [entity.id])),
     );
   }
 

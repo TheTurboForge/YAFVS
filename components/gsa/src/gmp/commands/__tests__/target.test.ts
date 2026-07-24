@@ -711,11 +711,14 @@ describe('TargetCommand tests', () => {
     });
   });
 
-  test('should keep unsupported host target creates on GMP when native API is available', async () => {
-    const response = createActionResultResponse();
-    const fetchMock = testing.fn();
+  test('should create bounded manual host expressions through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'native-target-id'}),
+      ok: true,
+      status: 201,
+    });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -724,6 +727,7 @@ describe('TargetCommand tests', () => {
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
     const cmd = new TargetCommand(fakeHttp);
 
     await cmd.create({
@@ -732,7 +736,8 @@ describe('TargetCommand tests', () => {
       comment: 'comment',
       targetSource: 'manual',
       targetExcludeSource: 'manual',
-      hosts: '192.0.2.0/24',
+      hosts:
+        '192.0.2.0/24,\n010.000.000.001, 192.0.2.1-192.0.2.3, 2001:db8::/126, 2001:db8::1-2001:db8::3',
       excludeHosts: '',
       reverseLookupOnly: false,
       reverseLookupUnify: true,
@@ -747,13 +752,30 @@ describe('TargetCommand tests', () => {
       krb5CredentialId: UNSET_VALUE,
     });
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: expect.objectContaining({
-        cmd: 'create_target',
-        hosts: '192.0.2.0/24',
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/targets',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'name',
+          comment: 'comment',
+          port_list_id: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+          hosts: [
+            '192.0.2.0/24',
+            '010.000.000.001',
+            '192.0.2.1-192.0.2.3',
+            '2001:db8::/126',
+            '2001:db8::1-2001:db8::3',
+          ],
+          exclude_hosts: [],
+          alive_tests: [SCAN_CONFIG_DEFAULT],
+          allow_simultaneous_ips: true,
+          reverse_lookup_only: false,
+          reverse_lookup_unify: true,
+        }),
       }),
-    });
+    );
   });
 
   test.each([
@@ -1061,11 +1083,13 @@ describe('TargetCommand tests', () => {
     expect(result.data.id).toEqual('target_id1');
   });
 
-  test('should keep unsupported host target saves on GMP when native API is available', async () => {
-    const response = createActionResultResponse();
-    const fetchMock = testing.fn();
+  test('should route exact full exclusion to native validation instead of GMP', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+    });
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
@@ -1074,39 +1098,59 @@ describe('TargetCommand tests', () => {
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
     const cmd = new TargetCommand(fakeHttp);
 
-    await cmd.save({
-      id: 'target_id1',
-      allowSimultaneousIPs: true,
-      name: 'name',
-      comment: 'comment',
-      targetSource: 'manual',
-      targetExcludeSource: 'manual',
-      hosts: '192.0.2.0/24',
-      excludeHosts: '',
-      reverseLookupOnly: false,
-      reverseLookupUnify: true,
-      portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
-      aliveTests: [SCAN_CONFIG_DEFAULT],
-      port: 22,
-      sshCredentialId: UNSET_VALUE,
-      sshElevateCredentialId: UNSET_VALUE,
-      smbCredentialId: UNSET_VALUE,
-      esxiCredentialId: UNSET_VALUE,
-      snmpCredentialId: UNSET_VALUE,
-      krb5CredentialId: UNSET_VALUE,
-    });
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: expect.objectContaining({
-        cmd: 'save_target',
-        target_id: 'target_id1',
+    await expect(
+      cmd.save({
+        id: 'target_id1',
+        allowSimultaneousIPs: true,
+        name: 'name',
+        comment: 'comment',
+        targetSource: 'manual',
+        targetExcludeSource: 'manual',
         hosts: '192.0.2.0/24',
-        ssh_credential_id: UNSET_VALUE,
+        excludeHosts: '192.0.2.0/24',
+        reverseLookupOnly: false,
+        reverseLookupUnify: true,
+        portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+        aliveTests: [SCAN_CONFIG_DEFAULT],
+        port: 22,
+        sshCredentialId: UNSET_VALUE,
+        sshElevateCredentialId: UNSET_VALUE,
+        smbCredentialId: UNSET_VALUE,
+        esxiCredentialId: UNSET_VALUE,
+        snmpCredentialId: UNSET_VALUE,
+        krb5CredentialId: UNSET_VALUE,
       }),
-    });
+    ).rejects.toThrow('Native API request failed with status 400');
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/targets/target_id1',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: 'name',
+          comment: 'comment',
+          alive_tests: [SCAN_CONFIG_DEFAULT],
+          allow_simultaneous_ips: true,
+          reverse_lookup_only: false,
+          reverse_lookup_unify: true,
+          port_list_id: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+          hosts: ['192.0.2.0/24'],
+          exclude_hosts: ['192.0.2.0/24'],
+          credentials: {
+            ssh: null,
+            ssh_elevate: null,
+            smb: null,
+            esxi: null,
+            snmp: null,
+            krb5: null,
+          },
+        }),
+      }),
+    );
   });
 
   test.each([

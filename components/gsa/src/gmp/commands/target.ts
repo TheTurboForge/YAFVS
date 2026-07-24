@@ -123,25 +123,8 @@ const parseSshHostKeyPins = (value?: string): SshHostKeyPin[] | undefined => {
   return pins.length > 0 && pins.length <= 4095 ? pins : undefined;
 };
 
-const looksLikeIpv4Range = (value: string) => {
-  const [left, right] = value.split('-', 2);
-  if (right === undefined) {
-    return false;
-  }
-  return /^\d+\.\d+\.\d+\.\d+$/.test(left) && /^[\d.]+$/.test(right);
-};
-
-const looksLikeIpv4WithLeadingZero = (value: string) =>
-  /^\d+\.\d+\.\d+\.\d+$/.test(value) &&
-  value.split('.').some(part => part.length > 1 && part.startsWith('0'));
-
 const isNativeTargetHostEntry = (value: string) =>
-  value.length <= 4096 &&
-  !/[\u0000-\u001F\u007F]/.test(value) &&
-  !value.includes('/') &&
-  !looksLikeIpv4Range(value) &&
-  !looksLikeIpv4WithLeadingZero(value) &&
-  /^[A-Za-z0-9._:-]+$/.test(value);
+  value.length <= 4096 && !/[\u0000-\u001F\u007F]/.test(value);
 
 const parseNativeTargetHostList = (
   value: string | undefined,
@@ -151,7 +134,7 @@ const parseNativeTargetHostList = (
     return undefined;
   }
   const entries = value
-    .split(',')
+    .split(/[\n,]/)
     .map(entry => entry.trim())
     .filter(entry => entry.length > 0);
   if (entries.length === 0) {
@@ -261,10 +244,6 @@ const nativeTargetCreateArgsFromParams = ({
     allowEmpty: true,
   });
   if (excludeHosts !== undefined && nativeExcludeHosts === undefined) {
-    return undefined;
-  }
-  const excludedHosts = new Set(nativeExcludeHosts ?? []);
-  if (nativeHosts.every(host => excludedHosts.has(host))) {
     return undefined;
   }
   return {
@@ -498,13 +477,6 @@ const nativeTargetPatchArgsFromParams = ({
     return undefined;
   }
   if (excludeHosts !== undefined && nativeHosts === undefined) {
-    return undefined;
-  }
-  const excludedHosts = new Set(nativeExcludeHosts ?? []);
-  if (
-    nativeHosts !== undefined &&
-    nativeHosts.every(host => excludedHosts.has(host))
-  ) {
     return undefined;
   }
   const credentials = nativeTargetCredentialsPatchFromParams({

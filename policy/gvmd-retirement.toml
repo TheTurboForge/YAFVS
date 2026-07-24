@@ -97,7 +97,7 @@ evidence = [
   "services/yafvs-api/src/credential_contract_tests.rs::credential_metadata_reads_and_browser_downloads_are_native_only",
   "services/yafvs-api/src/credential_contract_tests.rs::credential_live_delete_is_native_only",
   "services/yafvs-api/src/credential_writes_tests.rs::credential_delete_moves_live_state_to_trash_atomically_and_opaquely",
-  "services/yafvs-api/src/task_control_characterization_tests.rs::native_browser_task_controls_retire_only_the_gsad_gmp_bridges",
+  "services/yafvs-api/src/task_control_characterization_tests.rs::native_browser_task_transports_retire_only_the_gsad_gmp_bridges",
   "services/yafvs-api/src/scope_report_mutation_characterization_tests.rs::native_scope_reads_replace_public_gmp_scope_metadata_transport",
 ]
 independent_authority = ["api/openapi/yafvs-v1.yaml::x-yafvs-inherited-still-owns"]

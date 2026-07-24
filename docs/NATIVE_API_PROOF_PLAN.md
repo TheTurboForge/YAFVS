@@ -157,7 +157,12 @@ Task start and stop are reviewed native scanner-control slices. Browser task
 start and stop use the same-origin native `POST /api/v1/tasks/{task_id}/start`
 and `POST /api/v1/tasks/{task_id}/stop` routes; the superseded gsad
 `start_task` and `stop_task` GMP actions are retired while lowercase
-`start_task` and `stop_task` remain GSA availability vocabulary. Start creates
+`start_task` and `stop_task` remain GSA availability vocabulary. GSA task create,
+metadata save, list/detail reads, and metadata export use the native task API; the
+dedicated gsad `create_task`, `save_task`, `get_task`, `get_tasks`,
+`export_task`, and `export_tasks` aliases are retired. Raw authenticated gvmd
+`CREATE_TASK`, `MODIFY_TASK`, and `GET_TASKS` remain separately retained for
+external GMP compatibility. Start creates
 the report and gvmd `scan_queue` request transactionally. Start-task alert
 execution and scheduled starts use one strict private authenticated command to
 gvmd. They are separate from public GMP `START_TASK` and `STOP_TASK`, which

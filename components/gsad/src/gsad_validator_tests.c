@@ -98,7 +98,21 @@ Ensure (gsad_validator, reject_removed_native_only_commands)
                is_equal_to (0));
   assert_that (gvm_validate (validator, "cmd", "delete_task"),
                is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "create_task"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "save_task"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_task"),
+               is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_tasks"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "export_task"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "export_tasks"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_aggregate"),
+               is_equal_to (0));
+  assert_that (gvm_validate (validator, "cmd", "bulk_export"),
                is_equal_to (0));
   assert_that (gvm_validate (validator, "cmd", "move_task"),
                is_equal_to (2));

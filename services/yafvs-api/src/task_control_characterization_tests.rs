@@ -255,16 +255,6 @@ fn alert_and_scheduler_task_control_use_private_control_without_retiring_public_
 }
 
 #[test]
-fn legacy_gsad_task_create_cannot_issue_a_nested_tag_mutation() {
-    let gsad_create = inherited_function(GSAD_GMP_C, "create_task_gmp");
-    assert!(!gsad_create.contains("add_tag"));
-    assert!(!gsad_create.contains("tag_id"));
-    assert!(!gsad_create.contains("<modify_tag"));
-    assert!(!gsad_create.contains("Create Task and Tag"));
-    assert!(!GSAD_VALIDATOR_C.contains("gvm_validator_alias (validator, \"add_tag\""));
-}
-
-#[test]
 fn inherited_osp_start_checks_target_permission_and_creates_report_before_scanner_work() {
     let run_osp_task = inherited_function(MANAGE_C, "run_osp_task");
     for required in [
@@ -730,11 +720,23 @@ fn osp_handlers_reject_stale_reports_and_serialize_finalization_with_stop() {
 }
 
 #[test]
-fn native_browser_task_controls_retire_only_the_gsad_gmp_bridges() {
+fn native_browser_task_transports_retire_only_the_gsad_gmp_bridges() {
     for retired in [
+        "create_task_gmp",
+        "save_task_gmp",
+        "get_task_gmp",
+        "get_tasks_gmp",
+        "export_task_gmp",
+        "export_tasks_gmp",
         "delete_task_gmp",
         "start_task_gmp",
         "stop_task_gmp",
+        "ELSE (create_task)",
+        "ELSE (save_task)",
+        "ELSE (get_task)",
+        "ELSE (get_tasks)",
+        "ELSE (export_task)",
+        "ELSE (export_tasks)",
         "ELSE (delete_task)",
         "ELSE (start_task)",
         "ELSE (stop_task)",
@@ -744,7 +746,17 @@ fn native_browser_task_controls_retire_only_the_gsad_gmp_bridges() {
             "retired gsad task-control bridge remains: {retired}"
         );
     }
-    for retired in ["delete_task_gmp", "start_task_gmp", "stop_task_gmp"] {
+    for retired in [
+        "create_task_gmp",
+        "save_task_gmp",
+        "get_task_gmp",
+        "get_tasks_gmp",
+        "export_task_gmp",
+        "export_tasks_gmp",
+        "delete_task_gmp",
+        "start_task_gmp",
+        "stop_task_gmp",
+    ] {
         assert!(
             !GSAD_GMP_H.contains(retired),
             "retired gsad task-control declaration remains: {retired}"
@@ -784,9 +796,22 @@ fn native_browser_task_controls_retire_only_the_gsad_gmp_bridges() {
     assert!(gmp_delete_ext.contains("<delete_task task_id=\\\"%s\\\" ultimate=\\\"%d\\\"/>"));
     assert!(gmp_delete_ext.contains("opts.ultimate"));
 
-    assert!(!GSAD_VALIDATOR_C.contains("\"|(delete_task)\""));
-    assert!(!GSAD_VALIDATOR_C.contains("\"|(start_task)\""));
-    assert!(!GSAD_VALIDATOR_C.contains("\"|(stop_task)\""));
+    for retired in [
+        "create_task",
+        "save_task",
+        "get_task",
+        "get_tasks",
+        "export_task",
+        "export_tasks",
+        "delete_task",
+        "start_task",
+        "stop_task",
+    ] {
+        assert!(
+            !GSAD_VALIDATOR_C.contains(&format!("\"|({retired})\"")),
+            "retired gsad task command remains valid: {retired}"
+        );
+    }
     assert!(GMP_C.contains("strcasecmp (\"DELETE_TASK\", element_name)"));
     assert!(GMP_C.contains("set_client_state (CLIENT_DELETE_TASK)"));
     assert!(GMP_C.contains("case CLIENT_DELETE_TASK:"));

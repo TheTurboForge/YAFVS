@@ -32,26 +32,8 @@ exec_gmp_post (gsad_http_connection_t *connection,
                gsad_credentials_t *credentials);
 
 char *
-create_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                 gsad_command_response_data_t *);
-char *
-save_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-               gsad_command_response_data_t *);
-char *
-get_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-              gsad_command_response_data_t *);
-char *
-get_tasks_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-               gsad_command_response_data_t *);
-char *
 get_tasks_chart_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                      gsad_command_response_data_t *);
-char *
-export_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                 gsad_command_response_data_t *);
-char *
-export_tasks_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                  gsad_command_response_data_t *);
 
 char *
 delete_report_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,

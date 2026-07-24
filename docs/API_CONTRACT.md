@@ -80,7 +80,12 @@ The registry currently covers these representative workflow families:
   and up to five operator-owned alerts. `native-tasks-from-csv` snapshots and
   exactly resolves all referenced collections before writing, replacing the
   inherited CSV creator without GMP/XML. Optional host ordering is stored as a
-  bounded task preference and forwarded through both scanner transports.
+  bounded task preference and forwarded through both scanner transports. GSA task
+  create, metadata save, list/detail reads, and metadata export use the native
+  task API; the dedicated gsad `create_task`, `save_task`, `get_task`,
+  `get_tasks`, `export_task`, and `export_tasks` aliases are absent. Raw
+  authenticated gvmd `CREATE_TASK`, `MODIFY_TASK`, and `GET_TASKS` remain
+  separately retained for external GMP compatibility.
 - guarded task stop through `POST /api/v1/tasks/{task_id}/stop`. The HTTP
   service sends one bounded, shared-secret-authenticated operator command over
   a private Unix socket. gvmd keeps ACL, scanner stop/delete, queue,

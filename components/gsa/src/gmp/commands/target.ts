@@ -577,11 +577,8 @@ class TargetCommand extends EntityCommand<Target> {
   }
 
   async delete({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      await deleteNativeTarget(this.http, id);
-      return;
-    }
-    return super.delete({id});
+    requireNativeTargetApi(this.http);
+    await deleteNativeTarget(this.http, id);
   }
 
   async create({

@@ -28,7 +28,6 @@ gsad_init_validator ()
                      "|(create_target)"
                      "|(delete_config)"
                      "|(delete_report)"
-                     "|(delete_target)"
                      "|(download_ssl_cert)"
                      "|(download_ca_pub)"
                      "|(download_key_pub)"

@@ -152,11 +152,7 @@ fn target_reads_exports_and_acl_are_native_only_without_retiring_target_control(
         assert!(!TARGET_QUERY_SQL.contains(secret_column));
     }
 
-    for retained in [
-        "ELSE (create_target)",
-        "ELSE (delete_target)",
-        "ELSE (save_target)",
-    ] {
+    for retained in ["ELSE (create_target)", "ELSE (save_target)"] {
         assert!(GSAD_GMP_C.contains(retained));
     }
     for retained in [
@@ -407,7 +403,7 @@ fn inherited_target_clone_delete_and_restore_preserve_login_data_and_task_links(
 }
 
 #[test]
-fn inherited_target_gmp_gsad_and_gsa_surfaces_still_carry_broad_control() {
+fn target_delete_is_native_only_while_raw_gmp_and_create_save_bridges_remain() {
     for required in [
         "copy_target (create_target_data->name,",
         "create_target_data->copy",
@@ -442,19 +438,25 @@ fn inherited_target_gmp_gsad_and_gsa_surfaces_still_carry_broad_control() {
         );
     }
 
+    let save_gsad = inherited_function(GSAD_GMP_C, "save_target_gmp");
     for required in [
-        "return move_resource_to_trash (connection, \"target\"",
         "<modify_target target_id=\\\"%s\\\">",
         "<ssh_credential id=\\\"%s\\\">",
         "<alive_tests>",
-        "ELSE (create_target)",
-        "ELSE (delete_target)",
-        "ELSE (save_target)",
     ] {
         assert!(
-            GSAD_GMP_C.contains(required),
-            "gsad target surface missing {required}"
+            save_gsad.contains(required),
+            "save_target_gmp missing {required}"
         );
+    }
+
+    for retained in ["create_target_gmp", "save_target_gmp"] {
+        assert!(GSAD_GMP_C.contains(retained));
+        assert!(GSAD_GMP_H.contains(retained));
+    }
+    for retained in ["create_target", "save_target"] {
+        assert!(GSAD_GMP_C.contains(&format!("ELSE ({retained})")));
+        assert!(GSAD_VALIDATOR.contains(&format!("|({retained})")));
     }
 
     for required in [
@@ -476,6 +478,43 @@ fn inherited_target_gmp_gsad_and_gsa_surfaces_still_carry_broad_control() {
     assert!(GSA_TARGET_COMMAND.contains("requireNativeTargetApi(this.http)"));
     assert!(GSA_TARGET_COMMAND.contains("cloneNativeTarget(this.http, id)"));
     assert!(!GSA_TARGET_COMMAND.contains("super.clone({id})"));
+
+    let delete_gsa = GSA_TARGET_COMMAND
+        .split_once("async delete({id}: EntityCommandParams)")
+        .expect("GSA target delete method must exist")
+        .1
+        .split_once("  async create")
+        .expect("GSA target delete method must end before create")
+        .0;
+    assert!(delete_gsa.contains("requireNativeTargetApi(this.http)"));
+    assert!(delete_gsa.contains("deleteNativeTarget(this.http, id)"));
+    assert!(!delete_gsa.contains("super.delete"));
+
+    assert!(!GSAD_GMP_C.contains("delete_target_gmp"));
+    assert!(!GSAD_GMP_H.contains("delete_target_gmp"));
+    assert!(!GSAD_GMP_C.contains("ELSE (delete_target)"));
+    assert!(!GSAD_VALIDATOR.contains("|(delete_target)"));
+
+    for retained in [
+        "delete_target_data_t",
+        "strcasecmp (\"DELETE_TARGET\", element_name)",
+        "delete_target_data->ultimate",
+        "CLIENT_DELETE_TARGET",
+    ] {
+        assert!(
+            GMP_C.contains(retained),
+            "raw gvmd parser missing {retained}"
+        );
+    }
+    assert!(GMP_SCHEMA.contains("<name>delete_target</name>"));
+    let delete_manager = inherited_function(MANAGE_SQL_TARGETS_C, "delete_target");
+    assert!(delete_manager.contains("acl_user_may (\"delete_target\") == 0"));
+    assert!(delete_manager.contains("find_target_with_permission"));
+    assert!(delete_manager.contains("INSERT INTO targets_trash"));
+    assert!(delete_manager.contains("DELETE FROM targets WHERE id = %llu;"));
+    assert!(GVM_LIBS_GMP_C.contains("gmp_delete_target_ext ("));
+    assert!(GVM_LIBS_GMP_C.contains("<delete_target target_id=\\\"%s\\\" ultimate=\\\"%d\\\"/>"));
+    assert!(GVM_LIBS_GMP_H.contains("gmp_delete_target_ext ("));
 }
 
 #[test]

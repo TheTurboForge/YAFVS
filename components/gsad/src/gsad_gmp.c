@@ -2563,27 +2563,6 @@ create_target_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Delete a target, get all targets, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-delete_target_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  return move_resource_to_trash (connection, "target", credentials, params,
-                                 response_data);
-}
-
-
-
-/**
  * @brief Export a tag.
  *
  * @param[in]   connection           Connection to manager.
@@ -5732,7 +5711,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (create_target)
   ELSE (delete_config)
   ELSE (delete_report)
-  ELSE (delete_target)
   ELSE (renew_session)
   ELSE (save_asset)
   ELSE (save_setting)

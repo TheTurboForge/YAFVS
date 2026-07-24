@@ -111,7 +111,7 @@ Ensure (gsad_validator, reject_removed_native_only_commands)
   assert_that (gvm_validate (validator, "cmd", "save_asset"),
                is_equal_to (0));
   assert_that (gvm_validate (validator, "cmd", "delete_target"),
-               is_equal_to (0));
+               is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "delete_task"),
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "create_task"),

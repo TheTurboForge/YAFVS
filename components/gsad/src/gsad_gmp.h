@@ -80,9 +80,6 @@ char *
 create_target_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 char *
-delete_target_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                   gsad_command_response_data_t *);
-char *
 save_target_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                  gsad_command_response_data_t *);
 

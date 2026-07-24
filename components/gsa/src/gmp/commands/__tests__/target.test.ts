@@ -320,6 +320,19 @@ describe('TargetCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
+  test('should refuse target deletion locally when native API is unavailable', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(createActionResultResponse());
+    const cmd = new TargetCommand(fakeHttp);
+
+    await expect(cmd.delete({id: 'target-id'})).rejects.toThrow(
+      'Native target API is required for target command',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should create target', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);

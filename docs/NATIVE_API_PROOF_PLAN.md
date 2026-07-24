@@ -154,17 +154,18 @@ reports whether those markers align with the implementation inventory.
 ## Guarded Control Exceptions
 
 Task start and stop are reviewed native scanner-control slices. Browser task
-start uses the same-origin native `POST /api/v1/tasks/{task_id}/start` route;
-the superseded gsad `start_task` GMP action is retired while lowercase
-`start_task` remains GSA availability vocabulary. Start creates the report and
-gvmd `scan_queue` request transactionally. Start-task alert execution sends one
-strict private authenticated command to gvmd; scheduled starts use the same
-private client. It is separate from public GMP `START_TASK`, which remains for
-external compatibility. Native task stop sends one strict,
+start and stop use the same-origin native `POST /api/v1/tasks/{task_id}/start`
+and `POST /api/v1/tasks/{task_id}/stop` routes; the superseded gsad
+`start_task` and `stop_task` GMP actions are retired while lowercase
+`start_task` and `stop_task` remain GSA availability vocabulary. Start creates
+the report and gvmd `scan_queue` request transactionally. Start-task alert
+execution and scheduled starts use one strict private authenticated command to
+gvmd. They are separate from public GMP `START_TASK` and `STOP_TASK`, which
+remain for external compatibility. Native task stop sends one strict,
 bounded shared-secret/operator/task command over a private gvmd Unix socket,
 keeps status and queue state unchanged when scanner absence cannot be verified,
 rejects stale report handlers, and serializes task finalization with stop. This
-does not migrate scheduler stop, which remains on its inherited GMP path.
+same private client also performs scheduled stops.
 These control paths keep ACL, scanner protocol, queue, report, and state
 ownership in gvmd. Native start and stop are available through direct
 write-control and the authenticated browser proxy;

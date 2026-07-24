@@ -103,7 +103,7 @@ Ensure (gsad_validator, reject_removed_native_only_commands)
   assert_that (gvm_validate (validator, "cmd", "start_task"),
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "stop_task"),
-               is_equal_to (0));
+               is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_vulns"),
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_filter"),

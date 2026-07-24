@@ -88,7 +88,8 @@ The registry currently covers these representative workflow families:
   stale report handlers and changes queue/status state only after scanner
   absence is verified. A scanner-verification failure is `502`; an
   asynchronous-only inherited stop is `409`, never false success. No GMP/XML
-  or DB fallback exists.
+  or DB fallback exists. This retires only gsad's browser-facing `stop_task`
+  action; public GMP `STOP_TASK` remains available for external compatibility.
 - authoritative task clone through `POST /api/v1/tasks/{task_id}/clone`. The
   HTTP service sends one bounded, shared-secret-authenticated operator command
   over the private gvmd control socket. gvmd preserves its ACL checks,

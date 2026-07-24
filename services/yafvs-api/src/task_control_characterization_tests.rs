@@ -16,6 +16,7 @@ const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GMPD_C: &str = include_str!("../../../components/gvmd/src/gmpd.c");
 const GVMD_C: &str = include_str!("../../../components/gvmd/src/gvmd.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSAD_GMP_H: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GVM_LIBS_GMP_C: &str = include_str!("../../../components/gvm-libs/gmp/gmp.c");
 const MANAGE_ALERTS_C: &str = include_str!("../../../components/gvmd/src/manage_alerts.c");
@@ -729,28 +730,39 @@ fn osp_handlers_reject_stale_reports_and_serialize_finalization_with_stop() {
 }
 
 #[test]
-fn native_browser_task_start_replaces_only_the_gsad_start_task_bridge() {
+fn native_browser_task_controls_retire_only_the_gsad_gmp_bridges() {
     let gsad_delete = inherited_function(GSAD_GMP_C, "delete_task_gmp");
-    let gsad_stop = inherited_function(GSAD_GMP_C, "stop_task_gmp");
     assert!(gsad_delete.contains("move_resource_to_trash"));
     assert!(gsad_delete.contains("connection, \"task\", credentials, params"));
-    assert!(
-        gsad_stop.contains("resource_action (connection, credentials, params, \"task\", \"stop\"")
-    );
 
-    for retired in ["start_task_gmp", "ELSE (start_task)"] {
+    for retired in [
+        "start_task_gmp",
+        "stop_task_gmp",
+        "ELSE (start_task)",
+        "ELSE (stop_task)",
+    ] {
         assert!(
             !GSAD_GMP_C.contains(retired),
-            "retired gsad START_TASK bridge remains: {retired}"
+            "retired gsad task-control bridge remains: {retired}"
         );
     }
+    assert!(!GSAD_GMP_H.contains("stop_task_gmp"));
+    assert!(GSAD_GMP_C.contains("exec_gmp_post"));
     assert!(
         GSA_NATIVE_TASKS.contains("`api/v1/tasks/${encodeURIComponent(id)}/start`"),
         "GSA browser task start must use the same-origin native route"
     );
     assert!(
+        GSA_NATIVE_TASKS.contains("`api/v1/tasks/${encodeURIComponent(id)}/stop`"),
+        "GSA browser task stop must use the same-origin native route"
+    );
+    assert!(
         GSA_CAPABILITIES.contains("'start_task'"),
         "GSA task-start availability capability must remain lowercase"
+    );
+    assert!(
+        GSA_CAPABILITIES.contains("'stop_task'"),
+        "GSA task-stop availability capability must remain lowercase"
     );
 
     let gmp_start = inherited_function(GVM_LIBS_GMP_C, "gmp_start_task_report_c");
@@ -762,7 +774,9 @@ fn native_browser_task_start_replaces_only_the_gsad_start_task_bridge() {
 
     assert!(GSAD_VALIDATOR_C.contains("\"|(delete_task)\""));
     assert!(!GSAD_VALIDATOR_C.contains("\"|(start_task)\""));
-    assert!(GSAD_VALIDATOR_C.contains("\"|(stop_task)\""));
+    assert!(!GSAD_VALIDATOR_C.contains("\"|(stop_task)\""));
+    assert!(GMP_C.contains("strcasecmp (\"STOP_TASK\", element_name)"));
+    assert!(GMP_C.contains("case CLIENT_STOP_TASK:"));
 }
 
 #[test]

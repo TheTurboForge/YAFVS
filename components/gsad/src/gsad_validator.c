@@ -62,7 +62,6 @@ gsad_init_validator ()
                      "|(save_my_settings)"
                      "|(save_target)"
                      "|(save_task)"
-                     "|(stop_task)"
                      "|(sync_feed)"
                      "|(sync_scap)"
                      "|(sync_cert)"
